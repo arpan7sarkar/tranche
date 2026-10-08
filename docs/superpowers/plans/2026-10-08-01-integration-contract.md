@@ -1,0 +1,89 @@
+# Cross-Plan Integration Contract
+
+The lane plans were written in parallel.
+This document is the single source of truth for every name, path and payload that more than one plan touches.
+When a lane plan disagrees with this document, this document wins; adapt the plan's code while implementing the task.
+Each lane plan carries a short "Integration overrides" block near its top that lists the items below that affect it.
+
+## 1. Web server helpers (owner: Person H, plan H5)
+
+| Need | Canonical | Replaces |
+|---|---|---|
+| Database handle in `apps/web` | `getDb(): Db` from `apps/web/src/server/db.ts` | `db` from `@/lib/db`, `getDb` from `@/lib/server` |
+| PayPal client in `apps/web` | `getPayPal(): PayPal` from `apps/web/src/server/paypal.ts` | `getPayPal` from `@/lib/server` |
+| Immediate Workflows kick | `kickMoneyTick(): void` from `apps/web/src/server/kick.ts` | `@/lib/kick` |
+| Agency session in pages | `requireMember(): Promise<Member>` from `apps/web/src/server/session.ts` | `requireWorkspace()` from `@/lib/auth` |
+| Agency session in route handlers | `memberOrNull(request: Request): Promise<Member \| null>` from `apps/web/src/server/session.ts` | `requireWorkspaceId(req)`; use `(await memberOrNull(req))?.workspaceId ?? null` |
+| Deal access check | `requireDealAccess(dealId: string): Promise<{ ok: true; userId: string; workspaceId: string } \| { ok: false; response: Response }>` from `apps/web/src/server/session.ts` (H5 Task 3 adds it) | `@/lib/auth-guard` |
+| Money formatting | `formatMoney(m: Money, locale?: string): string` from `apps/web/src/lib/money.ts` | `@/lib/format` |
+| Live updates | `useDealStream(dealId: string, token: string \| null, onEvent: (e: StreamEvent) => void): void` from `apps/web/src/hooks/use-deal-stream.ts` | `apps/web/src/lib/stream` |
+
+`Member` is `{ userId: string; name: string; workspaceId: string; workspaceName: string }` as defined in H5 Task 3.
+`apps/web/vitest.config.ts` is created by whichever task needs it first; later tasks reuse it.
+`apps/web/next.config.ts` `transpilePackages` lists every workspace package the web app imports: `@tranche/contracts`, `@tranche/core`, `@tranche/db`, `@tranche/paypal`, `@tranche/agents`, `@tranche/agents-service`.
+
+## 2. Portal links (owner: Person H, foundation Task 5)
+
+- `hashToken`, `createMagicLink(db, { clientId, dealId, ttlDays?, now? }) -> { token, url }` and `resolveMagicLink(db, token, now?)` live in `@tranche/db`.
+- E4's `createPortalLink` means `(await createMagicLink(db, { clientId, dealId })).url`.
+- E5's `hashPortalToken` from `@tranche/core` means `hashToken` from `@tranche/db`.
+- A portal token or portal URL never goes into an `event` payload, because events are streamed and stored in plain text.
+- The portal lives at `/portal/[token]`.
+- PayPal return URLs for funding started inside the portal are `${APP_URL}/portal/<token>?funded=<milestoneId>`.
+- Funding started by a timer (H4) without a vaulted method emails the client a fresh portal link instead; its PayPal return URL is `${APP_URL}/portal/return?milestoneId=<id>`, a token-less page (H5) that only says the payment was received and grants no access.
+
+## 3. Event payloads
+
+| Event | Payload |
+|---|---|
+| `deal.plan_sent` | `{ clientId: string }`. Person E's notifier (E4) emails the client a link from `createMagicLink`. |
+| `approval.requested` | `{ approvalId: string; proposedActionId: string; side: "agency" \| "client" }` |
+| `milestone.verification_requested` | `{ source, repo, sha, prNumber, urls, state }` as H3 Task 2 defines |
+| `milestone.funding_requested` | `{ orderId: string; approveUrl: string \| null }` |
+| `alert.raised` | `{ kind: string; ... }` (contract already in the foundation) |
+| any `milestone.*` | also includes `title: string` |
+
+Live updates use one mechanism: the `AFTER INSERT` trigger on `event` from H5 Task 6 calls `pg_notify('tranche_events', '{ id, dealId, milestoneId, type }')`.
+H3's `appendEvent` is a plain insert with no `pg_notify` call.
+The verifier stores screenshot locations in `evidence.data.imageUrl` (E2 Task 6), which the portal (H5 Task 11) renders.
+
+## 4. Money core (owner: Person H)
+
+- `transition` takes a `MilestoneSnapshot` (`state`, `priceMinor`, `heldMinor`, `releasedMinor`, `verifiedAt`, `releaseAuthorizedAt`), as H1 Task 4 defines; the snapshot columns are in the foundation schema.
+- `verificationGate(criteria, evidence: EvidenceFact[])` with `EvidenceFact = { checkIndex: number | null; passed: boolean | null; createdAt: string }` (H1 Task 3); E2 passes `createdAt` as an ISO string.
+- Approvals, human actions, plan agreement and rescheduling have one implementation each, in `@tranche/agents-service/money` (H3 Task 9 and H4 Task 5): `decideApproval`, `submitHumanAction`, `agreeToPlan`, `applyReschedule`.
+  H5's approvals screen and client portal call these; they do not reimplement them.
+- `hold.expiresAt` is the hard deadline (authorization: original authorization plus 29 days; delayed disbursement: capture plus 27 days).
+  `placeHold` and `renewHold` also return `honorExpiresAt` (H2 Task 3).
+- PayPal rejects reauthorization inside the honor period, so H4 reauthorizes only when at least 4 full days have passed since the original authorization (`elapsedDays >= HONOR_DAYS + 1`); it creates a fresh authorization from the vault at day 27.
+- `@paypal/paypal-server-sdk` is not used; H2's single fetch transport covers every endpoint. Remove the dependency from `packages/paypal/package.json` in H2 Task 1.
+- The read-only PayPal toolkit for agents is `readOnlyPayPalTools()` from `@tranche/paypal/agent-tools` (H2 Task 5).
+
+## 5. Agents runtime (owner: Person E)
+
+- `proposeAction` rejects `agent: "human"`; only authenticated web routes create human actions, through `submitHumanAction`.
+- Starting an agent task uses E1's `launch(taskName, args, idempotencyKey, inline)`; E3's `startAgentTask` means `launch`.
+- Shared test helpers live under `packages/agents/src/testing/` (`index.ts` plus `scripted-model.ts`); E1's `src/testing.ts` becomes `src/testing/index.ts`, and whichever task first needs `scriptedModel` creates `src/testing/scripted-model.ts` as E3 Task 1 defines.
+- The runtime is re-exported from `packages/agents/src/runtime/index.ts`.
+- `consumeEvents` never advances the cursor past an event whose handler threw.
+- Public agent functions for evals (E5 Task 2): `draftPlan`, `judgeDelivery`, `negotiateTurn`, `assessDeal`, `MonitorSnapshot`, exported from `@tranche/agents`.
+- `TRANCHE_LLM=off` makes model calls throw and agent handlers skip that deal without failing.
+
+## 6. Scheduling and deployment (owner: Person E, plan E5 Task 4)
+
+- One cron entry runs everything: `apps/agents/src/cron-tick.ts` (every minute) and `apps/agents/src/cron-reconcile.ts` (hourly), both from E5.
+  Per-lane `cron.ts` scripts in H3 and E1 are replaced by these; keep E1's local dev loop.
+- Person H exports from `apps/agents/src/money/schedule.ts` `MONEY_TICK_TASKS: readonly TickTask[]` and `RECONCILE_TASK: string`, and from `apps/agents/src/money/handlers.ts` `MONEY_HANDLERS: Record<string, () => Promise<void>>`, wrapping H3's tick functions (H3 Task 9).
+- Person E exports `AGENT_TICK_TASKS` and `AGENT_HANDLERS` the same way from `apps/agents/src/agents/` (E1 Task 5), and E3 and E4 register their consumers there.
+- `TickTask = { name: string; everyMinutes: number }`.
+- Environment variables used across plans: `HOLD_MECHANISM`, `SUBCONTRACTOR_SPLIT`, `APP_URL`, `RENDER_WORKFLOW_SLUG`, `PAYPAL_API_BASE`, `PAGESPEED_API_BASE`, `TRANCHE_LLM`, `AI_FALLBACK`. Add each to `.env.example` when first used.
+
+## 7. UI test hooks
+
+H5 implements the `data-testid` and `data-state` attributes listed in E5 Task 8 so the end-to-end journeys can drive the UI, including the accessible task-edit dialog with `task-start-input` and the `fake-paypal-approve` button rendered only when `NEXT_PUBLIC_E2E_FAKE_PAYPAL=1`.
+
+## 8. Defaults
+
+- The default agency policy lists `reschedule` in `alwaysAsk`, because Monitor reschedules are suggestions.
+- `defaultClientPolicy(totalMinor)` lives in `apps/web/src/server/portal.ts` (H5 Task 11) and is the only default client policy.
+- `schema.user` from Better Auth is exported through `packages/db/src/schema/index.ts` (H5 Task 3) so E4 can look up the agency owner's email.
