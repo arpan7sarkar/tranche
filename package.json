@@ -1,0 +1,26 @@
+{
+  "name": "tranche",
+  "private": true,
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=@tranche/web",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "check": "biome check .",
+    "fix": "biome check --write .",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "dev:agents": "turbo run dev --filter=@tranche/agents-service"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "26.6.4",
+    "turbo": "2.11.7",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

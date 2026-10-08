@@ -1,0 +1,47 @@
+# Tranche
+
+Milestone-protected payments for freelancers and agencies, run by an AI agent, settled on PayPal.
+Built for the PayPal AI Hackathon.
+
+Design: [`docs/superpowers/specs/2026-10-08-tranche-design.md`](docs/superpowers/specs/2026-10-08-tranche-design.md)
+
+## Layout
+
+| Path | Purpose |
+|---|---|
+| `apps/web` | Next.js app: agency UI, client portal, API routes, webhooks |
+| `apps/agents` | Render Workflows tasks: agents and executor |
+| `packages/contracts` | Shared Zod schemas |
+| `packages/core` | State machine and policy engine (pure) |
+| `packages/db` | Drizzle schema and client |
+| `packages/paypal` | PayPal client |
+| `packages/agents` | Prompts, tools, model routing |
+| `packages/verifiers` | GitHub, PageSpeed and screenshot checks |
+
+## Setup
+
+Requires Node 22.12+, pnpm (the version in `package.json` is fetched automatically) and Docker.
+
+```bash
+pnpm install
+cp .env.example .env
+pnpm db:up
+pnpm dev
+```
+
+Running the agents service locally needs the [Render CLI](https://render.com/docs/cli): `pnpm dev:agents`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `pnpm dev` | Start the web app |
+| `pnpm dev:agents` | Start the local Render Workflows task server |
+| `pnpm typecheck` | Typecheck every package |
+| `pnpm test` | Run every test suite |
+| `pnpm build` | Build web and agents |
+| `pnpm check` / `pnpm fix` | Lint and format with Biome |
+
+## License
+
+MIT

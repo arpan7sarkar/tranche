@@ -1,0 +1,21 @@
+{
+  "name": "@tranche/agents",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tranche/contracts": "workspace:*",
+    "ai": "7.0.134",
+    "@ai-sdk/google": "4.0.92",
+    "@ai-sdk/openai": "4.0.89",
+    "@paypal/agent-toolkit": "1.11.0",
+    "zod": "4.6.5"
+  }
+}

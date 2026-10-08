@@ -12,7 +12,17 @@
 - `packages/{contracts,core,paypal,db,agents,verifiers}`.
 - Postgres + Drizzle, Gemini via Vercel AI SDK (OpenAI only as fallback), Bryntum Gantt, AG Grid Studio.
 - Hosting on Render (web, workflows, cron, Postgres).
-- Commands land here once the monorepo is scaffolded (work package F1).
+
+## Package Manager
+Use **pnpm** (version pinned in root `package.json`): `pnpm install`, `pnpm dev`, `pnpm dev:agents`, `pnpm db:up`.
+
+## File-Scoped Commands
+| Task | Command |
+|------|---------|
+| Typecheck one package | `pnpm --filter @tranche/<pkg> typecheck` |
+| Test one file | `pnpm --filter @tranche/<pkg> exec vitest run path/to/file.test.ts` |
+| Lint and format one file | `pnpm biome check --write path/to/file.ts` |
+| DB migration | `pnpm --filter @tranche/db db:generate` then `db:migrate` |
 
 ## Architecture Invariants
 - Agents never call money-moving PayPal endpoints. They insert typed rows into `proposed_action`; the policy engine in `packages/core` decides.
@@ -44,3 +54,14 @@
 ## Commits
 - Conventional commits: `<type>(<scope>): <Subject>`, imperative, under 70 characters.
 - Never add `Co-Authored-By` or any AI attribution line to commits or PRs.
+
+<!-- BEGIN:turborepo-agent-rules -->
+
+# This is NOT the Turborepo you know
+
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
+
+Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
+
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+<!-- END:turborepo-agent-rules -->

@@ -1,0 +1,26 @@
+{
+  "name": "@tranche/agents-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "render workflows dev -- tsx watch src/index.ts",
+    "build": "tsdown",
+    "start": "node dist/index.mjs",
+    "typecheck": "tsc",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@renderinc/sdk": "1.2.0",
+    "@tranche/agents": "workspace:*",
+    "@tranche/contracts": "workspace:*",
+    "@tranche/core": "workspace:*",
+    "@tranche/db": "workspace:*",
+    "@tranche/paypal": "workspace:*",
+    "@tranche/verifiers": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "0.23.0",
+    "tsx": "4.23.15"
+  }
+}

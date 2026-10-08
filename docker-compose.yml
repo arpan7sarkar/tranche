@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: tranche
+      POSTGRES_PASSWORD: tranche
+      POSTGRES_DB: tranche
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+volumes:
+  pgdata:
