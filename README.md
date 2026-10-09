@@ -5,6 +5,9 @@ Built for the PayPal AI Hackathon.
 
 Design: [`docs/superpowers/specs/2026-10-08-tranche-design.md`](docs/superpowers/specs/2026-10-08-tranche-design.md)
 
+F0 contributors: start with the [sandbox capability plan](docs/paypal/f0-plan.md), then read the [current handoff](docs/paypal/f0-status.md).
+For implemented sandbox configuration and authentication commands, use the [P1 operator runbook](docs/paypal/p1-runbook.md).
+
 ## Layout
 
 | Path | Purpose |
@@ -21,10 +24,12 @@ Design: [`docs/superpowers/specs/2026-10-08-tranche-design.md`](docs/superpowers
 ## Setup
 
 Requires Node 22.12+, pnpm (the version in `package.json` is fetched automatically) and Docker.
+The environment-file copy below runs only when .env does not already exist.
+If you already have .env, preserve its credentials and add only missing entries from .env.example privately.
 
 ```bash
 pnpm install
-cp .env.example .env
+if [ ! -e .env ]; then cp .env.example .env; fi
 pnpm db:up
 pnpm dev
 ```
