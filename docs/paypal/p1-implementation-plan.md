@@ -1,6 +1,17 @@
 # P1 implementation plan: sandbox accounts and access
 
-Status: Tooling and sandbox authentication verified; the owner deferred remaining participant and assessment work documented in the [access assessment](evidence/p1-access-assessment.md).
+## Current testing authorization: 2026-10-11
+
+The contributor's latest instruction sets USD $1 as the maximum total testing spend across all tests and resumes, replacing the earlier $5 cap and the original image's $10-per-test and $500-total proposal.
+Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
+Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
+If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+No current preflight command enforces money budgets or executes payments.
+Earlier requested amounts retained below are historical inputs and do not authorize spending.
+
+Status: Tooling and sandbox authentication verified; remaining participant and assessment work is pending under the [2026-10-11 sandbox readiness implementation plan](sandbox-readiness-implementation-plan.md).
+The contributor has requested a plan to resume the previously deferred work; no new account observations or payment results are claimed.
 Use the [runbook](p1-runbook.md) for reproducible operator steps.
 Parent plan: [F0 phases](f0-plan.md).
 Current state: [Contributor handoff](f0-status.md).
@@ -21,6 +32,8 @@ Business API writes require P2's outbox before they can run.
 Do not implement payment adapters, database tables, an outbox, agents, web routes, or UI in P1.
 Use existing accounts and dashboard settings for the assessment.
 Record missing accounts or enablement as follow-up work rather than silently creating accounts, changing app permissions, or requesting partner access.
+The readiness plan now includes owner-operated creation of a missing second seller as a future setup task, after inspecting existing accounts.
+This planning session does not create accounts or change app settings, and feature inspection remains separate from enablement.
 
 ## Roles and prerequisites
 
@@ -219,6 +232,10 @@ If the request fails ambiguously, preserve an inconclusive result and the next d
 No automated support requests or messages to external parties are part of P1.
 
 ## Step 8: Agree the later experiment envelope
+
+The contributor's image supplies requested targets of USD, $10 per test, $500 total, and 50 API calls, plus contributor-operated buyer approval and seller consent.
+Use the [readiness plan's accounting proposal](sandbox-readiness-implementation-plan.md#step-3-record-operators-and-finalize-the-execution-envelope) to distinguish all API attempts from business writes and preserve limits across runs and resumes.
+Confirm participant compatibility, operator access, and accounting details before payment experiments; no current tool enforces these limits.
 
 Record a proposed currency, per-operation amount, total run budget, and maximum number of writes for P3-P6.
 Record who can complete buyer approval and seller consent and how the next contributor arranges access.

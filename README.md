@@ -7,6 +7,8 @@ Design: [`docs/superpowers/specs/2026-10-08-tranche-design.md`](docs/superpowers
 
 F0 contributors: start with the [sandbox capability plan](docs/paypal/f0-plan.md), then read the [current handoff](docs/paypal/f0-status.md).
 For implemented sandbox configuration and authentication commands, use the [P1 operator runbook](docs/paypal/p1-runbook.md).
+For the requested accounts, browser approvals, USD test limits, and feature checks, use the [sandbox readiness implementation plan](docs/paypal/sandbox-readiness-implementation-plan.md).
+For the pending durable runner, approval gates, and agreed test limits, use the [P2 runner implementation plan](docs/paypal/p2-sandbox-runner-implementation-plan.md).
 
 ## Layout
 

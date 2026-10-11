@@ -1,8 +1,19 @@
 # P1 operator runbook
 
+## Current testing authorization: 2026-10-11
+
+The contributor's latest instruction sets USD $1 as the maximum total testing spend across all tests and resumes, replacing the earlier $5 cap and the original image's $10-per-test and $500-total proposal.
+Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
+Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
+If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+No current preflight command enforces money budgets or executes payments.
+Earlier requested amounts retained below are historical inputs and do not authorize spending.
+
 Scope: local configuration, one sandbox OAuth check, account inventory, and access assessment.
 No seller referrals, payments, payouts, vaulting, or account-setting changes belong to P1.
 See the [implementation plan](p1-implementation-plan.md), [assessment](evidence/p1-access-assessment.md), and [handoff](f0-status.md).
+For pending work from the contributor's image, follow the [sandbox readiness implementation plan](sandbox-readiness-implementation-plan.md).
 
 ## Local setup
 
@@ -79,6 +90,7 @@ Do not infer invalid credentials from an inconclusive network failure.
 Have the account owner inspect Apps & Credentials with Sandbox selected and Testing Tools > Sandbox Accounts.
 Navigation labels may change; the [official REST setup guide](https://developer.paypal.com/api/get-started/) describes the current flow.
 Do not change app permissions, create additional accounts, or request partner approval as part of this assessment.
+Creating a missing second sandbox Business seller is a separate future setup task in the readiness plan, performed by the account owner after inspecting existing accounts.
 
 Record aliases for the platform, buyer, two distinct sellers, intended payout sender, and recipient in the [assessment](evidence/p1-access-assessment.md).
 Confirm each account's country, currency, role, private custodian, and browser operator without publishing emails, passwords, merchant IDs, or account mappings.
@@ -90,6 +102,19 @@ App type Platform alone does not establish partner approval, seller readiness, d
 Record the proposed later test currency, per-operation amount, total budget, maximum writes, and who can approve buyer checkout and seller consent.
 Unknown entries must retain a named resolution owner and next action.
 All payment capabilities remain not_tested during P1.
+
+## Requested setup targets: 2026-10-11
+
+The requesting contributor supplied the following requirements through an image; they are not completed dashboard observations.
+Use the default Personal account as the buyer and the default Business account as seller-a if their inspected roles are suitable, and identify or create a distinct Business seller-b.
+Confirm separately whether seller-a shares the platform app's Business account and whether that arrangement supports third-party onboarding.
+Use the platform app's Business sandbox balance as the intended Payouts experiment funding source, and select a suitable existing recipient, potentially seller-b.
+The contributor is the requested browser operator; confirm private access and availability for buyer checkout and both sellers' consent.
+The requested envelope is USD, at most $10 principal per test, $500 total, and 50 runner-issued PayPal API attempts across the campaign.
+The readiness plan proposes exact accounting for split amounts, OAuth, reads, retries, polling, recovery, and cleanup; record agreement before execution.
+Inspect Payouts, Vault, partner/platform features, delayed disbursement, and seller readiness without treating OAuth or visible settings as payment proof.
+The preflight has no account-creation, payment-probe, browser-resume, or budget-enforcement commands.
+P2 must supply durable execution before referral or payment business operations.
 
 ## Closeout and continuation
 
