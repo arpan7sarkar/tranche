@@ -7,6 +7,12 @@ const criteria = {
   prose: ["Homepage matches the approved design"],
 };
 
+function at<T>(items: readonly T[], index: number): T {
+  const item = items[index];
+  if (item === undefined) throw new Error(`no item at index ${index}`);
+  return item;
+}
+
 function plan(overrides: Partial<PlanDraft> = {}): PlanDraft {
   return {
     summary: "Storefront rebuild",
@@ -57,7 +63,7 @@ describe("planIssues", () => {
   it("requires every milestone to have a task", () => {
     const base = plan();
     const p = plan({
-      milestones: [...base.milestones, { ...base.milestones[0]!, key: "m2", title: "Build" }],
+      milestones: [...base.milestones, { ...at(base.milestones, 0), key: "m2", title: "Build" }],
     });
     expect(planIssues(p)).toContain('milestone "m2" has no tasks');
   });
@@ -67,7 +73,7 @@ describe("planIssues", () => {
     const p = plan({
       milestones: [
         {
-          ...base.milestones[0]!,
+          ...at(base.milestones, 0),
           payees: [
             { kind: "agency", shareBps: 6000 },
             { kind: "subcontractor", name: "Dev", email: "dev@example.com", shareBps: 3000 },
@@ -81,14 +87,14 @@ describe("planIssues", () => {
   it("requires milestone prices in the plan currency", () => {
     const base = plan();
     const p = plan({
-      milestones: [{ ...base.milestones[0]!, price: { currency: "EUR", minor: 100 } }],
+      milestones: [{ ...at(base.milestones, 0), price: { currency: "EUR", minor: 100 } }],
     });
     expect(planIssues(p)).toContain('milestone "m1" is priced in EUR, plan currency is USD');
   });
 
   it("rejects duplicate keys", () => {
     const base = plan();
-    const p = plan({ tasks: [base.tasks[0]!, { ...base.tasks[1]!, key: "t1" }] });
+    const p = plan({ tasks: [at(base.tasks, 0), { ...at(base.tasks, 1), key: "t1" }] });
     expect(planIssues(p)).toContain('duplicate task key "t1"');
   });
 });
@@ -147,7 +153,7 @@ describe("plan review focus", () => {
     const p = plan({
       milestones: [
         {
-          ...base.milestones[0]!,
+          ...at(base.milestones, 0),
           payees: [
             { kind: "agency", shareBps: 6000 },
             { kind: "subcontractor", name: "Dev", email: "dev@example.com", shareBps: 3000 },
@@ -163,7 +169,7 @@ describe("plan review focus", () => {
     const p = plan({
       milestones: [
         {
-          ...base.milestones[0]!,
+          ...at(base.milestones, 0),
           payees: [
             { kind: "agency", shareBps: 7000 },
             { kind: "subcontractor", name: "Dev", email: "dev@example.com", shareBps: 4000 },
@@ -179,7 +185,7 @@ describe("plan review focus", () => {
     const p = plan({
       milestones: [
         {
-          ...base.milestones[0]!,
+          ...at(base.milestones, 0),
           payees: [
             { kind: "agency", shareBps: 7000 },
             { kind: "subcontractor", name: "Dev", email: "dev@example.com", shareBps: 3000 },
@@ -194,7 +200,7 @@ describe("plan review focus", () => {
   it("rejects a milestone whose criteria have no machine check", () => {
     const base = plan();
     const p = plan({
-      milestones: [{ ...base.milestones[0]!, criteria: { checks: [], prose: ["looks good"] } }],
+      milestones: [{ ...at(base.milestones, 0), criteria: { checks: [], prose: ["looks good"] } }],
     });
     expect(PlanDraft.safeParse(p).success).toBe(false);
   });
