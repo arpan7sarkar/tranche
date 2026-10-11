@@ -17,6 +17,17 @@ const CHANGES_AGREEMENT: ReadonlySet<ActionType> = new Set([
   "submit_dispute_evidence",
 ]);
 
+const ISO_INSTANT = /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+function instantMs(value: string): number | null {
+  const match = ISO_INSTANT.exec(value);
+  if (!match) return null;
+  const ms = Date.parse(value);
+  const day = new Date(`${match[1]}T00:00:00Z`);
+  if (Number.isNaN(ms) || Number.isNaN(day.getTime())) return null;
+  return day.toISOString().slice(0, 10) === match[1] ? ms : null;
+}
+
 const approve = (reason: string): PolicyDecision => ({ decision: "approve", reason });
 const ask = (reason: string): PolicyDecision => ({ decision: "needs_approval", reason });
 const reject = (reason: string): PolicyDecision => ({ decision: "reject", reason });
@@ -68,8 +79,15 @@ export function evaluatePolicy({
     }
   }
 
-  if (context.lastExecutedAt && policy.cooldownMinutes > 0) {
-    const elapsed = (Date.parse(context.now) - Date.parse(context.lastExecutedAt)) / 60_000;
+  if (context.lastExecutedAt !== null && policy.cooldownMinutes > 0) {
+    const now = instantMs(context.now);
+    const last = instantMs(context.lastExecutedAt);
+    if (now === null || last === null) {
+      return ask(
+        "cooldown cannot be evaluated: timestamps must be ISO 8601 instants with an offset",
+      );
+    }
+    const elapsed = (now - last) / 60_000;
     if (elapsed < policy.cooldownMinutes) {
       return ask(`cooldown: ${Math.ceil(policy.cooldownMinutes - elapsed)} minutes left`);
     }
