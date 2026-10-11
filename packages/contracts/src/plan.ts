@@ -76,21 +76,20 @@ export function planIssues(plan: z.infer<typeof PlanShape>): string[] {
       issues.push(`milestone "${m.key}" has no tasks`);
   }
 
-  const indegree = new Map(plan.tasks.map((t) => [t.key, 0]));
-  for (const t of plan.tasks) {
-    for (const d of t.dependsOn)
-      if (taskKeys.has(d)) indegree.set(t.key, (indegree.get(t.key) ?? 0) + 1);
-  }
+  const deps = new Map(
+    plan.tasks.map((t) => [t.key, new Set(t.dependsOn.filter((d) => taskKeys.has(d)))]),
+  );
+  const indegree = new Map([...deps].map(([k, d]) => [k, d.size]));
   const queue = [...indegree].filter(([, n]) => n === 0).map(([k]) => k);
   let visited = 0;
   while (queue.length > 0) {
     const k = queue.shift() as string;
     visited++;
-    for (const t of plan.tasks) {
-      if (!t.dependsOn.includes(k)) continue;
-      const n = (indegree.get(t.key) ?? 0) - 1;
-      indegree.set(t.key, n);
-      if (n === 0) queue.push(t.key);
+    for (const [key, d] of deps) {
+      if (!d.has(k)) continue;
+      const n = (indegree.get(key) ?? 0) - 1;
+      indegree.set(key, n);
+      if (n === 0) queue.push(key);
     }
   }
   if (visited < indegree.size) issues.push("tasks contain a dependency cycle");

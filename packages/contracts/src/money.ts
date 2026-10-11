@@ -23,9 +23,12 @@ export function fromPayPalValue(currency: string, value: string): Money {
   const exponent = minorUnitExponent(currency);
   const pattern = exponent === 0 ? /^\d+$/ : /^\d+(\.\d{1,2})?$/;
   if (!pattern.test(value)) throw new Error(`Cannot represent ${value} ${currency} exactly`);
-  if (exponent === 0) return { currency, minor: Number(value) };
   const [whole = "0", fraction = ""] = value.split(".");
-  return { currency, minor: Number(whole) * 100 + Number(fraction.padEnd(2, "0")) };
+  const minor =
+    exponent === 0 ? Number(value) : Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  if (!Number.isSafeInteger(minor))
+    throw new Error(`Cannot represent ${value} ${currency} exactly`);
+  return { currency, minor };
 }
 
 export function addMoney(a: Money, b: Money): Money {

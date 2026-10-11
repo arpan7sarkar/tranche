@@ -2,7 +2,6 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "globalEnv": ["NODE_ENV"],
-  "globalPassThroughEnv": ["DATABASE_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -14,6 +13,7 @@
     },
     "test": {
       "dependsOn": ["^typecheck"],
+      "env": ["DATABASE_URL"],
       "outputs": []
     },
     "dev": {
