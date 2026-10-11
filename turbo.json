@@ -13,6 +13,7 @@
     },
     "test": {
       "dependsOn": ["^typecheck"],
+      "env": ["DATABASE_URL"],
       "outputs": []
     },
     "dev": {
