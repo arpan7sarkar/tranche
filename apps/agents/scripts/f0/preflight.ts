@@ -88,7 +88,7 @@ export async function runPreflight(
       redirect: "manual",
       signal,
     });
-    if (response.redirected || (response.status >= 300 && response.status < 400)) {
+    if (response.status >= 300 && response.status < 400) {
       await response.body?.cancel();
       return result(4, "authenticate", "unexpected_redirect", { httpStatus: response.status });
     }
