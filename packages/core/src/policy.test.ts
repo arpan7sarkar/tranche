@@ -131,6 +131,57 @@ describe("evaluatePolicy", () => {
       "approve",
     );
   });
+
+  it("applies the cooldown to timestamps with an explicit offset", () => {
+    const within = { ...context, lastExecutedAt: "2026-10-10T10:55:00+01:00" };
+    expect(evaluatePolicy({ action: release(1000), policy, context: within })).toEqual({
+      decision: "needs_approval",
+      reason: "cooldown: 5 minutes left",
+    });
+    const past = { ...context, lastExecutedAt: "2026-10-10T09:49:00.000+00:00" };
+    expect(evaluatePolicy({ action: release(1000), policy, context: past }).decision).toBe(
+      "approve",
+    );
+  });
+
+  it.each([
+    ["not a date", "garbage"],
+    ["no offset", "2026-10-10T09:00:00"],
+    ["date only", "2026-10-09"],
+    ["impossible date", "2026-02-30T09:00:00Z"],
+    ["empty string", ""],
+  ])("asks when the last-executed timestamp is unusable: %s", (_label, lastExecutedAt) => {
+    const d = evaluatePolicy({
+      action: release(1000),
+      policy,
+      context: { ...context, lastExecutedAt },
+    });
+    expect(d.decision).toBe("needs_approval");
+    expect(d.reason).toMatch(/cooldown/);
+    expect(d.reason).toMatch(/cannot be evaluated/);
+  });
+
+  it.each([
+    ["not a date", "garbage"],
+    ["no offset", "2026-10-10T10:00:00"],
+    ["date only", "2026-10-10"],
+  ])("asks when the current timestamp is unusable: %s", (_label, now) => {
+    const d = evaluatePolicy({
+      action: release(1000),
+      policy,
+      context: { ...context, now, lastExecutedAt: "2026-10-10T09:00:00Z" },
+    });
+    expect(d.decision).toBe("needs_approval");
+    expect(d.reason).toMatch(/cooldown/);
+    expect(d.reason).toMatch(/cannot be evaluated/);
+  });
+
+  it("still rejects an impossible release when the timestamps are unusable", () => {
+    const ctx = { ...context, now: "garbage", lastExecutedAt: "garbage" };
+    expect(evaluatePolicy({ action: release(500000), policy, context: ctx }).decision).toBe(
+      "reject",
+    );
+  });
 });
 
 describe("defaultAgencyPolicy", () => {

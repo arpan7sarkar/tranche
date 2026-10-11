@@ -177,6 +177,78 @@ describe("transition", () => {
   });
 });
 
+describe("release_failed", () => {
+  const authorized = run(happy.slice(0, 8));
+  const failed: MilestoneEvent = { type: "release_failed", reason: "payout declined" };
+
+  it("clears the authorization and stays in release_pending", () => {
+    const r = transition(authorized, failed);
+    expect(r.ok && r.next).toEqual({ ...authorized, releaseAuthorizedAt: null });
+    expect(r.ok && r.next.state).toBe("release_pending");
+  });
+
+  it("keeps the money facts and verdict unchanged", () => {
+    const r = transition(authorized, failed);
+    expect(r.ok && r.next.heldMinor).toBe(100000);
+    expect(r.ok && r.next.releasedMinor).toBe(0);
+    expect(r.ok && r.next.verifiedAt).toBe(AT);
+  });
+
+  it("only raises an alert and does not re-arm the auto-release timer", () => {
+    const r = transition(authorized, failed);
+    expect(r.ok && r.effects).toEqual([{ type: "emit", event: "alert.raised" }]);
+  });
+
+  it("allows a fresh approval to release again after a failure", () => {
+    const afterFailure = run([failed], authorized);
+    const r = transition(afterFailure, { type: "release_approved", at: AT });
+    expect(r.ok && r.effects).toContainEqual({ type: "release_funds", amountMinor: 100000 });
+    expect(r.ok && r.next.releaseAuthorizedAt).toBe(AT);
+  });
+
+  it("can fail and be retried repeatedly before the release is confirmed", () => {
+    const s = run(
+      [
+        failed,
+        { type: "release_approved", at: AT },
+        failed,
+        { type: "release_approved", at: AT },
+        { type: "release_confirmed", amountMinor: 100000 },
+      ],
+      authorized,
+    );
+    expect(s.state).toBe("released");
+    expect(s.releasedMinor).toBe(100000);
+  });
+
+  it("rejects a failure when no release is authorized", () => {
+    const afterFailure = run([failed], authorized);
+    expect(transition(afterFailure, failed).ok).toBe(false);
+    expect(transition(run(happy.slice(0, 7)), failed).ok).toBe(false);
+  });
+
+  it("rejects a failure outside release_pending", () => {
+    const outside: MilestoneSnapshot[] = [
+      fresh,
+      run(happy.slice(0, 3)),
+      run(happy.slice(0, 4)),
+      run(happy.slice(0, 5)),
+      run(happy.slice(0, 6)),
+      run(happy.slice(0, 9)),
+      run(happy),
+      run([{ type: "cancel" }]),
+    ];
+    for (const s of outside) {
+      expect(transition(s, failed).ok).toBe(false);
+    }
+  });
+
+  it("rejects a failure while disputed even with an authorization on record", () => {
+    const disputed = run([{ type: "dispute_opened" }], authorized);
+    expect(transition(disputed, failed).ok).toBe(false);
+  });
+});
+
 const eventArb: fc.Arbitrary<MilestoneEvent> = fc.oneof(
   fc.constantFrom<MilestoneEvent>(
     { type: "plan_agreed" },
