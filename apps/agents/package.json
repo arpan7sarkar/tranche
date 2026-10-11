@@ -8,6 +8,7 @@
     "build": "tsdown",
     "start": "node dist/index.mjs",
     "typecheck": "tsc",
+    "f0:preflight": "node --env-file-if-exists=../../.env --import=tsx scripts/f0/preflight.ts",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
