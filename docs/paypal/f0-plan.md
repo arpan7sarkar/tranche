@@ -1,9 +1,20 @@
 # F0: PayPal sandbox capability plan
 
+## Current testing authorization: 2026-10-11
+
+The contributor's latest instruction sets USD $1 as the maximum total testing spend across all tests and resumes, replacing the earlier $5 cap and the original image's $10-per-test and $500-total proposal.
+Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
+Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
+If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+No current preflight command enforces money budgets or executes payments.
+Earlier requested amounts retained below are historical inputs and do not authorize spending.
+
 Created: 2026-10-09.
 Scope: phased execution of the sandbox capability check in [design sections 9 and 15](../superpowers/specs/2026-10-08-tranche-design.md).
 Current progress and the next action live in [f0-status.md](f0-status.md).
 Use [f0-evidence-template.md](f0-evidence-template.md) for each experiment.
+The [2026-10-11 sandbox readiness implementation plan](sandbox-readiness-implementation-plan.md) maps the contributor's image requirements to the remaining P1 assessment and P2 execution foundation.
 
 ## Objective and boundaries
 
@@ -64,6 +75,8 @@ If a phase is too large for one session, hand off its completed tasks and remain
 ## P1: Inventory accounts and assess access
 
 Follow the [P1 implementation plan](p1-implementation-plan.md) for file changes, preflight behavior, tests, operator steps, and completion criteria.
+Use the sandbox readiness plan for the newly requested account roles, contributor-operated browser actions, USD currency, $10-per-test and $500-total limits, and 50-call cap.
+These are requested targets; dashboard observations and budget enforcement remain pending.
 
 ### Tasks
 
@@ -103,6 +116,8 @@ P2 must extend environment loading explicitly to its durable probe runner.
 
 ## P2: Build the minimum execution foundation
 
+Use the [P2 runner implementation plan](p2-sandbox-runner-implementation-plan.md) for the latest limits, per-payment approval requirement, durable records, and ordered implementation tasks.
+
 ### Tasks
 
 - Inspect the installed PayPal SDK and official endpoint documentation before implementing adapters.
@@ -118,6 +133,7 @@ P2 must extend environment loading explicitly to its durable probe runner.
 - Implement atomic claiming, bounded retries, terminal result persistence, and recovery from ambiguous responses.
 - Pause durably for human browser actions and verify resulting state through API reads on resume.
 - Reject amounts or operation counts beyond the configured run budget.
+- Enforce the requested 50 API-call cap across a persistent campaign, counting OAuth, reads, writes, retries, polling, recovery, and cleanup according to the agreed accounting rules in the sandbox readiness plan.
 
 ### Tests and exit criteria
 

@@ -1,10 +1,22 @@
 # P1 sandbox access assessment
 
+## Current testing authorization: 2026-10-11
+
+The contributor's latest instruction sets USD $1 as the maximum total testing spend across all tests and resumes, replacing the earlier $5 cap and the original image's $10-per-test and $500-total proposal.
+Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
+Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
+If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+No current preflight command enforces money budgets or executes payments.
+Earlier requested amounts retained below are historical inputs and do not authorize spending.
+
 Date: 2026-10-09.
 Contributor: current implementation session with the project owner.
-Baseline revision: b35c022; P1 work is uncommitted.
+Historical implementation baseline: b35c022; the P1 implementation and subsequent redirect cleanup are now committed.
 Scope: authentication tooling and sandbox account/access assessment only.
-Status: P1 partially complete; tooling and real sandbox authentication verified, with remaining participant and assessment work explicitly deferred by the owner.
+Status: P1 partially complete; tooling and real sandbox authentication verified; remaining setup is planned under the [2026-10-11 readiness plan](../sandbox-readiness-implementation-plan.md).
+Last planning update: 2026-10-11; no new dashboard observations or payment experiments.
+Latest evidence update: 2026-10-11; contributor confirmed REST credential association, successful login to all four assigned accounts, and USD 5,000 displayed in each; screenshot review and earlier OAuth evidence retained below.
 
 ## Evidence provenance
 
@@ -13,35 +25,118 @@ The owner reports adding the app's sandbox credentials to the ignored root .env.
 These are user-reported facts, not a dashboard inspection performed by the implementing contributor.
 The .env ignore rule was verified without printing credential values.
 No payment capability is inferred from app type or account setup.
+The 2026-10-11 image supplies requested account roles, USD limits, and an operator role; it is not observed account or capability evidence.
+Four later screenshots supplied under the ignored local sources/sandbox_account directory show details for one Business sandbox account and a REST app listed under it.
+This is screenshot-derived evidence, not a direct authenticated dashboard inspection by the assistant.
+The later priority 1 execution record assigns this account to platform; observed-business-1 is a historical alias for the same account, not an additional participant.
 
 ## Account inventory
 
 | Role | Alias | Country / currency | Setup and provenance | Private custodian / operator |
 |---|---|---|---|---|
-| Platform app and business account | platform | Unknown / unknown | Sandbox Platform app and Business Account reported by owner | Project owner; private mapping retained locally |
-| Buyer | buyer | Unknown / unknown | Unknown; not inspected | Project owner to identify |
-| Seller A | seller-a | Unknown / unknown | Unknown; not inspected | Project owner to identify |
-| Seller B | seller-b | Unknown / unknown | Unknown; must be distinct from seller-a | Project owner to identify |
-| Intended Payouts sender | payout-sender | Unknown / unknown | Unknown; account sharing not established | Project owner to identify |
-| Existing Payouts recipient | payout-recipient | Unknown / unknown | Unknown; not inspected | Project owner to identify |
+| Platform app and business account | platform | IN / USD 5,000 displayed | Assigned app-linked Business account; REST credential association, login, and balance contributor-confirmed; local sandbox configuration checked; payment features unverified | Contributor with account owner; private mapping retained locally |
+| Buyer | buyer | IN / USD 5,000 displayed | Assigned default Personal account; login and balance contributor-confirmed; actual USD payment support untested | Contributor with account owner |
+| Seller A | seller-a | IN / USD 5,000 displayed | Assigned default Business account, distinct from platform; login and balance contributor-confirmed; seller consent and payment readiness unverified | Contributor with account owner |
+| Seller B | seller-b | IN / USD 5,000 displayed | Assigned remaining distinct Business account; login and balance contributor-confirmed; seller consent and payment readiness unverified | Contributor with account owner |
+| Intended Payouts sender | payout-sender | Country unknown / USD requested | Platform Business account and sandbox balance requested; mapping and balance unverified | Contributor with account owner |
+| Existing Payouts recipient | payout-recipient | Country unknown / USD requested | Suitable existing recipient to confirm, potentially seller-b | Contributor with account owner |
+| Observed Business account; final role unconfirmed | observed-business-1 | IN / USD balance displayed | Supplied screenshots show Business, Verified, USD 5,000, and an associated REST app | Requesting contributor supplies screenshots; private login access unverified |
 
 Do not publish credentials, account emails, merchant IDs, or secret-bearing lookup references.
 
 ## Dashboard observations
 
-No direct dashboard inspection was performed in this session.
+No direct authenticated dashboard inspection was performed by the assistant.
 Observation date for the owner's app/account report: 2026-10-09.
+Supplied screenshot review date: 2026-10-11.
 
 | Area | Observation | Resolution owner and next action |
 |---|---|---|
 | Sandbox app type / business account | Owner reports Platform / Sandbox Business Account | Project owner to confirm mapping privately |
-| Partner approval and attribution | unknown | Project owner to inspect visible enablement and private attribution details |
+| Partner approval and attribution | Sandbox BN code and multiparty settings visible in screenshot 180518; partner approval and API permissions unproven | Contributor retains BN code privately; later onboarding probe verifies access |
 | Seller features / readiness | unknown | Project owner to inspect both intended sellers |
-| Delayed disbursement enablement | unknown | Project owner to record visible evidence or not_visible |
-| Platform fees | unknown | Project owner to record visible evidence or not_visible |
-| Payouts sender / enablement / funding | unknown | Project owner to identify sender and inspect configuration |
+| Delayed disbursement enablement | observed_enabled in screenshot 180526; seller-level grant unverified | Later seller onboarding and protection-path probes |
+| Platform fees | observed_enabled in screenshot 180526; collection untested | Conditional later fee probe |
+| Payouts sender / enablement / funding | Payouts observed_enabled in screenshot 180505; platform has contributor-reported USD 5,000; usable sender funding and recipient mapping unverified | Confirm intended sender and recipient before later payout probe |
+| Vault / save payment methods | observed_enabled in screenshot 180505; token creation and unattended charging untested | Follow-up outside required F0 probes |
+
+The observations above originated before screenshot review; the dated findings below add partial account evidence without establishing payment capability.
+
+### Supplied screenshot findings: 2026-10-11
+
+The four local files are Screenshot 2026-10-11 162545.png, 162558.png, 162616.png, and 162629.png, with the same Screenshot 2026-10-11 prefix for each timestamp.
+The screenshots show Sandbox selected, a Business account with country IN and dashboard status Verified, and a displayed PayPal balance of USD 5,000.
+A REST app is listed under the account; its displayed name alone does not prove partner approval, app type, or enabled payment products.
+Payment Review and Negative Testing appear off; these testing settings do not establish delayed disbursement, Payouts, or Vault access.
+The screenshots do not show a Personal buyer, a second distinct seller, completed sandbox-account login, seller consent, or app feature settings.
+The supplied sequence is consistent with details for one account; it is not a complete sandbox account inventory.
+Keep platform/seller sharing, payout-sender mapping, and USD payment feasibility unconfirmed until the corresponding roles and API outcomes are established.
+A fifth supplied image, Screenshot 2026-10-11 163125.png, shows the credentials page for an app with the display-name prefix Platform Partner App and a banner explicitly identifying sandbox API credentials.
+Its client ID is visible and its secret is masked; no values are transcribed here and no exact comparison with .env was performed during screenshot review.
+The display name is editable and does not establish app type, partner approval, or payment-product enablement.
+This image shows no Features section, buyer, second seller, or completed consent flow.
+One screenshot contains visible legacy NVP/SOAP credentials; no credential values, account emails, merchant IDs, or screenshots are copied into committed evidence.
+The source directory is ignored; keep these originals private and redact credentials before sharing copies outside the private workspace.
+
+### Sandbox account list: 2026-10-11
+
+Screenshot 2026-10-11 163449.png shows four sandbox accounts: three distinct Business accounts and one Personal account, all with country IN.
+The first Business row matches the previously shown account and has one associated app and a Partner badge; use it as the platform candidate.
+The second Business row has no associated app and a Partner badge; it is a candidate for seller-b, subject to owner confirmation and seller readiness.
+The third Business row has one associated app and a Default badge; use it as the requested default seller-a candidate.
+The Personal row has no associated app and a Default badge; use it as the requested buyer candidate.
+The platform candidate and default seller-a are visibly distinct accounts, resolving the earlier uncertainty about whether those two requested roles must share an account.
+A second distinct Business candidate already exists; no additional account creation is needed merely to obtain three Business accounts and one Personal account.
+Partner badges are dashboard labels, not proof of API permissions, completed third-party onboarding, or payment-product enablement.
+The list does not establish each candidate's USD suitability, ability to log in, seller consent, or Payouts readiness.
+Record final role assignment and exact app-to-.env mapping privately before claiming operational readiness.
+
+## Priority 1 account confirmation
+
+### App feature screenshots: 2026-10-11
+
+Reviewed Screenshot 2026-10-11 180505.png, 180518.png, and 180526.png from the ignored sources/sandbox_account directory.
+The contributor supplied these while inspecting the platform app; the cropped images do not independently show its name or credential identity.
+Screenshot 180505 shows Save payment methods using Vault, Subscriptions, Invoicing, Payment links and buttons, Payouts, Customer disputes, Transaction search, JavaScript SDK v6, and Mobile SDKs checked.
+Log in with PayPal is unchecked, recorded as observed_disabled; this app feature is separate from the contributor's successful sandbox account logins.
+Screenshot 180518 shows a sandbox BN code, Onboard before payment checked, Onboard after payment unchecked, and Business selected as the onboarding intent.
+The before-payment option appears visually muted; the image establishes its displayed selection, not whether the control is editable.
+The BN code value is retained only in the private screenshot and is not transcribed into documentation.
+Screenshot 180526 shows Platform fee and Delay disbursement checked, recorded as observed_enabled.
+Screenshot 180259 separately shows Payment Review and Negative Testing off; these are account testing controls rather than payment-product enablement evidence.
+No feature settings were changed by the assistant.
+These observations do not establish partner approval, completed seller onboarding, granted seller permissions, successful delayed release, fee collection, Vault operation, or payout receipt.
+All business capabilities remain not_tested.
+Next: confirm the intended platform payout sender and existing recipient, inspect any remaining seller-readiness evidence, and agree browser-operator availability and precise test-limit accounting.
+
+### Priority 1 execution: 2026-10-11
+
+The contributor instructed execution after the four-account mapping was presented.
+Assigned platform to the first Business row, buyer to the default Personal row, seller-a to the default Business row, and seller-b to the remaining Business row in Screenshot 2026-10-11 163449.png.
+Compared the account identities visually in that supplied image; all four are distinct and all have country IN.
+Screenshot 162545 shows the platform app under the assigned platform account, and 163125 shows its sandbox credentials page.
+These are screenshot-derived facts, not a new authenticated dashboard inspection.
+Read-only local inspection confirmed PAYPAL_ENV=sandbox, a nonempty client ID and secret, and no process-level overrides for PAYPAL_ENV, PAYPAL_CLIENT_ID, or PAYPAL_CLIENT_SECRET in the inspected process.
+Git ignore checks confirmed the root .env and sources/sandbox_account directory are excluded.
+The contributor privately confirmed that the configured secret belongs to the intended app; its value was not shared.
+Local Windows OCR did not establish an exact client-ID match, so the comparison remains inconclusive rather than a confirmed mismatch.
+The contributor has been asked to confirm the client-ID match privately without sending its value.
+Priority 1 remains partially complete until that match is confirmed.
+No code or credentials were changed and no PayPal requests were made during these checks.
+Login access, USD suitability, payment permissions, and every business capability remain unverified or not_tested.
+See the [priority 1 plan](../p1-account-role-confirmation-plan.md) for the execution record and completion criteria.
 
 ## Authentication and validation
+
+### Contributor confirmation and browser checks: 2026-10-11
+
+After clarification that REST credentials differ from NVP/SOAP signatures, the contributor confirmed the correct platform REST client ID and secret are configured in .env.
+Record that association as contributor-confirmed, not as an exact automated OCR match.
+The contributor reported completing browser login checks for platform, buyer, seller-a, and seller-b, with USD 5,000 displayed in each account.
+The assistant did not independently operate those browser sessions or execute payment calls.
+Priority 1 role and configuration confirmation is complete on this evidence basis.
+The login and displayed-balance checks are complete as user-reported findings; actual USD payment compatibility, seller consent, and payment-product permissions remain untested.
+Next: inspect platform app features, intended payout sender and recipient readiness, browser-operator availability for future experiments, and the proposed accounting rules.
 
 The platform app's sandbox authentication succeeded on 2026-10-09 at 15:51:44.003 UTC.
 Command: pnpm --filter @tranche/agents-service run f0:preflight --authenticate.
@@ -54,6 +149,14 @@ Only the following allowlisted summary was emitted; no token or raw response was
 
 Configuration validation also succeeded at 2026-10-09T15:51:15.652Z.
 This establishes the credential pair works against the sandbox token endpoint, not payment feature enablement or the provenance of other accounts.
+
+### Fresh authentication: 2026-10-11
+
+At the contributor's explicit request, pnpm --filter @tranche/agents-service run f0:preflight --authenticate succeeded at 2026-10-11T10:52:20.384Z.
+Observed result: authenticated, sandbox, HTTP 200, expiresInSeconds 32400, shell exit status 0.
+The first sandboxed invocation stopped during pnpm registry verification; the authorized network-enabled retry reached PayPal and succeeded.
+No token or raw response was printed or persisted, and no business payment operation was performed.
+This fresh check does not establish which dashboard account owns the configured credentials or whether payment features are enabled.
 
 ### Commands actually executed
 
@@ -83,29 +186,32 @@ Final read-only lint, documentation, and diff checks passed and are also recorde
 
 ## Later experiment envelope
 
-Currency, per-operation amount, total budget, maximum writes, and intended payout funding source are unresolved.
-The project owner must propose or confirm these before payment experiments.
-The project owner must identify who can perform later buyer approval and seller consent and how contributors arrange access.
+As of 2026-10-11, the requested targets are USD, $10 per test, $500 total, and 50 API calls, with the platform Business sandbox balance as the intended Payouts experiment source.
+The requesting contributor is the intended operator for buyer approval and both sellers' consent.
+Login access and USD 5,000 displayed in each of the four assigned accounts are contributor-confirmed.
+Actual transaction suitability, operator availability for scheduled experiments, usable payout funding, and precise accounting remain unverified.
+Use the [readiness plan](../sandbox-readiness-implementation-plan.md#step-3-record-operators-and-finalize-the-execution-envelope) for the proposed campaign rules and future enforcement work.
 No browser availability is assumed from possession of app credentials.
 
-The owner explicitly deferred browser-operator assignment and payment-test limit selection to future contributors on 2026-10-09.
-No currency, amount, budget, write count, or operator has been approved by this conversation.
+The owner deferred operator and limit selection on 2026-10-09; the 2026-10-11 image now provides planning targets.
+The latest request plans and documents those tasks; it does not execute payment experiments or prove the limits are enforced.
 
-| Deferred item | Current value | Future contributor's required action |
+| Pending item | Requested target | Contributor's required action |
 |---|---|---|
-| Buyer checkout operator | Unassigned | Arrange a human operator with private access to the intended buyer and confirm availability |
-| Seller consent operators | Unassigned | Arrange an operator for each distinct seller and confirm private account access |
-| Test currency | Unset | Propose a currency compatible with the inspected participant accounts and intended probes |
-| Per-operation amount | Unset | Propose the smallest suitable sandbox amount and define how it applies to split purchase units and payout batches |
-| Total run budget | Unset | Propose a total sandbox amount and specify which operations consume it, without double-counting the same payment lifecycle |
-| Maximum business writes | Unset | Define an explicit cap and whether retries, polling, and cleanup count; align enforcement with the P2 runner |
-| Payout funding source | Unresolved | Identify the intended sender and funding source without assuming agency proceeds reach the platform |
-| Limit approval | Not requested or granted | Record the owner's confirmation, date, and agreed limits before executing payment experiments |
+| Buyer checkout operator | Requesting contributor | Confirm private buyer access and availability |
+| Seller consent operators | Requesting contributor for both sellers | Confirm private access to each distinct seller and availability |
+| Test currency | USD | Confirm participant compatibility without assuming account country |
+| Per-test amount | Must fit within remaining $1 total testing allowance | Sum units/items, allow for sender fees, and obtain explicit approval before each money-moving test |
+| Campaign spending | At most $1 total under latest contributor instruction | Persist a 100-cent allowance across tests and resumes, including known sender fees; no automatic increase |
+| API-call cap | 50 API calls requested | Agree accounting including OAuth, reads, writes, retries, polling, recovery, and cleanup; enforce in P2 |
+| Business writes | Separate audit count; no independent numeric cap supplied | Count every attempt and require outbox execution within the 50-call campaign cap |
+| Payout funding source | Platform app's Business sandbox balance | Verify account mapping, permissions, usable USD balance, and recipient; product proceeds path remains unproven |
+| Accounting agreement | Proposed in readiness plan; pending agreement | Record agreement on the image's accounting details before payment execution |
 
 Coordinate these choices with the project owner rather than assuming contributors inherit account access or spending authority.
 Keep passwords and account mappings private; committed records should contain only operator roles or agreed non-sensitive names, aliases, availability arrangements, and approved limits.
 P2 must validate and enforce the agreed amount and write-count limits before executing business operations.
-Later payment probes must not proceed with unset limits or unavailable required browser operators.
+Later payment probes must not proceed without agreed and enforced limits, verified required accounts, and available browser operators.
 Offline tooling work can proceed independently when requested, but it does not resolve these assessment gaps.
 
 ## Capabilities and provider resources
@@ -116,7 +222,7 @@ No business API writes have been executed and no payment resources require clean
 ## Remaining P1 criteria and P2 starting action
 
 Tooling tests, TypeScript checking, configuration validation, and real sandbox authentication are complete.
-The project owner must complete the participant inventory, dashboard observations, browser-operator assignment, and later budget proposal.
+The contributor and account owner must complete the participant inventory, dashboard observations, operator access/availability checks, and accounting agreement for the supplied budget targets.
 Do not mark P1 complete while these required facts are unresolved.
 P2's first independent implementation action is to inspect the preflight and define shared probe contracts and the durable outbox boundary before business operations.
 
@@ -127,7 +233,7 @@ This does not establish that participant accounts are absent; their existence an
 Do not invent account facts or mark unresolved features unsupported.
 
 1. Read AGENTS.md, design section 9, the P1 implementation plan, runbook, and this assessment.
-2. Inspect the working tree and preserve existing P0/P1 work; the current implementation has not been committed.
+2. Read the 2026-10-11 readiness plan, inspect the working tree, and preserve existing changes; P0/P1 implementation and redirect cleanup are committed.
 3. Arrange private dashboard access with the owner and confirm the platform app/account mapping without printing credentials.
 4. Inspect existing sandbox accounts and identify a Personal buyer, Business seller-a, and a distinct Business seller-b.
 5. Record each participant's alias, country, currency, private custodian, and setup status in the inventory.
@@ -136,7 +242,7 @@ Do not invent account facts or mark unresolved features unsupported.
 8. Inspect partner approval, seller features, delayed disbursement, platform fees, attribution availability, and Payouts settings without changing them.
 9. Record each dashboard observation with date and provenance, using unknown or not_visible when appropriate.
 10. Identify the operators for buyer checkout and each seller's consent and document how a future contributor arranges their participation.
-11. Propose the sandbox currency, per-operation amount, total budget, and maximum business writes; obtain owner confirmation before later payment tests.
+11. Record agreement on the requested USD, $10-per-test, $500-total, and 50-API-call envelope using the readiness plan's accounting rules; keep API attempts and business-write counts distinct.
 12. Rerun offline tests and configuration checks if code or configuration changed; repeat real OAuth only if a fresh credential verification is necessary.
 13. Review every P1 completion criterion, update this assessment and f0-status.md, and explicitly retain any unresolved work.
 

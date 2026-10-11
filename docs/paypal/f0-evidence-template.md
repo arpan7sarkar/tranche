@@ -20,6 +20,12 @@ Never copy secrets, full approval URLs, or unredacted provider payloads into thi
 | Country and currency | TBD |
 | Intent and disbursement configuration | TBD |
 | Per-operation amount and total budget | TBD |
+| Campaign identity and agreed accounting rules | TBD |
+| Currency and total principal for this experiment | TBD |
+| API attempts used / remaining against campaign cap | TBD |
+| Business-write attempts, recorded separately | TBD |
+| Payment approval reference and approved attempt | TBD; required before each money-moving dispatch |
+| Principal, sender-fee bound, and remaining $1 total allowance | TBD |
 | Capability status | not_tested |
 
 ## Prerequisites and expected evidence
@@ -36,6 +42,8 @@ Identify any dependent experiment and its evidence path.
 
 For browser actions, record the account alias, action, and confirmed result without preserving token-bearing URLs.
 For writes, record local run and operation references so the private outbox can establish request identity and payload continuity.
+Record campaign counters before and after execution, including OAuth, reads, retries, polling, recovery, and cleanup according to the agreed envelope.
+For the requested sandbox setup, use the [readiness plan](sandbox-readiness-implementation-plan.md), adjusting its relative link when copying this template into the evidence directory.
 Record sanitized HTTP statuses, issue codes, debug IDs, and timestamps where relevant.
 If a step was simulated, identify it as simulated rather than real sandbox evidence.
 
