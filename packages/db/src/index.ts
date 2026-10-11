@@ -15,4 +15,5 @@ export async function migrateDb(db: Db) {
   await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
 }
 
+export * from "./magic-links";
 export { schema };
