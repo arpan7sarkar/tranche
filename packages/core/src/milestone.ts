@@ -22,6 +22,7 @@ export type MilestoneEvent =
   | { type: "release_approved"; at: string }
   | { type: "auto_release_due"; at: string }
   | { type: "release_confirmed"; amountMinor: number }
+  | { type: "release_failed"; reason: string }
   | { type: "payout_confirmed" }
   | { type: "dispute_opened" }
   | { type: "dispute_resolved"; outcome: "merchant" | "buyer" }
@@ -127,6 +128,11 @@ export function transition(s: MilestoneSnapshot, e: MilestoneEvent): TransitionR
         { type: "cancel_timers" },
         { type: "pay_out" },
       ]);
+    case "release_failed":
+      // No auto-release re-arm: a retry needs a fresh release_approved, so failures never loop.
+      return from("release_pending") && s.releaseAuthorizedAt !== null
+        ? go({ releaseAuthorizedAt: null }, [emit("alert.raised")])
+        : reject();
     case "payout_confirmed":
       return from("released") ? go({ state: "paid_out" }, [emit("milestone.paid_out")]) : reject();
     case "dispute_opened":
