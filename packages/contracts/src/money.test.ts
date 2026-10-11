@@ -72,4 +72,24 @@ describe("money edge cases", () => {
     expect(Money.safeParse({ currency: "USD", minor: -1 }).success).toBe(false);
     expect(Money.safeParse({ currency: "USD", minor: 1.5 }).success).toBe(false);
   });
+
+  it("returns the largest safe integer exactly", () => {
+    expect(fromPayPalValue("USD", "90071992547409.91")).toEqual({
+      currency: "USD",
+      minor: Number.MAX_SAFE_INTEGER,
+    });
+    expect(fromPayPalValue("JPY", "9007199254740991")).toEqual({
+      currency: "JPY",
+      minor: Number.MAX_SAFE_INTEGER,
+    });
+  });
+
+  it.each([
+    ["USD", "90071992547409.92"],
+    ["USD", "90071992547409.93"],
+    ["JPY", "9007199254740992"],
+    ["JPY", "9007199254740993"],
+  ])("throws when %s %s exceeds the safe integer range", (currency, value) => {
+    expect(() => fromPayPalValue(currency, value)).toThrow();
+  });
 });

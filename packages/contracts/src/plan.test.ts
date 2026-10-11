@@ -97,6 +97,25 @@ describe("planIssues", () => {
     const p = plan({ tasks: [at(base.tasks, 0), { ...at(base.tasks, 1), key: "t1" }] });
     expect(planIssues(p)).toContain('duplicate task key "t1"');
   });
+  it("does not report a cycle when a task lists the same dependency twice", () => {
+    const p = plan({
+      tasks: [
+        { key: "a", title: "A", durationDays: 1, dependsOn: [], milestoneKey: "m1" },
+        { key: "b", title: "B", durationDays: 1, dependsOn: ["a", "a"], milestoneKey: "m1" },
+      ],
+    });
+    expect(planIssues(p)).not.toContain("tasks contain a dependency cycle");
+  });
+
+  it("still reports a cycle that includes a duplicated dependency", () => {
+    const p = plan({
+      tasks: [
+        { key: "a", title: "A", durationDays: 1, dependsOn: ["b", "b"], milestoneKey: "m1" },
+        { key: "b", title: "B", durationDays: 1, dependsOn: ["a"], milestoneKey: "m1" },
+      ],
+    });
+    expect(planIssues(p)).toContain("tasks contain a dependency cycle");
+  });
 });
 
 describe("AcceptanceCriteria", () => {
