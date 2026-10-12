@@ -52,6 +52,7 @@ CREATE TABLE "sandbox_operation" (
 	"commitment_id" uuid NOT NULL,
 	"request_id" uuid NOT NULL,
 	"payload_hash" text NOT NULL,
+	"semantic_key" text NOT NULL,
 	"spec" jsonb NOT NULL,
 	"state" text NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
@@ -60,7 +61,8 @@ CREATE TABLE "sandbox_operation" (
 	"fee_committed" integer DEFAULT 0 NOT NULL,
 	"held_calls" integer DEFAULT 0 NOT NULL,
 	"recovery_reads" integer DEFAULT 0 NOT NULL,
-	CONSTRAINT "sandbox_operation_request_id_unique" UNIQUE("request_id")
+	CONSTRAINT "sandbox_operation_request_id_unique" UNIQUE("request_id"),
+	CONSTRAINT "sandbox_operation_semantic_key_unique" UNIQUE("semantic_key")
 );
 --> statement-breakpoint
 CREATE TABLE "sandbox_run" (

@@ -77,7 +77,17 @@ Applicable fees, seller grants, usable payout funding and actual USD transaction
 The P1 browser-operator availability confirmation remains open; passing P2 tests does not close that assessment.
 A concrete eligible payment experiment cannot yet be prepared with established endpoint prerequisites and fee bounds; retain that blocker rather than guessing a fee or increasing the budget.
 
-## Next phase
+## Main-branch integration verification: 2026-10-12
+
+The merge preserves the upstream foundation contracts, pure core implementation, schema directory, seed helpers and magic links alongside the P2 runner.
+The upstream 0000_living_cargill foundation migration is retained unchanged, and Drizzle generated 0001_sparkling_imperial_guard for the seven sandbox tables with their final constraints.
+The two original P2-only migration files were replaced during integration because their independent initial snapshot conflicted with the foundation history.
+The original P2 migrations had been applied only to disposable test data; the configured application database was not migrated or changed.
+A fresh tranche-merge-tests PostgreSQL container verified the combined migration chain, followed by 237 passing workspace tests with no database scenarios skipped and all package typechecks passing.
+This total includes upstream foundation tests and the original 109 P2/preflight tests; PayPal transport remained mocked.
+The isolated merge-test container was stopped afterward.
+
+## Next implementation action
 
 The next implementation task is the P3 seller-onboarding adapter and its endpoint-specific contract tests.
 Confirm platform onboarding prerequisites and the contributor's browser availability before requesting a real referral operation.

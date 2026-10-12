@@ -1,2 +1,0 @@
-ALTER TABLE "sandbox_operation" ADD COLUMN "semantic_key" text NOT NULL;--> statement-breakpoint
-ALTER TABLE "sandbox_operation" ADD CONSTRAINT "sandbox_operation_semantic_key_unique" UNIQUE("semantic_key");
