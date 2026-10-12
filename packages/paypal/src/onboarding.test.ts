@@ -117,6 +117,28 @@ describe("PayPal onboarding contracts", () => {
       ),
     ).not.toMatch(/private@example|PRIVATE/);
   });
+  it.each(["PPCP_STANDARD", "PPCP_CUSTOM"])(
+    "accepts subscribed %s only when PPCP is requested",
+    (name) => {
+      const body = response({ products: [{ name, vetting_status: "SUBSCRIBED" }] });
+      expect(verifyOnboarding(body, context).reason).toBe("product_inactive");
+      expect(verifyOnboarding(body, { ...context, product: "PPCP" })).toMatchObject({
+        status: "consent_verified",
+        productActive: true,
+      });
+    },
+  );
+  it.each([
+    { name: "PPCP_STANDARD" },
+    { name: "PPCP_STANDARD", vetting_status: "SUBSCRIBED_WITH_LIMIT" },
+    { name: "PPCP_STANDARD", vetting_status: "IN_REVIEW" },
+    { name: "PPCP_CUSTOM", status: "PENDING", vetting_status: "SUBSCRIBED" },
+    { name: "MOBILE_PAYMENT_ACCEPTANCE", status: "ACTIVE" },
+  ])("keeps uncertain or unrelated PPCP readiness blocked: %j", (product) => {
+    expect(
+      verifyOnboarding(response({ products: [product] }), { ...context, product: "PPCP" }),
+    ).toMatchObject({ status: "readiness_incomplete", reason: "product_inactive" });
+  });
   it("validates both referral destinations without following returned API links", () => {
     expect(parseReferral(referral()).referralId).toBe("FAKE_REF");
     expect(

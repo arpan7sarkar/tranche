@@ -5,12 +5,24 @@ import {
   type StoredOperation,
   sandboxPayloadHash,
 } from "@tranche/db";
-import { SandboxClient, type SandboxRequest } from "@tranche/paypal";
+import {
+  onboardingStatusRequest,
+  paymentRead,
+  SandboxClient,
+  type SandboxRequest,
+  verifyBuyerChangeOrder,
+  verifyOnboarding,
+} from "@tranche/paypal";
 
 export interface SandboxAdapter {
   kind: SandboxOperationSpec["kind"];
   validate(spec: SandboxOperationSpec): void;
   prepare(operation: StoredOperation): SandboxRequest;
+  beforeWrite?(
+    operation: StoredOperation,
+    read: (request: SandboxRequest) => Promise<unknown>,
+    claim: DispatchClaim,
+  ): Promise<void>;
   interpret(body: unknown, operation: StoredOperation): Promise<unknown>;
   failure?(error: unknown): unknown;
   recover(
@@ -60,6 +72,65 @@ export class SandboxRunner {
     );
   }
 
+  async changeBuyer(id: string): Promise<void> {
+    const change = await this.store.buyerChange(id);
+    if (change.state !== "approved") throw new Error("buyer_change_approval_required");
+    const op = await this.store.operation(change.operationId);
+    this.adapter(op);
+    const claim = await this.store.beginRecovery(op.id, id);
+    try {
+      const p = claim.operation.spec.payment;
+      if (!p) throw new Error("payment_context_required");
+      const signal = AbortSignal.timeout(30_000);
+      const body = await this.client(claim).request(
+        paymentRead({ ...p, orderId: change.orderId }, "order"),
+        { recovery: true, signal },
+      );
+      const order = verifyBuyerChangeOrder(
+        body,
+        { ...p, orderId: change.orderId },
+        op.commitmentId,
+      );
+      await this.store.applyBuyerChange(claim, id, order.id);
+    } catch (error) {
+      await this.store.finishRecovery(claim, { state: "inconclusive" });
+      throw error;
+    }
+  }
+
+  async maintain(id: string): Promise<void> {
+    const row = await this.store.maintenanceRecord(id);
+    const op = await this.store.operation(row.operationId);
+    this.adapter(op);
+    const claim = await this.store.beginMaintenance(id);
+    try {
+      const signal = AbortSignal.timeout(30_000);
+      if (row.input.kind === "onboarding_product") {
+        const context = row.targetContext;
+        if (!context) throw new Error("product_change_invalid");
+        const body = await this.client(claim).request(onboardingStatusRequest(context), {
+          recovery: true,
+          signal,
+        });
+        const evidence = verifyOnboarding(body, context);
+        if (evidence.status !== "consent_verified") throw new Error("product_not_ready");
+        await this.store.finishMaintenance(claim, id, evidence);
+      } else {
+        const p = op.spec.payment;
+        if (!p || !row.orderId) throw new Error("retirement_not_available");
+        const body = await this.client(claim).request(
+          paymentRead({ ...p, orderId: row.orderId }, "order"),
+          { recovery: true, signal },
+        );
+        verifyBuyerChangeOrder(body, { ...p, orderId: row.orderId }, op.commitmentId);
+        await this.store.finishMaintenance(claim, id, body);
+      }
+    } catch (error) {
+      await this.store.failMaintenance(claim, id);
+      throw error;
+    }
+  }
+
   async resume(operationId: string, options: { refreshConsent?: boolean } = {}): Promise<void> {
     const op = await this.store.operation(operationId);
     if (["succeeded", "failed", "blocked", "awaiting_approval"].includes(op.state)) return;
@@ -76,6 +147,18 @@ export class SandboxRunner {
       let outcome: unknown;
       try {
         const signal = AbortSignal.timeout(45_000);
+        const beforeWrite = adapter.beforeWrite;
+        if (beforeWrite)
+          await bounded(signal, () =>
+            beforeWrite(
+              claim.operation,
+              (request) => {
+                if (request.method !== "GET") throw new Error("preflight_read_only");
+                return client.request(request, { signal });
+              },
+              claim,
+            ),
+          );
         const body = await client.request(request, {
           permit: {
             requestId: claim.operation.requestId,

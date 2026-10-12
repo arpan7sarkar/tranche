@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   PayPalIntegrationResponse,
+  PayPalReferralId,
   PayPalReferralResponse,
   SandboxOnboardingContext,
   type SandboxOnboardingEvidence,
@@ -85,9 +86,7 @@ export function parseReferral(body: unknown): { referralId: string; browserUrl: 
   if (self.length !== 1 || action.length !== 1) throw new Error("referral_links");
   const selfUrl = new URL(self[0]?.href ?? "");
   const browser = new URL(action[0]?.href ?? "");
-  const match = /^\/v2\/customer\/partner-referrals\/([A-Za-z0-9_-]{1,127})$/.exec(
-    selfUrl.pathname,
-  );
+  const match = /^\/v2\/customer\/partner-referrals\/(.{1,765})$/.exec(selfUrl.pathname);
   if (
     !["https://api-m.sandbox.paypal.com", "https://api.sandbox.paypal.com"].includes(
       selfUrl.origin,
@@ -106,7 +105,8 @@ export function parseReferral(body: unknown): { referralId: string; browserUrl: 
     (action[0]?.method && action[0].method !== "GET")
   )
     throw new Error("referral_destination");
-  return { referralId: match[1] as string, browserUrl: browser.href };
+  const referralId = PayPalReferralId.parse(decodeURIComponent(match[1] as string));
+  return { referralId, browserUrl: browser.href };
 }
 
 export function verifyOnboarding(

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SandboxMaintenanceSummary } from "./sandbox-maintenance";
 import {
   SandboxOnboardingApproval,
   SandboxOnboardingContext,
@@ -7,6 +8,13 @@ import {
   SandboxPartnerContext,
   SandboxSeller,
 } from "./sandbox-onboarding";
+import {
+  SandboxAssertionContext,
+  SandboxBuyerChangeSummary,
+  SandboxPaymentApproval,
+  SandboxPaymentResult,
+  SandboxPaymentSpec,
+} from "./sandbox-protection";
 
 export const SandboxAlias = z.enum(["platform", "buyer", "seller-a", "seller-b"]);
 export const SandboxCents = z.number().int().min(0).max(100);
@@ -48,11 +56,26 @@ export const SandboxOperationSpec = z
       path: z.string().regex(/^\/v[12]\/[A-Za-z0-9/_-]+$/),
       body: z.json().optional(),
       partner: SandboxPartnerContext.optional(),
+      assertion: SandboxAssertionContext.optional(),
+      representation: z.literal(true).optional(),
     }),
     onboarding: SandboxOnboardingContext.optional(),
+    payment: SandboxPaymentSpec.optional(),
     recoveryCalls: z.number().int().min(1).max(10),
   })
   .superRefine((spec, ctx) => {
+    if (
+      spec.payment &&
+      (spec.kind !== spec.payment.stage ||
+        spec.sender !== "buyer" ||
+        spec.recipients.length !== 1 ||
+        spec.recipients[0]?.alias !== spec.payment.context.seller.seller ||
+        spec.recipients[0]?.cents !== spec.payment.context.principalCents ||
+        spec.feeBoundCents !== spec.payment.context.feeBounds[spec.payment.stage] ||
+        spec.recoveryCalls !== spec.payment.context.recoveryCalls ||
+        spec.onboarding)
+    )
+      ctx.addIssue({ code: "custom", message: "Invalid payment mapping" });
     if (spec.kind === "onboard_seller" && !spec.onboarding)
       ctx.addIssue({ code: "custom", message: "Onboarding configuration required" });
     if (
@@ -131,17 +154,28 @@ export const SandboxApprovalSummary = z.strictObject({
   recipients: z.array(z.strictObject({ alias: SandboxAlias, cents: SandboxCents })),
   feeBoundCents: SandboxCents,
   onboarding: SandboxOnboardingApproval.optional(),
+  payment: SandboxPaymentApproval.optional(),
 });
 
 export const SandboxOutcome = z.discriminatedUnion("state", [
-  z.strictObject({ state: z.literal("succeeded"), onboarding: SandboxOnboardingResult.optional() }),
-  z.strictObject({ state: z.literal("failed"), onboarding: SandboxOnboardingResult.optional() }),
+  z.strictObject({
+    state: z.literal("succeeded"),
+    onboarding: SandboxOnboardingResult.optional(),
+    payment: SandboxPaymentResult.optional(),
+  }),
+  z.strictObject({
+    state: z.literal("failed"),
+    onboarding: SandboxOnboardingResult.optional(),
+    payment: SandboxPaymentResult.optional(),
+  }),
   z.strictObject({
     state: z.literal("inconclusive"),
+    payment: SandboxPaymentResult.optional(),
     onboarding: SandboxOnboardingResult.optional(),
   }),
   z.strictObject({
     state: z.literal("waiting_for_browser"),
+    payment: SandboxPaymentResult.optional(),
     expectedAlias: SandboxAlias,
     artifactKey: z.uuid(),
     onboarding: SandboxOnboardingResult.optional(),
@@ -152,6 +186,16 @@ export type SandboxOutcome = z.infer<typeof SandboxOutcome>;
 export const SandboxReport = z.strictObject({
   runId: z.uuid(),
   capability: z.literal("not_tested"),
+  payments: z
+    .array(
+      z.strictObject({
+        commitmentId: z.uuid(),
+        path: z.literal("authorization_capture"),
+        evidence: SandboxPaymentResult.shape.evidence,
+        remainingCalls: z.number().int().min(0).max(50),
+      }),
+    )
+    .optional(),
   allocation: SandboxAllocation,
   operations: z.array(
     z.strictObject({
@@ -174,6 +218,8 @@ export const SandboxReport = z.strictObject({
 export type SandboxReport = z.infer<typeof SandboxReport>;
 
 export const SandboxInspection = z.strictObject({
+  maintenance: z.array(SandboxMaintenanceSummary).optional(),
+  buyerChanges: z.array(SandboxBuyerChangeSummary).optional(),
   report: SandboxReport,
   approvals: z.array(SandboxApprovalSummary),
   browserWaits: z.array(SandboxBrowserWait),

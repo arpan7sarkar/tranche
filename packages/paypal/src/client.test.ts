@@ -14,6 +14,38 @@ function setup(fetcher: typeof fetch) {
 }
 
 describe("counted sandbox transport", () => {
+  it("binds seller assertions to the configured platform and generates tokens only for transport", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValue(Response.json({}));
+    const { client } = setup(fetcher);
+    await expect(
+      client.request({
+        method: "GET",
+        path: "/v2/checkout/orders/FAKE",
+        assertion: { platformClientId: "OTHER", sellerMerchantId: "SELLERA000001" },
+      }),
+    ).rejects.toThrow("sandbox_configuration");
+    expect(fetcher).not.toHaveBeenCalled();
+    await client.request({
+      method: "GET",
+      path: "/v2/checkout/orders/FAKE",
+      assertion: { platformClientId: config.clientId, sellerMerchantId: "SELLERA000001" },
+      representation: true,
+    });
+    const headers = fetcher.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    const jwt = headers["PayPal-Auth-Assertion"] ?? "";
+    const parts = jwt.split(".");
+    expect(parts).toHaveLength(3);
+    expect(parts[2]).toBe("");
+    expect(JSON.parse(Buffer.from(parts[0] ?? "", "base64").toString())).toEqual({ alg: "none" });
+    expect(JSON.parse(Buffer.from(parts[1] ?? "", "base64").toString())).toEqual({
+      iss: config.clientId,
+      payer_id: "SELLERA000001",
+    });
+    expect(headers.Prefer).toBe("return=representation");
+  });
   it("sends validated partner attribution without accepting arbitrary headers", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

@@ -1,7 +1,7 @@
 # P3 seller-onboarding operator runbook
 
 Date: 2026-10-12.
-Status: Offline implementation verified; actual sandbox onboarding has not been executed.
+Status: Offline implementation verified; Indian Seller A consent verified; replacement US seller consent and PPCP product readiness verified through approved read-only maintenance.
 Design: [P3 implementation plan](p3-seller-onboarding-implementation-plan.md).
 Evidence and limitations: [P3 implementation record](p3-implementation-record.md).
 Foundation commands: [P2 runbook](p2-runbook.md).
@@ -22,7 +22,8 @@ The seller signs in on PayPal and grants permissions there; Tranche does not rec
 Resume checks the intended merchant, tracking identity, platform client grant, requested scopes, active product, payments_receivable and primary_email_confirmed through PayPal's merchant-integration endpoint.
 Only a matching and ready integration produces consent_verified and a succeeded operation.
 Wrong identity, missing permissions, pending readiness, malformed responses and HTTP permission errors remain incomplete or inconclusive.
-No order, authorization, capture, release or payout adapter is registered.
+P4 now registers order, authorization and capture adapters separately; use the [P4 runbook](p4-runbook.md) for their prerequisites and approvals.
+Delayed release and payout adapters remain unavailable.
 The generic report's capability field remains not_tested; use its separate onboarding evidence for the observed seller-connection result, not as proof of a payment capability.
 
 ## Private prerequisites
@@ -45,6 +46,20 @@ Its structure is SandboxOnboardingInput in packages/contracts/src/sandbox-onboar
 Use a unique, stable trackingId for this seller and retain it after an interrupted request.
 Preparation permanently deduplicates platform/seller and platform/tracking identities across runs, even if the mapping version changes.
 This release provides no reset, replacement-referral or permission-revocation command.
+
+### Requested product and returned products
+
+The intended replacement payment test uses a US Personal buyer and a separate US Business seller.
+The US seller's merchant-integration response returned PPCP_STANDARD and PPCP_CUSTOM with vetting_status SUBSCRIBED, but no EXPRESS_CHECKOUT product, after an EXPRESS_CHECKOUT referral.
+Identity, platform grant, required scopes, payments_receivable and primary_email_confirmed passed; the initial EXPRESS_CHECKOUT product check remained incomplete.
+The existing verifier supports PPCP requests with subscribed PPCP_STANDARD or PPCP_CUSTOM products, but does not treat them as proof of the separately requested EXPRESS_CHECKOUT product.
+PayPal describes the requested products and their response examples in its [before-payment onboarding guide](https://developer.paypal.com/platforms/seller-onboarding/before-payment/).
+Do not change an approved or dispatched operation's private JSON or database rows to switch products, reset recovery limits, or create another run to bypass seller deduplication.
+The [read-only maintenance flow](sandbox-maintenance-runbook.md) now supports a separately approved check of the existing PPCP subscription and unchanged grants, without replacing the original referral.
+The US onboarding operation has exhausted its two original recovery reads; maintenance requires a separate two-call approval rather than another ordinary resume.
+The previous Indian-seller order was subsequently verified as unapproved with no authorization or capture, then retired locally through approved maintenance; its reservation is released and its original commitment cannot advance in this runner.
+Return and cancel URLs are now included for newly prepared orders, with local informational callback pages that do not confirm or initiate a payment.
+No US seller payment order, authorization or capture is authorized by these findings.
 
 ## Database and authorization
 

@@ -77,7 +77,7 @@ export function onboardingAdapter(
         const body = await read({
           method: "GET",
           partner: c.partner,
-          path: `/v2/customer/partner-referrals/${resource.referralId}`,
+          path: `/v2/customer/partner-referrals/${encodeURIComponent(resource.referralId)}`,
         });
         if (parseReferral(body).referralId !== resource.referralId)
           throw new Error("referral_mismatch");
@@ -92,7 +92,7 @@ export function onboardingAdapter(
         const body = await read({
           method: "GET",
           partner: c.partner,
-          path: `/v2/customer/partner-referrals/${resource.referralId}`,
+          path: `/v2/customer/partner-referrals/${encodeURIComponent(resource.referralId)}`,
         });
         if (parseReferral(body).referralId !== resource.referralId)
           throw new Error("referral_mismatch");

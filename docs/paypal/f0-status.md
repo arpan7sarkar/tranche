@@ -22,6 +22,8 @@ Foundation completion: [P2 closeout](p2-closeout.md).
 Implementation plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](p4-payment-protection-implementation-plan.md).
 P3 implementation and execution handoff: [P3 record](p3-implementation-record.md) and [runbook](p3-runbook.md).
 P3 implementation closure and agreed next phase: [P3 closeout](p3-closeout.md).
+P4 authorization/capture commands and verification: [P4 runbook](p4-runbook.md) and [implementation record](p4-implementation-record.md).
+Actual US-to-US transaction evidence: [P4 authorization and capture](evidence/p4-us-authorization-capture-2026-10-12.md).
 
 ## Current position
 
@@ -30,7 +32,68 @@ F0 as a whole is not complete.
 P1 tooling and real sandbox authentication are verified.
 P2's offline runner foundation is implemented and verified with 109 passing tests, including 18 disposable PostgreSQL scenarios; real capability adapters are deferred to P3-P6.
 P3's seller-onboarding adapter and durable consent verification are now implemented; the combined workspace passes 295 tests, with only the separately opted-in real sandbox test skipped.
-No actual referral, seller-consent verification or payment capability experiment has been executed.
+P4 subsequently implements authorization/capture offline; the latest workspace verification passes 349 tests with the P3 and P4 real integration tests intentionally skipped.
+Delayed-disbursement implementation remains blocked on its referenced-release contract; Seller A onboarding and one US-to-US authorization/capture transaction are verified.
+The first approved, zero-dollar Seller A referral attempt on 2026-10-12 ended inconclusively with malformed_response; no referral ID or usable consent artifact was saved.
+That initial attempt consumed two API attempts and held eight calls, with zero reserved or committed cents.
+An offline reproduction subsequently confirmed that the referral validator rejected documented Base64 IDs containing padding or reserved characters; validation and encoded referral reads were corrected.
+The contributor recovered the original response from sandbox API call logs; screenshots show HTTP 201 and a padded referral ID that the original validator rejected.
+The contributor opened the original consent link and reported approval as Seller A.
+Resuming the same operation used only authentication and a merchant-integration read; the operation succeeded with consent_verified and ready.
+Authoritative evidence confirms the expected merchant, platform connection, required permissions, payments_receivable, primary_email_confirmed, active product, and no missing scopes.
+The persisted allocation now reports four consumed API attempts, zero held calls, and zero reserved or committed cents; the referral POST was not repeated.
+Buyer identification, payment amount and sender-fee bounds, and explicit approval of each subsequent write remain prerequisites for actual P4 testing.
+The approved P4 test subsequently created one USD 1.00 AUTHORIZE order for Seller A; checkout failed with UNSUPPORTED_PAYEE_CURRENCY as shown in screenshot 190259.
+Two counted order-status checks kept the operation waiting for browser approval; after the approved buyer change, the latest observed allocation is 13 consumed attempts, 27 held calls, 100 reserved cents and zero committed cents.
+No authorization or capture has been issued.
+The contributor supplied a replacement US Personal buyer and confirmed USD 5,000 displayed; an offline buyer-change flow now supports a separately approved amendment of the existing unapproved order without replacing its payment commitment.
+The amendment requires four additional call reservations within the unchanged 50-call cap, preserves all used counters, and does not establish that the seller currency error is resolved.
+The tested audit-table migration has been applied to the existing local database, and the contributor-approved US buyer change is applied after a counted OAuth and order GET verified that the existing order remained unapproved.
+The existing order and browser artifact are preserved; checkout with the US Personal buyer and Indian seller remains pending, and no authorization or capture was sent.
+The contributor subsequently reported the same generic checkout failure with the US buyer and supplied a US Business replacement seller.
+The approved replacement-seller referral was created successfully and is waiting for browser consent; shared accounting is now 15 consumed attempts, 31 held calls, 100 reserved cents and zero committed cents.
+The existing Indian-seller order remains unchanged; no replacement payment order, authorization or capture was sent.
+After the contributor completed US seller consent, a counted merchant-integration check confirmed matching identity, platform connection, required permissions, payments receivable and primary email confirmation.
+The verifier could not confirm the requested EXPRESS_CHECKOUT product as active and recorded readiness_incomplete with reason product_inactive; this does not establish whether the cause is provider activation or product-response mapping.
+US seller payment testing remains blocked pending product-readiness investigation; shared accounting is 17 consumed attempts, 29 held calls, 100 reserved cents and zero committed cents.
+The final reserved onboarding read returned PPCP_CUSTOM and PPCP_STANDARD with vetting_status SUBSCRIBED, plus MOBILE_PAYMENT_ACCEPTANCE with status ACTIVE, but no EXPRESS_CHECKOUT product.
+The requested EXPRESS_CHECKOUT product therefore does not match the returned products; this explains the verifier rejection without establishing that the seller cannot accept PayPal payments.
+Do not bypass the product gate or reinterpret the approved product silently; align the requested onboarding product with documented provider semantics before another payment attempt.
+Shared accounting after this diagnostic is 19 consumed attempts, 27 held calls, 100 reserved cents and zero committed cents; this onboarding operation has exhausted its two reserved recovery reads.
+Offline CLI-to-runner-to-database regressions reproduced the same returned-products mismatch for EXPRESS_CHECKOUT and verified readiness for an explicitly approved PPCP request using mocked PayPal responses.
+These checks do not amend the actual US seller operation or establish actual US payment readiness; seller deduplication, immutable approvals and exhausted recovery reads still prevent an unreviewed product replacement.
+See the [P3 runbook product prerequisites](p3-runbook.md#requested-product-and-returned-products) for the required audited product change, old commitment retirement and checkout return-route work before the US-to-US payment test.
+Offline follow-up validation passed 75 runner tests against the isolated PostgreSQL database and 28 onboarding unit tests, plus the agents workspace typecheck and formatting checks.
+A scheduling-dependent concurrency assertion was made deterministic by holding the first referral dispatch while the competing runner attempts its claim; production readiness rules were not weakened.
+No additional real PayPal requests or application-database amendments were performed during this offline follow-up.
+Implemented [read-only product readiness maintenance and local order retirement](sandbox-maintenance-runbook.md) with immutable source snapshots, separate hash-bound approvals, two-call reservations, exclusive claims and retained history.
+Offline validation passed 91 runner integration tests and 37 sandbox policy tests, plus typechecks for contracts, core, db and agents-service.
+These amendments have not been approved or executed against PayPal; the actual allocation remains 19 consumed attempts, 27 held calls, 100 reserved cents and zero committed cents.
+The tested maintenance audit-table migration has been applied to the existing local application database, and both actual amendments are prepared with awaiting_approval status; the US product proposal advances its private mapping version by exactly one.
+The contributor subsequently approved both amendments, and their four counted sandbox requests completed successfully.
+The existing Indian-seller order was confirmed unapproved with no authorization or capture, permanently blocked in this runner, and its unused money and call reservations released without cancelling it at PayPal.
+The replacement US seller's PPCP subscription, identity, platform connection, required permissions, payments receivable and email confirmation all passed the authoritative read; its onboarding operation is succeeded with consent_verified evidence and the separately approved effective product context.
+Latest shared accounting is 23 consumed attempts, zero held calls, zero reserved cents and zero committed cents; no authorization or capture has been sent.
+The intended next payment pair remains the US Personal buyer and US Business seller; checkout return/cancel routing and a newly approved payment commitment are still required before the replacement browser test.
+The checkout return and cancel routes were subsequently implemented and verified locally, with validated destinations included in new order payloads and approval summaries.
+The fresh US-to-US USD 1 payment commitment is prepared and awaiting create-order approval; the full lifecycle reserves 26 calls within the existing allocation.
+Latest accounting is 23 consumed attempts, 26 held calls, 100 reserved cents and zero committed cents; no replacement PayPal order, authorization or capture has been sent.
+The contributor requested the next step, and the approved replacement US-to-US create-order operation completed its OAuth, seller-readiness read and order POST successfully.
+The USD 1 AUTHORIZE order is now waiting for buyer browser approval, with the new return and cancel destinations included.
+Latest shared accounting is 26 consumed attempts, 23 held calls, 100 reserved cents and zero committed cents; no authorization or capture has been approved or sent.
+The contributor subsequently returned from checkout, and the counted order read verified buyer_approved for the expected US buyer, US seller and USD 1 order.
+Shared accounting is now 28 consumed attempts, 21 held calls, zero reserved cents and 100 committed cents; committed cents represent internal budget accounting, not an actual authorization or capture.
+The authorization step is prepared locally with awaiting_approval status and a zero sender-fee bound; placing the USD 1 hold requires separate explicit contributor approval.
+No authorization or capture has been approved or sent.
+The contributor then explicitly approved the USD 1 sandbox authorization, and the runner's authoritative result is authorized for the matching US buyer, US seller and payment commitment.
+The saved allocation now shows 32 of 50 API attempts consumed, 17 calls held for the existing lifecycle, zero reserved cents and 100 committed cents.
+The capture operation is prepared locally and remains awaiting_approval; it would collect the already authorized USD 1 for the seller and requires separate explicit contributor approval.
+No capture has been approved or sent, and the generic capability field remains not_tested until capture evidence is recorded.
+The contributor then separately approved capture of the same USD 1 authorization.
+The capture write was sent once and initially recorded as inconclusive pending provider confirmation; a read-only resume confirmed the matching capture as succeeded with captured_immediate evidence.
+Final shared accounting is 40 of 50 API attempts consumed, zero calls held, zero reserved cents and 100 committed cents; no principal remains for another test under the agreed USD 1 cap.
+The US-to-US authorization/capture transaction is evidenced in the [P4 experiment record](evidence/p4-us-authorization-capture-2026-10-12.md), while milestone release, multiple payees and Payouts remain untested.
+Affected follow-up suites pass 369 tests, with real PayPal integration disabled; applying the proposal will use counted GETs only after explicit contributor approval.
 P1 is partially complete; the owner deferred remaining work on 2026-10-09, and the contributor requested a plan for that work on 2026-10-11.
 The original requested targets were a default Personal buyer, two distinct Business sellers, the platform Business balance as the payout source, contributor-operated browser approvals, USD, $10 per test, $500 total, and 50 API calls.
 The readiness plan retains that historical request; the current agreed limit is $1 total including sender fees and 50 runner-issued API attempts.
@@ -48,7 +111,7 @@ Priority 1 role and configuration confirmation is complete on the combined scree
 The contributor reports successful browser login to all four assigned accounts and USD 5,000 displayed in each; actual USD payment support, seller consent, and app permissions remain unverified.
 Supplied feature screenshots show Payouts, Vault/save payment methods, Platform fee, and Delay disbursement checked; multiparty settings show a sandbox BN code and before-payment onboarding for Business sellers.
 These are dashboard observations, not successful API tests or proof of partner approval or seller-level permissions.
-No business PayPal writes or sandbox transactions have occurred.
+One approved onboarding write has been attempted; no payment or other money-moving sandbox transaction has occurred.
 Credentials remain in the owner's ignored local .env; values and access tokens were not printed or recorded.
 
 ## Historical repository baseline before P2
@@ -70,8 +133,8 @@ Dependencies were installed during P1 using the unchanged frozen lockfile.
 | P0 | Complete | Current session | Plan, template, handoff, and README entry point |
 | P1 | In progress | Requesting contributor with account owner | Tooling revalidated on Oct 12; accounts, features, limits and access recorded; future browser-operator availability remains the closeout item |
 | P2 | Offline foundation complete | Current implementing contributor | Contracts, pure checks, seven tables, generated migrations, transport, CLI and recovery verified; real capability adapters deferred to P3-P6 |
-| P3 | Offline implementation complete; actual sandbox evidence pending | Current implementing contributor | Durable onboarding adapter, private consent flow and verification tested; actual referral and consent require separate approval |
-| P4 | Planned; implementation not started | Unassigned | Implement and test one eligible protection path, then collect separately approved sandbox evidence |
+| P3 | Seller A actual sandbox onboarding verified | Current implementing contributor | Original referral response recovered by operator; consent approved and same operation verified ready through a counted API read |
+| P4 | US-to-US USD 1 authorization and capture verified | Current implementing contributor | Matching capture confirmed by counted reads; delayed disbursement and milestone release remain untested |
 | P5 | Not started | Unassigned | Test multiple-payee capture |
 | P6 | Not started | Unassigned | Test Payouts and assess source funding |
 | P7 | Not started | Unassigned | Review evidence and write the payment-path decision |
@@ -80,11 +143,11 @@ Dependencies were installed during P1 using the unchanged frozen lockfile.
 
 | Capability | Status | Evidence |
 |---|---|---|
-| Partner Referrals onboarding | not_tested | None |
+| Partner Referrals onboarding | verified for tested sellers | Counted merchant-integration reads verified Seller A and the replacement US Business seller; see [P3 runbook](p3-runbook.md) |
 | Delayed capture and referenced release | not_tested | None |
 | Multiple payees | not_tested | None |
 | Payouts from intended sender | not_tested | None |
-| Authorization and capture alternative | not_tested | None |
+| Authorization and capture alternative | verified for one US-to-US sandbox transaction | [Dated P4 evidence](evidence/p4-us-authorization-capture-2026-10-12.md); generic runner capability field remains not_tested |
 | Platform fees | not_tested | Conditional follow-up |
 | Vaulting and unattended funding | not_tested | Outside the required F0 probes |
 
@@ -114,13 +177,24 @@ The contributor must coordinate private access with the account owner and follow
 2. Inspect git status --short and preserve existing work; do not infer commit or merge status from this documentation.
 3. Reuse confirmed account roles, credential association, login access, balances and feature observations from the access assessment.
 4. Read the P3 closeout and P4 plan; P3 offline contracts, persistence, adapter and tests are complete.
-5. Implement and verify P4 offline using mocked readiness and an isolated database; do not create an actual P3 referral during development.
+5. Read the P4 implementation record and runbook; authorization/capture is verified offline, while delayed release remains blocked on its endpoint contract.
 6. After P4 offline verification, privately confirm known merchant IDs, app context, required product/scopes, the intended migrated database's existing allocation and future browser availability.
 7. Prepare the actual P3 operation near the browser session, obtain explicit referral approval, complete Seller A's consent and record authoritative seller grants.
 8. Before actual P4 payment testing, verify P3 readiness and path-specific gates, present the purpose, accounts, principal and sender fees, and wait for separate approval before money-moving execution.
 
-P2 has supplied the durable outbox and persistent limits; P3 now registers onboarding only, with payment adapters still unavailable.
+P2 supplies the durable outbox and persistent limits; P3 registers onboarding, and P4 adds authorization/capture with whole-lifecycle money and call reservations.
 P3/P4 planning authorizes no PayPal execution, and all business capabilities remain not_tested.
+
+## P4 offline implementation: 2026-10-12
+
+Implemented strict payment context, controlled seller assertions, private checkout links, separate order/authorization/capture approvals, persistent resource lineage and bounded read-only recovery.
+Successful stored P3 consent and fresh authoritative seller checks gate each write; the buyer, order, seller, amount and authorization must match before advancing.
+Preparation reserves principal once, all stage fee bounds and the whole lifecycle call allowance without resetting the existing $1/50-call allocation.
+The [P4 record](p4-implementation-record.md) records 349 passing tests, including 20 new payment database cases; both real sandbox opt-in tests were disabled.
+All eight package typechecks, 62-file Biome CI, migration application to the isolated database, schema-drift and offline CLI help checks passed.
+No actual PayPal OAuth, onboarding or payment request was made, and .env and the configured application database were unchanged.
+Next action: arrange separately approved actual P3 onboarding, then establish payment prerequisites and obtain fresh approval for each actual P4 write.
+Delayed capture/release remains unregistered until its confirmation, idempotency and recovery contract is established.
 
 ## P3 offline implementation: 2026-10-12
 
@@ -129,8 +203,8 @@ The [P3 record](p3-implementation-record.md) documents the delivered files and 2
 All package typechecks, Biome, migration consistency, documentation and configured-credential privacy checks passed.
 The generated migration was applied only to the isolated local test database; .env, the application database and PayPal accounts were unchanged.
 No real OAuth or business PayPal request was made.
-Next action: implement and test P4 offline under its plan; the contributor agreed to defer actual P3 onboarding until afterward, with P3 readiness still required before any P4 payment test.
-Seller onboarding capability remains not_tested until that execution produces dated authoritative evidence; P4 implementation and payment testing have not started.
+At P3 closeout, the next action was P4 offline implementation; the subsequent P4 section above records delivered authorization/capture and remaining actual execution gates.
+Seller onboarding capability remains not_tested until that execution produces dated authoritative evidence; actual P4 payment testing has not started.
 
 ## Checks performed in P0
 

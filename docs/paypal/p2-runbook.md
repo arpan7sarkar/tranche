@@ -4,7 +4,8 @@ Completion and limitations: [P2 closeout](p2-closeout.md).
 Capability adapter plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](p4-payment-protection-implementation-plan.md).
 
 Date: 2026-10-12.
-Scope: deterministic operator tooling with durable accounting; P3 now registers seller onboarding, while payment adapters remain unavailable.
+Scope: deterministic operator tooling with durable accounting; P3 registers onboarding and P4 registers authorization/capture, with delayed release and payouts unavailable.
+For payment lifecycle reservations, exact prerequisites and commands, use the [P4 runbook](p4-runbook.md).
 For onboarding inputs, commands, permissions and execution approval, use the [P3 runbook](p3-runbook.md).
 Read the [implementation plan](p2-sandbox-runner-implementation-plan.md) and [P1 closeout](p1-closeout.md) first.
 
@@ -68,7 +69,7 @@ Help and default invocation need neither database access nor PayPal requests.
 Start validates a private operation specification, creates a run, reserves money and prints a sanitized approval summary; it sends no PayPal request.
 Inspect restores pending approval summaries and opaque browser-artifact references from storage without contacting PayPal.
 Approve records a trusted operator decision; for assistant-operated tests, run it only after presenting the concrete test and receiving explicit contributor approval in conversation.
-Resume uses the registered adapter for the operation kind; the current CLI has an empty registry and stops before any OAuth or business request for an otherwise executable operation.
+Resume uses the registered adapter for the operation kind; the current CLI supports onboarding and P4 authorization/capture and blocks unregistered capabilities before authentication.
 Report exports persisted sanitized state and always retains capability not_tested in this foundation.
 The command paths were exercised through the exported CLI dispatcher with a disposable PostgreSQL database and fake transport; packaged help and default invocation were also checked.
 

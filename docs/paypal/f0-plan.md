@@ -47,14 +47,15 @@ Do not start another phase merely to fill the current session.
 | P0 | Plan, evidence template, and contributor handoff | Repository inspection | Complete |
 | P1 | Account inventory and sandbox access assessment | P0 | In progress; future browser availability remains open |
 | P2 | Minimal durable probe execution foundation | P1 account requirements understood | Offline foundation complete |
-| P3 | Seller onboarding evidence | P2 and partner access | Offline implementation complete; actual sandbox evidence pending |
-| P4 | Single-seller protection-path evidence | P2 and relevant seller readiness | Planned; implementation not started |
+| P3 | Seller onboarding evidence | P2 and partner access | Tested seller consent and grants verified in sandbox |
+| P4 | Single-seller protection-path evidence | P2 and relevant seller readiness | US-to-US authorization/capture verified by sandbox reads; delayed disbursement blocked |
 | P5 | Multiple-payee capture evidence | P2 and two ready sellers | Not started |
 | P6 | Payouts capability and funding assessment | P2 and intended sender identified | Not started |
 | P7 | Reviewed payment-path decision | Required probe results or explicit blockers recorded | Not started |
 
 P0 established the documentation baseline; current execution progress lives in the handoff.
 The [P3 closeout](p3-closeout.md) records completed offline onboarding implementation and the agreed sequence: P4 offline implementation, then approved P3 onboarding, then separately approved P4 payment testing.
+The [P4 implementation record](p4-implementation-record.md) records completed offline authorization/capture, 349 passing tests and the unresolved delayed-release contract.
 P1 includes actual account and access checks, so completing P0 does not claim those checks were performed.
 If a phase is too large for one session, hand off its completed tasks and remaining exit criteria without marking the entire phase complete.
 

@@ -1,4 +1,8 @@
-import { SandboxPartnerContext } from "@tranche/contracts";
+import {
+  PayPalReferralId,
+  SandboxAssertionContext,
+  SandboxPartnerContext,
+} from "@tranche/contracts";
 
 export class SandboxTransportError extends Error {
   constructor(
@@ -14,6 +18,8 @@ export type SandboxRequest = {
   path: string;
   body?: unknown;
   partner?: { attributionId: string } | undefined;
+  assertion?: { platformClientId: string; sellerMerchantId: string } | undefined;
+  representation?: true | undefined;
 };
 export type SandboxRequestAccounting = {
   reserve(kind: "oauth" | "read" | "recovery"): Promise<string>;
@@ -119,8 +125,21 @@ export class SandboxClient {
     request: SandboxRequest,
     options: { permit?: SandboxWritePermit; recovery?: boolean; signal?: AbortSignal } = {},
   ): Promise<unknown> {
+    const referralToken = /^\/v2\/customer\/partner-referrals\/([A-Za-z0-9_%+-]{1,765})$/.exec(
+      request.path,
+    )?.[1];
+    let referralRead = false;
+    if (request.method === "GET" && referralToken) {
+      try {
+        const id = decodeURIComponent(referralToken);
+        referralRead =
+          PayPalReferralId.safeParse(id).success && encodeURIComponent(id) === referralToken;
+      } catch {
+        throw new SandboxTransportError("destination");
+      }
+    }
     if (
-      !/^\/v[12]\/[A-Za-z0-9/_-]+$/.test(request.path) ||
+      (!/^\/v[12]\/[A-Za-z0-9/_-]+$/.test(request.path) && !referralRead) ||
       request.path.includes("//") ||
       request.path === "/v1/oauth2/token" ||
       !["GET", "POST"].includes(request.method)
@@ -136,6 +155,14 @@ export class SandboxClient {
       throw new SandboxTransportError("configuration");
     if (request.partner && !SandboxPartnerContext.safeParse(request.partner).success)
       throw new SandboxTransportError("configuration");
+    if (
+      request.assertion &&
+      (!SandboxAssertionContext.safeParse(request.assertion).success ||
+        request.assertion.platformClientId !== this.config.clientId)
+    )
+      throw new SandboxTransportError("configuration");
+    if (request.representation !== undefined && request.representation !== true)
+      throw new SandboxTransportError("configuration");
     options.signal?.throwIfAborted();
     const token = await this.accessToken(options.signal);
     options.signal?.throwIfAborted();
@@ -144,6 +171,12 @@ export class SandboxClient {
       "Content-Type": "application/json",
     };
     if (request.partner) headers["PayPal-Partner-Attribution-Id"] = request.partner.attributionId;
+    if (request.assertion) {
+      const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64");
+      headers["PayPal-Auth-Assertion"] =
+        `${encode({ alg: "none" })}.${encode({ iss: request.assertion.platformClientId, payer_id: request.assertion.sellerMerchantId })}.`;
+    }
+    if (request.representation) headers.Prefer = "return=representation";
     let attempt: string | undefined;
     if (options.permit) {
       if (request.method === "POST") headers["PayPal-Request-Id"] = options.permit.requestId;

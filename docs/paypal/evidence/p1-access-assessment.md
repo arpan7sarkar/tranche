@@ -3,6 +3,8 @@
 Current implementation handoff: [P2 closeout](../p2-closeout.md), [P3 seller-onboarding plan](../p3-seller-onboarding-implementation-plan.md) and [P4 payment-protection plan](../p4-payment-protection-implementation-plan.md).
 P3 update, 2026-10-12: the [onboarding adapter](../p3-implementation-record.md) passed offline/database verification; actual partner access and seller grants remain untested, with execution steps in the [P3 runbook](../p3-runbook.md).
 The [P3 closeout](../p3-closeout.md) records the contributor's decision to implement P4 offline before actual onboarding; browser availability and actual grants remain execution prerequisites afterward.
+P4 update, 2026-10-12: [authorization/capture](../p4-implementation-record.md) is verified offline with 349 passing tests; actual payments remain untested and delayed release remains blocked on its endpoint contract.
+Use the [P4 runbook](../p4-runbook.md) only after approved P3 consent, current seller checks, applicable fee/minimum review and separate payment-stage approvals.
 
 ## Current testing authorization: 2026-10-11
 
@@ -222,8 +224,12 @@ Offline tooling work can proceed independently when requested, but it does not r
 
 ## Capabilities and provider resources
 
-Partner Referrals, delayed capture/referenced release, multiple payees, Payouts, authorization/capture, platform fees, and vaulting remain not_tested.
-No business API writes have been executed and no payment resources require cleanup.
+Seller A Partner Referrals onboarding was verified on 2026-10-12 after an approved zero-dollar referral, operator browser consent, and a counted merchant-integration read.
+The initial response was HTTP 201, but a referral ID validation defect prevented saving the consent artifact; the operator recovered the original link from API logs without repeating the POST.
+The existing operation then succeeded with matching merchant identity, platform connection, required permissions, payments receivable, confirmed primary email, active product, and no missing scopes.
+Shared runner accounting is four consumed API attempts, zero held calls, and zero reserved or committed cents.
+Delayed capture/referenced release, multiple payees, Payouts, authorization/capture, platform fees, and vaulting remain not_tested.
+One onboarding write has been attempted; no money-moving write has occurred and no payment resources require cleanup.
 
 ## Remaining P1 criteria and P2 starting action
 
