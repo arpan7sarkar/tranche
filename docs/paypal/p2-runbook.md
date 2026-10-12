@@ -4,7 +4,8 @@ Completion and limitations: [P2 closeout](p2-closeout.md).
 Capability adapter plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](p4-payment-protection-implementation-plan.md).
 
 Date: 2026-10-12.
-Scope: deterministic operator tooling with durable accounting; no real capability adapters are registered in the CLI yet.
+Scope: deterministic operator tooling with durable accounting; P3 now registers seller onboarding, while payment adapters remain unavailable.
+For onboarding inputs, commands, permissions and execution approval, use the [P3 runbook](p3-runbook.md).
 Read the [implementation plan](p2-sandbox-runner-implementation-plan.md) and [P1 closeout](p1-closeout.md) first.
 
 ## Implemented behavior
@@ -103,7 +104,7 @@ See the [P2 implementation record](p2-implementation-record.md) for actual resul
 
 ## Next action
 
-Implement and review the P3 seller-onboarding adapter against the official endpoint contract, privately confirm its app prerequisites and arrange the contributor's browser availability.
+The P3 onboarding adapter is implemented and verified offline; its [closeout](p3-closeout.md) hands off P4 offline implementation before separately approved P3 onboarding and subsequent P4 payment testing.
 Onboarding readiness and later payment capability evidence remain separate from passing P2 tests.
 The first payment experiment remains unprepared because applicable fee bounds and endpoint-specific readiness have not been established.
 Before any money-moving test, explain purpose, sender, recipient, amount and fees, and wait for explicit approval.

@@ -34,9 +34,9 @@ The original image amounts are historical inputs; the current $1 total and 50-ca
 | Configuration and authentication | apps/agents/scripts/f0/preflight.ts validates sandbox credentials and performs one OAuth exchange | Preserve its interface; add runner-specific readiness validation separately |
 | Tests | P2 verification and retest passed 109 tests, including 54 preflight tests and 18 PostgreSQL scenarios | Add endpoint-specific P3/P4 tests before real experiments |
 | Shared contracts | Strict sandbox operation, approval, budget and report schemas implemented | Add onboarding and protection-path contracts |
-| PayPal adapter | Fixed-sandbox counted transport implemented; real capability registry empty | Implement endpoint-specific adapters and narrowly scoped partner headers |
+| PayPal adapter | Fixed-sandbox counted transport and P3 onboarding adapter implemented, with validated attribution | Establish actual onboarding evidence and implement separately reviewed payment adapters |
 | Database | Seven durable sandbox tables and generated migrations implemented; isolated database tested | Add private provider-resource persistence; application database migration remains pending |
-| CLI | start, inspect, approve, resume and report implemented | Register reviewed capability adapters after offline verification |
+| CLI | start, inspect, approve, resume, report and P3 onboarding/consent commands implemented | Follow the P3 runbook for separately approved real onboarding; payment adapters remain pending |
 | Accounts and features | Four roles, login access, displayed balances and feature observations recorded | Confirm future browser availability and establish actual seller grants and transaction support |
 
 Do not treat the web landing page or ping workflow as payment functionality.

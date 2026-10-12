@@ -1,12 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  onboardingApprovalSummary,
   SandboxAllocation,
   SandboxInspection,
+  SandboxOnboardingResult,
   SandboxOperationSpec,
   SandboxOutcome,
   SandboxReport,
 } from "@tranche/contracts";
-import { needsSandboxApproval, sandboxApprovalMatches, sandboxEligibility } from "@tranche/core";
+import {
+  needsSandboxApproval,
+  sandboxApprovalMatches,
+  sandboxEligibility,
+  sandboxRequestAllowance,
+} from "@tranche/core";
 import { and, eq, sql } from "drizzle-orm";
 import { createDb, type Db } from "./index";
 import {
@@ -14,6 +21,7 @@ import {
   sandboxApproval as approvals,
   sandboxAttempt as attempts,
   sandboxCommitment as commitments,
+  sandboxOnboarding as onboarding,
   sandboxOperation as operations,
   sandboxRun as runs,
   sandboxBrowserWait as waits,
@@ -113,7 +121,7 @@ export class SandboxStore {
         allocation,
         spec,
         additionalCents: extra,
-        requiredCalls: 3 + spec.recoveryCalls,
+        requiredCalls: sandboxRequestAllowance(spec),
       });
       if (decision !== "allowed") throw new Error(decision);
       if (!commitment)
@@ -138,6 +146,24 @@ export class SandboxStore {
         })
         .returning();
       if (!operation) throw new Error("prepare_failed");
+      if (spec.kind === "onboard_seller") {
+        const c = spec.onboarding;
+        const until = c ? new Date(c.checkUntil) : new Date(0);
+        if (!c || until.getTime() <= Date.now() || until.getTime() > Date.now() + 86_400_000)
+          throw new Error("onboarding_prerequisites");
+        await tx.insert(onboarding).values({
+          operationId,
+          checkUntil: until,
+          sellerKey: sandboxPayloadHash({
+            platform: c.platformMerchantId,
+            seller: c.sellerMerchantId,
+          }),
+          trackingKey: sandboxPayloadHash({
+            platform: c.platformMerchantId,
+            tracking: c.trackingId,
+          }),
+        });
+      }
       return operation;
     });
   }
@@ -179,7 +205,8 @@ export class SandboxStore {
       if (op?.state !== "ready") throw new Error("not_ready");
       if (op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec)))
         throw new Error("payload_changed");
-      if (allocation.consumedCalls + allocation.heldCalls + 3 + op.spec.recoveryCalls > 50)
+      const allowance = sandboxRequestAllowance(op.spec);
+      if (allocation.consumedCalls + allocation.heldCalls + allowance > 50)
         throw new Error("call_limit");
       if (needsSandboxApproval(op.spec)) {
         const [approval] = await tx
@@ -204,7 +231,7 @@ export class SandboxStore {
           state: "dispatching",
           attempts: op.attempts + 1,
           claimToken: token,
-          heldCalls: 2 + op.spec.recoveryCalls,
+          heldCalls: allowance - 1,
           claimUntil: sql`now() + interval '60 seconds'`,
         })
         .where(eq(operations.id, operationId))
@@ -213,7 +240,7 @@ export class SandboxStore {
         .update(allocations)
         .set({
           consumedCalls: allocation.consumedCalls + 1,
-          heldCalls: allocation.heldCalls + 2 + op.spec.recoveryCalls,
+          heldCalls: allocation.heldCalls + allowance - 1,
         })
         .where(eq(allocations.id, 1));
       await tx.insert(attempts).values({
@@ -344,6 +371,7 @@ export class SandboxStore {
         )
         .for("update");
       if (!op) throw new Error("stale_claim");
+      await this.persistOnboarding(tx, op, outcome);
       if (outcome.state === "succeeded") await this.commitMoney(tx, allocation, op);
       if (outcome.state === "succeeded" || outcome.state === "failed") {
         await tx
@@ -406,6 +434,13 @@ export class SandboxStore {
         throw new Error("not_recoverable");
       if (op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec)))
         throw new Error("payload_changed");
+      if (
+        op.spec.onboarding &&
+        (Date.parse(op.spec.onboarding.checkUntil) <= Date.now() ||
+          op.recoveryReads >= op.spec.recoveryCalls ||
+          op.heldCalls <= 1)
+      )
+        throw new Error("onboarding_recovery_limit");
       const [claimed] = await tx
         .update(operations)
         .set({
@@ -441,6 +476,7 @@ export class SandboxStore {
         )
         .for("update");
       if (!op) throw new Error("stale_claim");
+      await this.persistOnboarding(tx, op, outcome);
       if (outcome.state === "succeeded") await this.commitMoney(tx, allocation, op);
       if (outcome.state === "succeeded" || outcome.state === "failed") {
         await tx
@@ -482,12 +518,69 @@ export class SandboxStore {
     return op;
   }
 
+  async onboardingResource(operationId: string) {
+    const [row] = await this.db
+      .select()
+      .from(onboarding)
+      .where(eq(onboarding.operationId, operationId));
+    if (!row) throw new Error("onboarding_missing");
+    return row;
+  }
+
+  private async persistOnboarding(tx: Tx, op: StoredOperation, outcome: SandboxOutcome) {
+    if (!op.spec.onboarding) {
+      if (outcome.onboarding) throw new Error("unexpected_onboarding_result");
+      return;
+    }
+    if (!outcome.onboarding) {
+      if (outcome.state !== "inconclusive") throw new Error("onboarding_evidence_required");
+      return;
+    }
+    const result = SandboxOnboardingResult.parse(outcome.onboarding);
+    if (
+      outcome.state === "succeeded" &&
+      (result.evidence.status !== "consent_verified" ||
+        result.evidence.reason !== "ready" ||
+        !result.evidence.merchantMatched ||
+        !result.evidence.platformConnected ||
+        !result.evidence.permissionsGranted ||
+        !result.evidence.paymentsReceivable ||
+        !result.evidence.primaryEmailConfirmed ||
+        !result.evidence.productActive ||
+        result.evidence.missingScopes.length)
+    )
+      throw new Error("onboarding_not_verified");
+    if (
+      outcome.state === "waiting_for_browser" &&
+      (outcome.expectedAlias !== op.spec.onboarding.seller ||
+        outcome.artifactKey !== result.artifactKey)
+    )
+      throw new Error("onboarding_browser_mismatch");
+    const [row] = await tx.select().from(onboarding).where(eq(onboarding.operationId, op.id));
+    if (!row || (row.referralId && result.referralId && row.referralId !== result.referralId))
+      throw new Error("onboarding_resource_mismatch");
+    await tx
+      .update(onboarding)
+      .set({
+        referralId: result.referralId ?? row.referralId,
+        artifactKey: result.artifactKey ?? row.artifactKey,
+        evidence: result.evidence,
+        checkedAt: sql`now()`,
+      })
+      .where(eq(onboarding.operationId, op.id));
+  }
+
   async report(runId: string): Promise<SandboxReport> {
     return this.db.transaction(async (tx) => {
       const allocation = await this.allocation(tx);
       const [run] = await tx.select().from(runs).where(eq(runs.id, runId));
       if (!run) throw new Error("run_missing");
       const rows = await tx.select().from(operations).where(eq(operations.runId, runId));
+      const observations = await tx
+        .select({ operationId: onboarding.operationId, evidence: onboarding.evidence })
+        .from(onboarding)
+        .innerJoin(operations, eq(operations.id, onboarding.operationId))
+        .where(eq(operations.runId, runId));
       return SandboxReport.parse({
         runId,
         capability: "not_tested",
@@ -498,6 +591,17 @@ export class SandboxStore {
           state: op.state,
           attempts: op.attempts,
         })),
+        ...(observations.length
+          ? {
+              onboarding: observations
+                .filter((o) => o.evidence)
+                .map((o) => ({
+                  operationId: o.operationId,
+                  seller: rows.find((op) => op.id === o.operationId)?.spec.onboarding?.seller,
+                  evidence: o.evidence,
+                })),
+            }
+          : {}),
       });
     });
   }
@@ -527,6 +631,9 @@ export class SandboxStore {
           sender: op.spec.sender,
           recipients: op.spec.recipients,
           feeBoundCents: op.spec.feeBoundCents,
+          ...(op.spec.onboarding
+            ? { onboarding: onboardingApprovalSummary(op.spec.onboarding) }
+            : {}),
         })),
       browserWaits: browserWaits.map((wait) => ({ ...wait, resolved: wait.resolved === 1 })),
     });

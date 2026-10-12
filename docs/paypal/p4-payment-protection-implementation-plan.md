@@ -5,6 +5,16 @@ Status: Planned; payment adapters and real payment tests have not started.
 Parent: [F0 plan](f0-plan.md).
 Foundation: [P2 closeout](p2-closeout.md) and [P2 runbook](p2-runbook.md).
 Seller readiness: [P3 implementation plan](p3-seller-onboarding-implementation-plan.md).
+P3 offline implementation is now verified; actual consent and seller grants remain pending as recorded in the [P3 handoff](p3-implementation-record.md).
+Implementation closeout and agreed sequence: [P3 closeout](p3-closeout.md).
+
+## Agreed implementation and execution order
+
+P4 offline implementation and tests are the next task and can use mocked seller readiness while actual P3 onboarding is deferred.
+After P4 offline verification, prepare and separately approve P3 referral execution, complete Seller A's consent and verify the actual permissions required by the selected P4 path.
+Successful offline P4 tests do not establish those real permissions.
+Run a P4 payment experiment only after authoritative P3 readiness, path-specific prerequisites and separate explicit payment approval.
+The existing $1 total including sender fees and 50-call allocation remains shared across both phases without reset or increase.
 
 ## Outcome and execution boundary
 

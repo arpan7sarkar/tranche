@@ -4,6 +4,10 @@ export function needsSandboxApproval(spec: SandboxOperationSpec): boolean {
   return spec.kind !== "read_status";
 }
 
+export function sandboxRequestAllowance(spec: SandboxOperationSpec): number {
+  return spec.onboarding ? 2 + 2 * spec.recoveryCalls : 3 + spec.recoveryCalls;
+}
+
 export function sandboxApprovalMatches(input: {
   payloadHash: string;
   nextAttempt: number;

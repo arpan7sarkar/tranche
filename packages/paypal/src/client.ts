@@ -1,10 +1,20 @@
+import { SandboxPartnerContext } from "@tranche/contracts";
+
 export class SandboxTransportError extends Error {
-  constructor(readonly code: "configuration" | "destination" | "network" | "http" | "response") {
+  constructor(
+    readonly code: "configuration" | "destination" | "network" | "http" | "response",
+    readonly status?: number,
+  ) {
     super(`sandbox_${code}`);
   }
 }
 
-export type SandboxRequest = { method: "GET" | "POST"; path: string; body?: unknown };
+export type SandboxRequest = {
+  method: "GET" | "POST";
+  path: string;
+  body?: unknown;
+  partner?: { attributionId: string } | undefined;
+};
 export type SandboxRequestAccounting = {
   reserve(kind: "oauth" | "read" | "recovery"): Promise<string>;
   finish(id: string, success: boolean): Promise<void>;
@@ -41,9 +51,13 @@ export class SandboxClient {
           ...(init.signal ? [init.signal] : []),
         ]),
       });
-      if (!response.ok) throw new SandboxTransportError("http");
-      const body: unknown = await response.json();
-      return body;
+      if (!response.ok) throw new SandboxTransportError("http", response.status);
+      try {
+        const body: unknown = await response.json();
+        return body;
+      } catch {
+        throw new SandboxTransportError("response");
+      }
     } catch (error) {
       if (error instanceof SandboxTransportError) throw error;
       throw new SandboxTransportError("network");
@@ -120,6 +134,8 @@ export class SandboxClient {
       throw new SandboxTransportError("configuration");
     if (request.method === "GET" && request.body !== undefined)
       throw new SandboxTransportError("configuration");
+    if (request.partner && !SandboxPartnerContext.safeParse(request.partner).success)
+      throw new SandboxTransportError("configuration");
     options.signal?.throwIfAborted();
     const token = await this.accessToken(options.signal);
     options.signal?.throwIfAborted();
@@ -127,6 +143,7 @@ export class SandboxClient {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
+    if (request.partner) headers["PayPal-Partner-Attribution-Id"] = request.partner.attributionId;
     let attempt: string | undefined;
     if (options.permit) {
       if (request.method === "POST") headers["PayPal-Request-Id"] = options.permit.requestId;

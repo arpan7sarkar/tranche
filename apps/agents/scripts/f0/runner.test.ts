@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { SandboxOperationSpec } from "@tranche/contracts";
 import { createSandboxStore, type SandboxStore } from "@tranche/db";
+import { onboardingSpec } from "@tranche/paypal";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { onboardingAdapter } from "./adapters";
 import { sandboxCli } from "./index";
 import { PrivateSandboxArtifacts, sandboxBrowserUrl } from "./private-artifacts";
 import { type SandboxAdapter, SandboxRunner } from "./runner";
@@ -91,6 +93,7 @@ if (testUrl) {
 
 describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
   let store: SandboxStore;
+  const onboardingDirectories: string[] = [];
   beforeAll(() => {
     store = createSandboxStore(testUrl);
   });
@@ -101,6 +104,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
   });
   afterAll(async () => {
     await store.db.$client.end();
+    for (const directory of onboardingDirectories) await removeTestDirectory(directory);
   });
 
   async function prepared(input = spec()) {
@@ -113,6 +117,372 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     await store.approve(result.op.id, result.op.payloadHash, 1);
     return result;
   }
+
+  async function onboardingSetup(recoveryCalls = 4) {
+    const context = {
+      seller: "seller-a",
+      platformMerchantId: "PLATFORM00001",
+      sellerMerchantId: "SELLERA000001",
+      platformClientId: credentials.clientId,
+      mappingVersion: 1,
+      trackingId: randomUUID(),
+      partner: { attributionId: "FAKE_BN" },
+      product: "EXPRESS_CHECKOUT",
+      features: ["PAYMENT"],
+      requiredScopes: ["https://uri.paypal.com/services/payments/payment/authcapture"],
+      shareDataConsent: true,
+      checkUntil: new Date(Date.now() + 3_600_000).toISOString(),
+    };
+    const directory = await mkdtemp(join(tmpdir(), "tranche-p2-onboarding-"));
+    onboardingDirectories.push(directory);
+    const artifacts = new PrivateSandboxArtifacts(directory);
+    const referralBody = {
+      links: [
+        {
+          rel: "self",
+          href: "https://api-m.sandbox.paypal.com/v2/customer/partner-referrals/FAKE_REF",
+          method: "GET",
+        },
+        {
+          rel: "action_url",
+          href: "https://www.sandbox.paypal.com/consent?token=PRIVATE_CONSENT",
+          method: "GET",
+        },
+      ],
+    };
+    const statusBody = {
+      merchant_id: context.sellerMerchantId,
+      tracking_id: context.trackingId,
+      payments_receivable: true,
+      primary_email_confirmed: true,
+      products: [{ name: context.product, status: "ACTIVE" }],
+      oauth_integrations: [
+        {
+          integration_type: "OAUTH_THIRD_PARTY",
+          integration_method: "PAYPAL",
+          oauth_third_party: [
+            { partner_client_id: context.platformClientId, scopes: context.requiredScopes },
+          ],
+        },
+      ],
+    };
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST" || String(url).includes("/partner-referrals/"))
+        return Response.json(referralBody);
+      return Response.json(statusBody);
+    });
+    const input = onboardingSpec({ context, recoveryCalls });
+    const { runId, op } = await prepared(input);
+    const adapter = onboardingAdapter(store, artifacts, credentials.clientId);
+    const runner = new SandboxRunner(store, credentials, [adapter], fetcher);
+    return {
+      context,
+      input,
+      runId,
+      op,
+      artifacts,
+      directory,
+      referralBody,
+      statusBody,
+      fetcher,
+      adapter,
+      runner,
+    };
+  }
+
+  it("P3 requires approval, persists referral and consent, then verifies counted status after restart", async () => {
+    const x = await onboardingSetup();
+    await x.runner.resume(x.op.id);
+    expect(x.fetcher).not.toHaveBeenCalled();
+    expect((await store.inspect(x.runId)).approvals[0]?.onboarding?.features).toEqual(["PAYMENT"]);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+    const resource = await store.onboardingResource(x.op.id);
+    expect(resource.referralId).toBe("FAKE_REF");
+    expect(await x.artifacts.readBrowserUrl(resource.artifactKey ?? "")).toContain(
+      "PRIVATE_CONSENT",
+    );
+    expect((await store.report(x.runId)).allocation).toMatchObject({
+      consumedCalls: 2,
+      reservedCents: 0,
+      committedCents: 0,
+    });
+    expect(JSON.stringify(await store.inspect(x.runId))).not.toMatch(
+      /PRIVATE_CONSENT|PLATFORM00001|SELLERA000001|FAKE_CLIENT|FAKE_BN|FAKE_REF/,
+    );
+    const reopened = createSandboxStore(testUrl);
+    try {
+      const runner = new SandboxRunner(
+        reopened,
+        credentials,
+        [onboardingAdapter(reopened, x.artifacts, credentials.clientId)],
+        x.fetcher,
+      );
+      await runner.resume(x.op.id);
+      expect((await reopened.report(x.runId)).onboarding?.[0]?.evidence.status).toBe(
+        "consent_verified",
+      );
+      expect((await reopened.operation(x.op.id)).state).toBe("succeeded");
+      expect((await reopened.inspect(x.runId)).browserWaits[0]?.resolved).toBe(true);
+      expect((await reopened.report(x.runId)).allocation).toMatchObject({
+        consumedCalls: 4,
+        heldCalls: 0,
+        committedCents: 0,
+      });
+    } finally {
+      await reopened.db.$client.end();
+    }
+    expect(
+      x.fetcher.mock.calls.filter(
+        ([, init]) =>
+          init?.method === "POST" && init?.headers && "PayPal-Request-Id" in init.headers,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("P3 prevents duplicate sellers or tracking IDs across runs and mapping changes", async () => {
+    const x = await onboardingSetup();
+    const runId = await store.start();
+    for (const context of [
+      { ...x.context, trackingId: randomUUID(), mappingVersion: 2 },
+      { ...x.context, seller: "seller-b", sellerMerchantId: "SELLERB000001" },
+    ])
+      await expect(
+        store.prepare(runId, randomUUID(), onboardingSpec({ context, recoveryCalls: 4 })),
+      ).rejects.toThrow();
+    expect((await store.report(runId)).operations).toHaveLength(0);
+  });
+
+  it("P3 invalidates approval when private context is changed", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await store.db
+      .$client`UPDATE sandbox_operation SET spec = jsonb_set(spec, '{onboarding,mappingVersion}', '2') WHERE id = ${x.op.id}`;
+    await expect(x.runner.resume(x.op.id)).rejects.toThrow("payload_changed");
+    expect(x.fetcher).not.toHaveBeenCalled();
+  });
+
+  it("P3 rejects a different app or altered referral payload before network dispatch", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    const runner = new SandboxRunner(
+      store,
+      credentials,
+      [onboardingAdapter(store, x.artifacts, "OTHER_APP")],
+      x.fetcher,
+    );
+    await expect(runner.resume(x.op.id)).rejects.toThrow("onboarding_configuration");
+    expect(() =>
+      x.adapter.validate({
+        ...x.input,
+        request: { ...x.input.request, body: { tracking_id: "other" } },
+      }),
+    ).toThrow("onboarding_configuration");
+    expect(x.fetcher).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "wrong_seller",
+    "wrong_app",
+    "missing_permissions",
+    "email",
+    "payment",
+    "product",
+    "malformed",
+  ])("P3 never marks an incomplete or wrong integration ready: %s", async (failure) => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    if (failure === "wrong_seller") x.statusBody.merchant_id = "SELLERB000001";
+    const grant = x.statusBody.oauth_integrations[0]?.oauth_third_party[0];
+    const product = x.statusBody.products[0];
+    if (!grant || !product) throw new Error("missing_test_fixture");
+    if (failure === "wrong_app") grant.partner_client_id = "OTHER_APP";
+    if (failure === "missing_permissions") grant.scopes = [];
+    if (failure === "email") x.statusBody.primary_email_confirmed = false;
+    if (failure === "payment") x.statusBody.payments_receivable = false;
+    if (failure === "product") product.status = "PENDING";
+    if (failure === "malformed")
+      x.fetcher.mockImplementation(async (url) =>
+        String(url).endsWith("/token") ? token() : Response.json({ invalid: true }),
+      );
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).not.toBe("succeeded");
+    expect((await store.report(x.runId)).onboarding?.[0]?.evidence.status).not.toBe(
+      "consent_verified",
+    );
+  });
+
+  it("P3 stores safe permission-denied evidence without response details", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url) =>
+      String(url).endsWith("/token") ? token() : new Response("PRIVATE_DENIAL", { status: 403 }),
+    );
+    await x.runner.resume(x.op.id);
+    const report = await store.report(x.runId);
+    expect(report.onboarding?.[0]?.evidence.reason).toBe("permission_denied");
+    expect(JSON.stringify(report)).not.toContain("PRIVATE_DENIAL");
+    expect(x.fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("P3 recovers a timed-out referral only through reads and never sends a replacement POST", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("PRIVATE_TIMEOUT");
+      return Response.json(x.statusBody);
+    });
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).toBe("inconclusive");
+    expect((await store.onboardingResource(x.op.id)).referralId).toBeNull();
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).toBe("succeeded");
+    expect((await store.operation(x.op.id)).attempts).toBe(1);
+    expect(
+      x.fetcher.mock.calls.filter(
+        ([, init]) => init?.method === "POST" && String(init?.body).includes("tracking_id"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("P3 retains a referral ID when private-link storage fails and can refresh by counted GET", async () => {
+    const x = await onboardingSetup(6);
+    x.statusBody.primary_email_confirmed = false;
+    const save = vi
+      .spyOn(x.artifacts, "saveBrowserUrl")
+      .mockRejectedValueOnce(new Error("disk_failure"));
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    expect((await store.onboardingResource(x.op.id)).referralId).toBe("FAKE_REF");
+    expect((await store.operation(x.op.id)).state).toBe("inconclusive");
+    await x.runner.resume(x.op.id, { refreshConsent: true });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+    expect(
+      x.fetcher.mock.calls.filter(([url]) => String(url).endsWith("/partner-referrals/FAKE_REF")),
+    ).toHaveLength(1);
+  });
+
+  it("P3 bounds polling across repeated resumes and preserves the shared money allocation", async () => {
+    const x = await onboardingSetup(2);
+    x.statusBody.primary_email_confirmed = false;
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    await x.runner.resume(x.op.id);
+    await x.runner.resume(x.op.id);
+    const count = x.fetcher.mock.calls.length;
+    await expect(x.runner.resume(x.op.id)).rejects.toThrow("onboarding_recovery_limit");
+    expect(x.fetcher).toHaveBeenCalledTimes(count);
+    expect((await store.operation(x.op.id)).recoveryReads).toBe(2);
+    expect((await store.report(x.runId)).allocation).toMatchObject({
+      committedCents: 0,
+      reservedCents: 0,
+    });
+  });
+
+  it("P3 stops before network access when its persistent deadline expires", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse(x.context.checkUntil) + 1);
+    try {
+      await expect(x.runner.resume(x.op.id)).rejects.toThrow("onboarding_recovery_limit");
+      expect(x.fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("P3 atomically rejects stale resource updates and false ready evidence", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    const claim = await store.claim(x.op.id);
+    const result = await x.adapter.interpret(x.referralBody, claim.operation);
+    await expect(store.finish({ ...claim, token: randomUUID() }, result)).rejects.toThrow(
+      "stale_claim",
+    );
+    expect((await store.onboardingResource(x.op.id)).referralId).toBeNull();
+    await expect(
+      store.finish(claim, {
+        state: "succeeded",
+        onboarding: {
+          evidence: {
+            status: "consent_verified",
+            reason: "ready",
+            merchantMatched: false,
+            platformConnected: true,
+            permissionsGranted: true,
+            paymentsReceivable: true,
+            primaryEmailConfirmed: true,
+            productActive: true,
+            missingScopes: [],
+          },
+        },
+      }),
+    ).rejects.toThrow("onboarding_not_verified");
+    expect((await store.operation(x.op.id)).state).toBe("dispatching");
+    await store.finish(claim, result);
+    expect((await store.onboardingResource(x.op.id)).referralId).toBe("FAKE_REF");
+  });
+
+  it("P3 exposes private file locations only on explicit request and refreshes without another POST", async () => {
+    const x = await onboardingSetup();
+    const inputFile = join(x.directory, "input.json");
+    await writeFile(
+      inputFile,
+      JSON.stringify({
+        context: {
+          ...x.context,
+          seller: "seller-b",
+          sellerMerchantId: "SELLERB000001",
+          trackingId: randomUUID(),
+        },
+        recoveryCalls: 2,
+      }),
+    );
+    const preparedResult = await sandboxCli(["onboard", inputFile], store, x.runner);
+    expect(JSON.stringify(preparedResult)).not.toMatch(/SELLERB000001|FAKE_CLIENT|FAKE_BN/);
+    expect(x.fetcher).not.toHaveBeenCalled();
+    await expect(sandboxCli(["consent-file", x.op.id], store, x.runner)).rejects.toThrow(
+      "consent_unavailable",
+    );
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    const oldKey = (await store.onboardingResource(x.op.id)).artifactKey;
+    const location = await sandboxCli(["consent-file", x.op.id], store, x.runner);
+    expect(location).toEqual({
+      seller: "seller-a",
+      privateFile: `.sandbox-private/${oldKey}.json`,
+    });
+    expect(JSON.stringify(location)).not.toContain("PRIVATE_CONSENT");
+    await sandboxCli(["refresh-consent", x.op.id], store, x.runner);
+    const newKey = (await store.onboardingResource(x.op.id)).artifactKey;
+    expect(newKey).not.toBe(oldKey);
+    expect((await store.inspect(x.runId)).browserWaits[0]?.artifactKey).toBe(newKey);
+    expect((await store.operation(x.op.id)).attempts).toBe(1);
+  });
+
+  it("P3 prevents concurrent duplicate dispatch and refuses exhausted shared request budgets", async () => {
+    const x = await onboardingSetup(2);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await store.db.$client`UPDATE sandbox_allocation SET consumed_calls = 45`;
+    await expect(x.runner.resume(x.op.id)).rejects.toThrow("call_limit");
+    expect(x.fetcher).not.toHaveBeenCalled();
+    await store.db.$client`UPDATE sandbox_allocation SET consumed_calls = 44`;
+    await Promise.allSettled([x.runner.resume(x.op.id), x.runner.resume(x.op.id)]);
+    expect((await store.operation(x.op.id)).attempts).toBe(1);
+    expect(
+      x.fetcher.mock.calls.filter(([, init]) => String(init?.body).includes("tracking_id")),
+    ).toHaveLength(1);
+    expect((await store.report(x.runId)).allocation).toMatchObject({
+      consumedCalls: 46,
+      heldCalls: 4,
+    });
+  });
 
   it("persists preparation, blocks unapproved dispatch and reports no private payload", async () => {
     const { runId, op } = await prepared();
