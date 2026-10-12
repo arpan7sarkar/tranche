@@ -5,6 +5,7 @@ import {
   onboardingApprovalSummary,
   SandboxApprovalSummary,
   SandboxOperationSpec,
+  SandboxReferralRecoveryInput,
 } from "@tranche/contracts";
 import { createSandboxStore, type SandboxStore } from "@tranche/db";
 import { onboardingSpec } from "@tranche/paypal";
@@ -13,14 +14,29 @@ import { PrivateSandboxArtifacts } from "./private-artifacts";
 import { SandboxRunner } from "./runner";
 
 export const sandboxHelp =
-  "Sandbox runner: onboard <private-input-file> | start <private-spec-file> | inspect <run-id> | report <run-id> | approve <operation-id> <payload-hash> <attempt> | resume <operation-id> | consent-file <operation-id> | refresh-consent <operation-id>. Only seller onboarding has a real adapter; all writes require approval.";
+  "Sandbox runner: onboard <private-input-file> | start <private-spec-file> | inspect <run-id> | report <run-id> | approve <operation-id> <payload-hash> <attempt> | resume <operation-id> | consent-file <operation-id> | refresh-consent <operation-id> | referral-recovery <operation-id> <private-input-file> | approve-referral-recovery <id> <approval-hash> | apply-referral-recovery <id>. Only seller onboarding has a real adapter; all writes require approval.";
 
 export async function sandboxCli(
   args: string[],
   store: SandboxStore,
   runner: SandboxRunner,
+  artifacts = new PrivateSandboxArtifacts(
+    fileURLToPath(new URL("../../../../.sandbox-private", import.meta.url)),
+  ),
 ): Promise<unknown> {
   const [command, first, second, third] = args;
+  if (command === "referral-recovery" && args.length === 3 && first && second) {
+    const input = SandboxReferralRecoveryInput.parse(JSON.parse(await readFile(second, "utf8")));
+    return store.proposeReferralRecovery(first, input.referralId);
+  }
+  if (command === "approve-referral-recovery" && args.length === 3 && first && second) {
+    await store.approveReferralRecovery(first, second);
+    return { approvalRecorded: true };
+  }
+  if (command === "apply-referral-recovery" && args.length === 2 && first) {
+    await runner.recoverReferral(first);
+    return { applied: true };
+  }
   if (["start", "onboard"].includes(command ?? "") && args.length === 2 && first) {
     const input: unknown = JSON.parse(await readFile(first, "utf8"));
     const spec = command === "onboard" ? onboardingSpec(input) : SandboxOperationSpec.parse(input);
@@ -46,13 +62,11 @@ export async function sandboxCli(
   if (command === "inspect" && args.length === 2 && first) return store.inspect(first);
   if (command === "report" && args.length === 2 && first) return store.report(first);
   if (command === "consent-file" && args.length === 2 && first) {
-    const resource = await store.onboardingResource(first);
-    const op = await store.operation(first);
-    if (!resource.artifactKey || op.state !== "waiting_for_browser")
-      throw new Error("consent_unavailable");
+    const consent = await store.consentArtifact(first);
+    await artifacts.readBrowserUrl(consent.artifactKey);
     return {
-      seller: op.spec.onboarding?.seller,
-      privateFile: `.sandbox-private/${resource.artifactKey}.json`,
+      seller: consent.seller,
+      privateFile: artifacts.filePath(consent.artifactKey),
     };
   }
   if (command === "approve" && args.length === 4 && first && second && third) {
@@ -86,7 +100,7 @@ async function main() {
       },
       [onboardingAdapter(store, artifacts, process.env.PAYPAL_CLIENT_ID ?? "")],
     );
-    console.log(JSON.stringify(await sandboxCli(args, store, runner), null, 2));
+    console.log(JSON.stringify(await sandboxCli(args, store, runner, artifacts), null, 2));
   } finally {
     await store.db.$client.end();
   }

@@ -6,7 +6,9 @@ import {
   onboardingRequest,
   onboardingStatusRequest,
   parseReferral,
+  SandboxTransportError,
   verifyOnboarding,
+  verifyReferralRecovery,
 } from "@tranche/paypal";
 import type { PrivateSandboxArtifacts } from "./private-artifacts";
 import type { SandboxAdapter } from "./runner";
@@ -59,6 +61,11 @@ export function onboardingAdapter(
       return op.spec.request;
     },
     interpret: (body, op) => referral(body, op.spec),
+    recoverReferral: (body, op, expectedId) => {
+      const c = context(op.spec);
+      verifyReferralRecovery(body, c, expectedId);
+      return referral(body, op.spec);
+    },
     failure: onboardingFailure,
     recover: async (op, read, options) => {
       const c = context(op.spec);
@@ -77,13 +84,41 @@ export function onboardingAdapter(
         const body = await read({
           method: "GET",
           partner: c.partner,
-          path: `/v2/customer/partner-referrals/${resource.referralId}`,
+          path: `/v2/customer/partner-referrals/${encodeURIComponent(resource.referralId)}`,
         });
         if (parseReferral(body).referralId !== resource.referralId)
           throw new Error("referral_mismatch");
         return referral(body, op.spec);
       }
-      const evidence = verifyOnboarding(await read(onboardingStatusRequest(c)), c);
+      let evidence: ReturnType<typeof verifyOnboarding>;
+      try {
+        evidence = verifyOnboarding(await read(onboardingStatusRequest(c)), c);
+      } catch (error) {
+        if (
+          resource.artifactKey &&
+          ((error instanceof Error && error.message === "recovery_bound") ||
+            (error instanceof SandboxTransportError &&
+              (error.code === "network" ||
+                (error.code === "http" &&
+                  (error.status === 404 || (error.status !== undefined && error.status >= 500))))))
+        ) {
+          const failure =
+            error instanceof SandboxTransportError
+              ? onboardingFailure(error).onboarding?.evidence
+              : onboardingEvidence("provider_unavailable");
+          if (!failure) throw error;
+          return {
+            state: "waiting_for_browser",
+            expectedAlias: c.seller,
+            artifactKey: resource.artifactKey,
+            onboarding: {
+              artifactKey: resource.artifactKey,
+              evidence: failure,
+            },
+          };
+        }
+        throw error;
+      }
       if (evidence.status === "consent_verified")
         return { state: "succeeded", onboarding: { evidence } };
       if (evidence.reason === "identity_mismatch" || evidence.reason === "malformed_response")
@@ -92,7 +127,7 @@ export function onboardingAdapter(
         const body = await read({
           method: "GET",
           partner: c.partner,
-          path: `/v2/customer/partner-referrals/${resource.referralId}`,
+          path: `/v2/customer/partner-referrals/${encodeURIComponent(resource.referralId)}`,
         });
         if (parseReferral(body).referralId !== resource.referralId)
           throw new Error("referral_mismatch");

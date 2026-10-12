@@ -74,7 +74,8 @@ pnpm --filter @tranche/agents-service f0:runner consent-file <operation-id>
 onboard only persists preparation and prints a sanitized approval summary; it sends no PayPal request.
 Review the summary, private mapping and exact request before approving.
 The first approved resume is the actual referral dispatch and can use OAuth plus one business write.
-consent-file returns a private JSON file location, not the token-bearing URL; open that file privately and use its link while signed in as the intended seller.
+consent-file returns an absolute private JSON file location, not the token-bearing URL; open that file privately and use its link while signed in as the intended seller.
+An older inconclusive operation can still return its file when the saved referral, unresolved seller wait, private artifact and original deadline match.
 After completing browser consent, run resume again to make a counted authoritative status read and then inspect or report the run.
 No requests occur merely because the runner is waiting for the browser.
 
@@ -88,8 +89,21 @@ Use refresh-consent only when the stored link needs refreshing and a persisted r
 It performs a counted GET for the same referral, validates the returned destinations and atomically updates the artifact reference and browser wait; it never creates another referral.
 After refresh, request consent-file again because the private file key changes.
 If a referral timed out before its ID was saved, resume can verify a matching integration through the known seller ID, but it cannot invent a missing referral ID or issue a replacement POST.
-Treat missing evidence as inconclusive and investigate privately without resetting counters.
-On deadline or read-limit exhaustion, resume refuses further network work; inspect the existing evidence and allocation rather than repeatedly retrying.
+A pre-consent 404 does not prove that PayPal never created the referral, so keep the original seller and tracking reservation.
+If PayPal's API call evidence provides the original referral ID, use the separately approved, counted recovery described in the [P3 recovery fix](p3-onboarding-recovery-fix.md).
+Put `{"referralId":"PROVIDER_REFERRAL_ID"}` in a private input file and run these commands with the original operation and proposal IDs.
+
+```powershell
+pnpm --filter @tranche/agents-service f0:runner referral-recovery <operation-id> <private-input-file>
+pnpm --filter @tranche/agents-service f0:runner approve-referral-recovery <recovery-id> <approval-hash>
+pnpm --filter @tranche/agents-service f0:runner apply-referral-recovery <recovery-id>
+pnpm --filter @tranche/agents-service f0:runner consent-file <operation-id>
+```
+
+The proposal makes no PayPal request, approval reserves two calls and application makes one OAuth request plus one GET by the supplied referral ID.
+The GET must return matching original platform and tracking evidence plus a validated action link; otherwise the link is not accepted.
+If no authoritative ID exists, keep the operation unresolved and do not send a new referral POST.
+On deadline or read-limit exhaustion, the operation becomes blocked and unused held calls are released; inspect the existing evidence and allocation rather than repeatedly retrying.
 
 ## Verification and optional real test
 

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   onboardingApprovalSummary,
+  PayPalReferralId,
   SandboxAllocation,
   SandboxInspection,
   SandboxOnboardingResult,
@@ -23,6 +24,7 @@ import {
   sandboxCommitment as commitments,
   sandboxOnboarding as onboarding,
   sandboxOperation as operations,
+  sandboxReferralRecovery as referralRecoveries,
   sandboxRun as runs,
   sandboxBrowserWait as waits,
 } from "./sandbox-schema";
@@ -325,6 +327,28 @@ export class SandboxStore {
         )
         .for("update");
       if (!op || !["dispatching", "recovering"].includes(op.state)) throw new Error("stale_claim");
+      const [referralClaim] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(
+          and(
+            eq(referralRecoveries.operationId, op.id),
+            eq(referralRecoveries.claimToken, claim.token),
+            eq(referralRecoveries.state, "approved"),
+          ),
+        );
+      if (referralClaim) {
+        const issued = await tx
+          .select()
+          .from(attempts)
+          .where(and(eq(attempts.operationId, op.id), eq(attempts.claimToken, claim.token)));
+        if (
+          !["oauth", "recovery"].includes(kind) ||
+          issued.length >= 2 ||
+          issued.some((attempt) => attempt.kind === kind)
+        )
+          throw new Error("referral_recovery_call_limit");
+      }
       if (
         op.heldCalls <= 0 ||
         allocation.consumedCalls >= 50 ||
@@ -419,9 +443,280 @@ export class SandboxStore {
     await tx.update(operations).set({ feeCommitted: 1 }).where(eq(operations.id, op.id));
   }
 
-  async beginRecovery(operationId: string): Promise<DispatchClaim> {
+  private async referralCandidate(tx: Tx, operationId: string, recovering = false) {
+    const [op] = await tx
+      .select()
+      .from(operations)
+      .where(eq(operations.id, operationId))
+      .for("update");
+    if (
+      !op?.spec.onboarding ||
+      op.state !== (recovering ? "recovering" : "inconclusive") ||
+      (!recovering && op.claimToken) ||
+      op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec)) ||
+      Date.parse(op.spec.onboarding.checkUntil) <= Date.now() ||
+      op.recoveryReads >= op.spec.recoveryCalls ||
+      op.heldCalls <= 1
+    )
+      throw new Error("referral_recovery_not_available");
+    const [resource] = await tx.select().from(onboarding).where(eq(onboarding.operationId, op.id));
+    const dispatched = await tx
+      .select({ id: attempts.id })
+      .from(attempts)
+      .where(
+        and(
+          eq(attempts.operationId, op.id),
+          eq(attempts.kind, "business"),
+          eq(attempts.dispatched, 1),
+        ),
+      );
+    if (!resource || resource.referralId || resource.artifactKey || dispatched.length !== 1)
+      throw new Error("referral_recovery_not_available");
+    return op;
+  }
+
+  private referralRecoverySummary(row: typeof referralRecoveries.$inferSelect) {
+    return {
+      id: row.id,
+      operationId: row.operationId,
+      state: row.state,
+      approvalHash: row.approvalHash,
+      additionalCalls: 2 as const,
+    };
+  }
+
+  private referralRecoveryHash(op: StoredOperation, referralId: string) {
+    return sandboxPayloadHash({
+      operationId: op.id,
+      referralId,
+      payloadHash: op.payloadHash,
+      requestId: op.requestId,
+      additionalCalls: 2,
+    });
+  }
+
+  async referralRecovery(id: string) {
+    const [row] = await this.db
+      .select()
+      .from(referralRecoveries)
+      .where(eq(referralRecoveries.id, id));
+    if (!row) throw new Error("referral_recovery_missing");
+    return row;
+  }
+
+  async proposeReferralRecovery(operationId: string, input: unknown) {
+    const referralId = PayPalReferralId.parse(input);
     return this.db.transaction(async (tx) => {
       await this.allocation(tx);
+      const op = await this.referralCandidate(tx, operationId);
+      const approvalHash = this.referralRecoveryHash(op, referralId);
+      const [prior] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(eq(referralRecoveries.operationId, operationId));
+      if (prior) {
+        if (prior.referralId !== referralId || prior.approvalHash !== approvalHash)
+          throw new Error("referral_recovery_exists");
+        return this.referralRecoverySummary(prior);
+      }
+      const [row] = await tx
+        .insert(referralRecoveries)
+        .values({
+          id: randomUUID(),
+          operationId,
+          referralId,
+          approvalHash,
+          state: "awaiting_approval",
+        })
+        .returning();
+      if (!row) throw new Error("referral_recovery_prepare_failed");
+      return this.referralRecoverySummary(row);
+    });
+  }
+
+  async approveReferralRecovery(id: string, approvalHash: string) {
+    await this.db.transaction(async (tx) => {
+      const allocation = await this.allocation(tx);
+      const [row] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(eq(referralRecoveries.id, id))
+        .for("update");
+      if (row?.state !== "awaiting_approval" || row.approvalHash !== approvalHash)
+        throw new Error("referral_recovery_approval_mismatch");
+      const op = await this.referralCandidate(tx, row.operationId);
+      if (this.referralRecoveryHash(op, row.referralId) !== row.approvalHash)
+        throw new Error("referral_recovery_stale");
+      if (allocation.consumedCalls + allocation.heldCalls + 2 > 50) throw new Error("call_limit");
+      await tx
+        .update(allocations)
+        .set({ heldCalls: allocation.heldCalls + 2 })
+        .where(eq(allocations.id, 1));
+      await tx
+        .update(operations)
+        .set({ heldCalls: op.heldCalls + 2 })
+        .where(eq(operations.id, op.id));
+      await tx
+        .update(referralRecoveries)
+        .set({ state: "approved", approvedAt: new Date() })
+        .where(eq(referralRecoveries.id, id));
+    });
+  }
+
+  async beginReferralRecovery(id: string): Promise<DispatchClaim> {
+    return this.db.transaction(async (tx) => {
+      await this.allocation(tx);
+      const [row] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(eq(referralRecoveries.id, id))
+        .for("update");
+      if (row?.state !== "approved" || row.claimToken)
+        throw new Error("referral_recovery_approval_required");
+      const op = await this.referralCandidate(tx, row.operationId);
+      if (this.referralRecoveryHash(op, row.referralId) !== row.approvalHash)
+        throw new Error("referral_recovery_stale");
+      if (op.heldCalls < 2) throw new Error("call_limit");
+      const token = randomUUID();
+      const [claimed] = await tx
+        .update(operations)
+        .set({
+          state: "recovering",
+          claimToken: token,
+          claimUntil: sql`now() + interval '60 seconds'`,
+        })
+        .where(eq(operations.id, op.id))
+        .returning();
+      if (!claimed) throw new Error("claim_failed");
+      await tx
+        .update(referralRecoveries)
+        .set({ claimToken: token })
+        .where(eq(referralRecoveries.id, id));
+      return { operation: claimed, token, attemptId: randomUUID() };
+    });
+  }
+
+  async finishReferralRecovery(claim: DispatchClaim, id: string, input: unknown) {
+    const outcome = SandboxOutcome.parse(input);
+    await this.db.transaction(async (tx) => {
+      await this.allocation(tx);
+      const [row] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(eq(referralRecoveries.id, id))
+        .for("update");
+      const [op] = await tx
+        .select()
+        .from(operations)
+        .where(eq(operations.id, claim.operation.id))
+        .for("update");
+      if (
+        row?.state !== "approved" ||
+        row.claimToken !== claim.token ||
+        op?.claimToken !== claim.token ||
+        op.state !== "recovering" ||
+        !op.claimUntil ||
+        op.claimUntil.getTime() <= Date.now() ||
+        row.operationId !== op.id ||
+        !op.spec.onboarding ||
+        Date.parse(op.spec.onboarding.checkUntil) <= Date.now()
+      )
+        throw new Error("stale_claim");
+      if (
+        this.referralRecoveryHash(op, row.referralId) !== row.approvalHash ||
+        op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec))
+      )
+        throw new Error("referral_recovery_stale");
+      if (
+        outcome.state !== "waiting_for_browser" ||
+        outcome.onboarding?.referralId !== row.referralId ||
+        !outcome.artifactKey
+      )
+        throw new Error("referral_recovery_mismatch");
+      const requestRows = await tx
+        .select()
+        .from(attempts)
+        .where(and(eq(attempts.operationId, op.id), eq(attempts.claimToken, claim.token)));
+      if (
+        requestRows.length !== 2 ||
+        requestRows.some((attempt) => attempt.outcome !== "completed")
+      )
+        throw new Error("referral_recovery_read_required");
+      await this.persistOnboarding(tx, op, outcome);
+      await tx
+        .insert(waits)
+        .values({
+          operationId: op.id,
+          expectedAlias: op.spec.onboarding.seller,
+          artifactKey: outcome.artifactKey,
+        })
+        .onConflictDoUpdate({
+          target: waits.operationId,
+          set: {
+            expectedAlias: op.spec.onboarding.seller,
+            artifactKey: outcome.artifactKey,
+            resolved: 0,
+          },
+        });
+      await tx
+        .update(operations)
+        .set({ state: "waiting_for_browser", claimToken: null, claimUntil: null })
+        .where(eq(operations.id, op.id));
+      await tx
+        .update(referralRecoveries)
+        .set({ state: "applied", appliedAt: new Date() })
+        .where(eq(referralRecoveries.id, id));
+    });
+  }
+
+  async failReferralRecovery(claim: DispatchClaim, id: string) {
+    await this.db.transaction(async (tx) => {
+      const allocation = await this.allocation(tx);
+      const [row] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(eq(referralRecoveries.id, id))
+        .for("update");
+      const [op] = await tx
+        .select()
+        .from(operations)
+        .where(eq(operations.id, claim.operation.id))
+        .for("update");
+      if (
+        row?.state !== "approved" ||
+        row.claimToken !== claim.token ||
+        op?.claimToken !== claim.token
+      )
+        throw new Error("stale_claim");
+      const issued = await tx
+        .select({ id: attempts.id })
+        .from(attempts)
+        .where(and(eq(attempts.operationId, op.id), eq(attempts.claimToken, claim.token)));
+      const unused = 2 - issued.length;
+      if (unused < 0) throw new Error("referral_recovery_call_limit");
+      await tx
+        .update(allocations)
+        .set({ heldCalls: allocation.heldCalls - unused })
+        .where(eq(allocations.id, 1));
+      await tx
+        .update(operations)
+        .set({
+          state: "inconclusive",
+          heldCalls: op.heldCalls - unused,
+          claimToken: null,
+          claimUntil: null,
+        })
+        .where(eq(operations.id, op.id));
+      await tx
+        .update(referralRecoveries)
+        .set({ state: "awaiting_approval", claimToken: null, approvedAt: null })
+        .where(eq(referralRecoveries.id, id));
+    });
+  }
+
+  async beginRecovery(operationId: string): Promise<DispatchClaim> {
+    const claim = await this.db.transaction(async (tx) => {
+      const allocation = await this.allocation(tx);
       const [op] = await tx
         .select()
         .from(operations)
@@ -434,13 +729,35 @@ export class SandboxStore {
         throw new Error("not_recoverable");
       if (op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec)))
         throw new Error("payload_changed");
+      const [referralRow] = await tx
+        .select()
+        .from(referralRecoveries)
+        .where(eq(referralRecoveries.operationId, op.id));
       if (
         op.spec.onboarding &&
         (Date.parse(op.spec.onboarding.checkUntil) <= Date.now() ||
           op.recoveryReads >= op.spec.recoveryCalls ||
           op.heldCalls <= 1)
-      )
-        throw new Error("onboarding_recovery_limit");
+      ) {
+        if (op.claimUntil && op.claimUntil.getTime() > Date.now()) throw new Error("claim_active");
+        await tx
+          .update(allocations)
+          .set({ heldCalls: allocation.heldCalls - op.heldCalls })
+          .where(eq(allocations.id, 1));
+        await tx
+          .update(operations)
+          .set({ state: "blocked", heldCalls: 0, claimToken: null, claimUntil: null })
+          .where(eq(operations.id, op.id));
+        await tx.update(waits).set({ resolved: 1 }).where(eq(waits.operationId, op.id));
+        if (referralRow && referralRow.state !== "applied")
+          await tx
+            .update(referralRecoveries)
+            .set({ state: "failed", claimToken: null })
+            .where(eq(referralRecoveries.id, referralRow.id));
+        return null;
+      }
+      if (referralRow && referralRow.state !== "applied")
+        throw new Error("referral_recovery_requires_dedicated_command");
       const [claimed] = await tx
         .update(operations)
         .set({
@@ -458,6 +775,8 @@ export class SandboxStore {
       if (!claimed?.claimToken) throw new Error("claim_active");
       return { operation: claimed, token: claimed.claimToken, attemptId: randomUUID() };
     });
+    if (!claim) throw new Error("onboarding_recovery_limit");
+    return claim;
   }
 
   async finishRecovery(claim: DispatchClaim, input: unknown): Promise<void> {
@@ -477,8 +796,15 @@ export class SandboxStore {
         .for("update");
       if (!op) throw new Error("stale_claim");
       await this.persistOnboarding(tx, op, outcome);
+      const exhausted = Boolean(
+        op.spec.onboarding &&
+          !["succeeded", "failed"].includes(outcome.state) &&
+          (Date.parse(op.spec.onboarding.checkUntil) <= Date.now() ||
+            op.recoveryReads >= op.spec.recoveryCalls ||
+            op.heldCalls <= 1),
+      );
       if (outcome.state === "succeeded") await this.commitMoney(tx, allocation, op);
-      if (outcome.state === "succeeded" || outcome.state === "failed") {
+      if (outcome.state === "succeeded" || outcome.state === "failed" || exhausted) {
         await tx
           .update(allocations)
           .set({ heldCalls: allocation.heldCalls - op.heldCalls })
@@ -487,12 +813,12 @@ export class SandboxStore {
       }
       await tx
         .update(operations)
-        .set({ state: outcome.state, claimToken: null, claimUntil: null })
+        .set({ state: exhausted ? "blocked" : outcome.state, claimToken: null, claimUntil: null })
         .where(eq(operations.id, op.id));
-      if (outcome.state === "succeeded" || outcome.state === "failed") {
+      if (outcome.state === "succeeded" || outcome.state === "failed" || exhausted) {
         await tx.update(waits).set({ resolved: 1 }).where(eq(waits.operationId, op.id));
       }
-      if (outcome.state === "waiting_for_browser") {
+      if (outcome.state === "waiting_for_browser" && !exhausted) {
         await tx
           .insert(waits)
           .values({
@@ -518,6 +844,44 @@ export class SandboxStore {
     return op;
   }
 
+  async finalizeOnboardingExpiry(operationId: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const allocation = await this.allocation(tx);
+      const [op] = await tx
+        .select()
+        .from(operations)
+        .where(eq(operations.id, operationId))
+        .for("update");
+      if (
+        !op?.spec.onboarding ||
+        Date.parse(op.spec.onboarding.checkUntil) > Date.now() ||
+        ["succeeded", "failed"].includes(op.state)
+      )
+        return false;
+      if (op.claimUntil && op.claimUntil.getTime() > Date.now()) throw new Error("claim_active");
+      if (op.state === "blocked" && op.heldCalls === 0) return false;
+      await tx
+        .update(allocations)
+        .set({ heldCalls: allocation.heldCalls - op.heldCalls })
+        .where(eq(allocations.id, 1));
+      await tx
+        .update(operations)
+        .set({ state: "blocked", heldCalls: 0, claimToken: null, claimUntil: null })
+        .where(eq(operations.id, op.id));
+      await tx.update(waits).set({ resolved: 1 }).where(eq(waits.operationId, op.id));
+      await tx
+        .update(referralRecoveries)
+        .set({ state: "failed", claimToken: null })
+        .where(
+          and(
+            eq(referralRecoveries.operationId, op.id),
+            sql`${referralRecoveries.state} <> 'applied'`,
+          ),
+        );
+      return true;
+    });
+  }
+
   async onboardingResource(operationId: string) {
     const [row] = await this.db
       .select()
@@ -525,6 +889,27 @@ export class SandboxStore {
       .where(eq(onboarding.operationId, operationId));
     if (!row) throw new Error("onboarding_missing");
     return row;
+  }
+
+  async consentArtifact(operationId: string) {
+    const op = await this.operation(operationId);
+    const resource = await this.onboardingResource(operationId);
+    const [wait] = await this.db.select().from(waits).where(eq(waits.operationId, operationId));
+    if (
+      !op.spec.onboarding ||
+      !["waiting_for_browser", "inconclusive"].includes(op.state) ||
+      (op.state === "inconclusive" &&
+        !["not_found", "provider_unavailable"].includes(resource.evidence?.reason ?? "")) ||
+      Date.parse(op.spec.onboarding.checkUntil) <= Date.now() ||
+      !resource.referralId ||
+      !resource.artifactKey ||
+      !wait ||
+      wait.resolved !== 0 ||
+      wait.expectedAlias !== op.spec.onboarding.seller ||
+      wait.artifactKey !== resource.artifactKey
+    )
+      throw new Error("consent_unavailable");
+    return { seller: op.spec.onboarding.seller, artifactKey: resource.artifactKey };
   }
 
   private async persistOnboarding(tx: Tx, op: StoredOperation, outcome: SandboxOutcome) {

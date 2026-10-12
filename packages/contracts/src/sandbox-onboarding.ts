@@ -3,6 +3,10 @@ import { z } from "zod";
 export const SandboxSeller = z.enum(["seller-a", "seller-b"]);
 export const PayPalMerchantId = z.string().regex(/^[A-Z0-9]{13}$/);
 export const PayPalOpaqueId = z.string().regex(/^[A-Za-z0-9_-]{1,127}$/);
+export const PayPalReferralId = z
+  .string()
+  .regex(/^(?:[A-Za-z0-9+/=]{1,255}|[A-Za-z0-9_-]{1,127})$/);
+export const SandboxReferralRecoveryInput = z.strictObject({ referralId: PayPalReferralId });
 export const SandboxPartnerContext = z.strictObject({
   attributionId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
 });
@@ -98,7 +102,7 @@ export const SandboxOnboardingEvidence = z.strictObject({
 });
 export type SandboxOnboardingEvidence = z.infer<typeof SandboxOnboardingEvidence>;
 export const SandboxOnboardingResult = z.strictObject({
-  referralId: PayPalOpaqueId.optional(),
+  referralId: PayPalReferralId.optional(),
   artifactKey: z.uuid().optional(),
   evidence: SandboxOnboardingEvidence,
 });
