@@ -6,7 +6,8 @@ The contributor's latest instruction sets USD $1 as the maximum total testing sp
 Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
 Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
 If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
-The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup.
+P2 implements persistent runner accounting as of 2026-10-12; do not use the standalone preflight for uncounted calls during an active experiment.
 No current preflight command enforces money budgets or executes payments.
 Earlier requested amounts retained below are historical inputs and do not authorize spending.
 
@@ -41,13 +42,13 @@ Do not start another phase merely to fill the current session.
 
 ## Phase map
 
-| Phase | Deliverable | Prerequisites | Initial status |
+| Phase | Deliverable | Prerequisites | Status as of 2026-10-12 |
 |---|---|---|---|
 | P0 | Plan, evidence template, and contributor handoff | Repository inspection | Complete |
-| P1 | Account inventory and sandbox access assessment | P0 | Not started |
-| P2 | Minimal durable probe execution foundation | P1 account requirements understood | Not started |
-| P3 | Seller onboarding evidence | P2 and partner access | Not started |
-| P4 | Single-seller protection-path evidence | P2 and relevant seller readiness | Not started |
+| P1 | Account inventory and sandbox access assessment | P0 | In progress; future browser availability remains open |
+| P2 | Minimal durable probe execution foundation | P1 account requirements understood | Offline foundation complete |
+| P3 | Seller onboarding evidence | P2 and partner access | Planned; implementation not started |
+| P4 | Single-seller protection-path evidence | P2 and relevant seller readiness | Planned; implementation not started |
 | P5 | Multiple-payee capture evidence | P2 and two ready sellers | Not started |
 | P6 | Payouts capability and funding assessment | P2 and intended sender identified | Not started |
 | P7 | Reviewed payment-path decision | Required probe results or explicit blockers recorded | Not started |
@@ -75,8 +76,8 @@ If a phase is too large for one session, hand off its completed tasks and remain
 ## P1: Inventory accounts and assess access
 
 Follow the [P1 implementation plan](p1-implementation-plan.md) for file changes, preflight behavior, tests, operator steps, and completion criteria.
-Use the sandbox readiness plan for the newly requested account roles, contributor-operated browser actions, USD currency, $10-per-test and $500-total limits, and 50-call cap.
-These are requested targets; dashboard observations and budget enforcement remain pending.
+Use the sandbox readiness plan and access assessment for account roles, browser actions, USD currency and dashboard observations.
+The original $10-per-test and $500-total proposal is superseded by $1 total including sender fees and 50 runner-issued calls; P2 implements persistent enforcement.
 
 ### Tasks
 
@@ -112,11 +113,14 @@ Use pnpm install when dependencies are needed, and never hand-edit the lockfile.
 P1 adds the f0:preflight package command and explicit root .env loading for that command only.
 See the [operator runbook](p1-runbook.md) and [access assessment](evidence/p1-access-assessment.md) for validation results.
 Do not assume creating a root .env makes other package commands load it.
-P2 must extend environment loading explicitly to its durable probe runner.
+The implemented P2 runner also loads root .env explicitly; process environment values take precedence.
 
 ## P2: Build the minimum execution foundation
 
 Use the [P2 runner implementation plan](p2-sandbox-runner-implementation-plan.md) for the latest limits, per-payment approval requirement, durable records, and ordered implementation tasks.
+The offline foundation is complete; see the [P2 closeout](p2-closeout.md) for evidence and limitations.
+Continue with the [P3 seller-onboarding plan](p3-seller-onboarding-implementation-plan.md), followed by the [P4 payment-protection plan](p4-payment-protection-implementation-plan.md).
+The tasks below retain the original phase design; endpoint-specific adapters and actual capability evidence belong to subsequent phases.
 
 ### Tasks
 
@@ -156,7 +160,7 @@ F0 uses authoritative API reads for confirmation and does not claim webhook proc
 
 ### Proposed code locations
 
-These locations are targets for P2, not files or commands that already exist.
+These are the original P2 location proposals; the implementation record lists the actual delivered files and the runbook lists implemented commands.
 Adjust small file boundaries to the actual implementation and update this plan if responsibilities change.
 
 ```text

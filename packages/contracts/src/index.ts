@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./sandbox-capabilities";
+
 export const MilestoneState = z.enum([
   "draft",
   "agreed",
