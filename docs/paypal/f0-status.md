@@ -6,26 +6,32 @@ The contributor's latest instruction sets USD $1 as the maximum total testing sp
 Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
 Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
 If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
-The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup.
+P2 implements persistent runner accounting as of 2026-10-12; do not use the standalone preflight for uncounted calls during an active experiment.
 No current preflight command enforces money budgets or executes payments.
 Earlier requested amounts retained below are historical inputs and do not authorize spending.
 
-Last updated: 2026-10-11.
+Last updated: 2026-10-12.
 Plan: [f0-plan.md](f0-plan.md).
 Experiment template: [f0-evidence-template.md](f0-evidence-template.md).
 Pending setup and implementation: [sandbox readiness plan](sandbox-readiness-implementation-plan.md).
 Ordered runtime implementation: [P2 runner plan](p2-sandbox-runner-implementation-plan.md).
+P1 verification and remaining closeout item: [P1 closeout review](p1-closeout.md).
+Implemented runner commands and evidence: [P2 runbook](p2-runbook.md), [P2 implementation record](p2-implementation-record.md).
+Foundation completion: [P2 closeout](p2-closeout.md).
+Next implementation plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md), then [P4 payment protection](p4-payment-protection-implementation-plan.md).
 
 ## Current position
 
 P0, planning and handoff, is complete.
 F0 as a whole is not complete.
 P1 tooling and real sandbox authentication are verified.
+P2's offline runner foundation is implemented and verified with 109 passing tests, including 18 disposable PostgreSQL scenarios; real capability adapters are deferred to P3-P6.
 P1 is partially complete; the owner deferred remaining work on 2026-10-09, and the contributor requested a plan for that work on 2026-10-11.
-The requested targets are a default Personal buyer, two distinct Business sellers, the platform Business balance as the payout source, contributor-operated browser approvals, USD, $10 per test, $500 total, and 50 API calls.
-The new readiness plan records those requirements and proposes precise campaign accounting; the request in this session is for planning and documentation.
-Login access and USD 5,000 displayed in all four assigned accounts are contributor-confirmed; dashboard feature observations are now recorded, while transaction suitability, future operator availability, and accounting agreement remain pending.
-No budget enforcement, participant setup, or new PayPal experiment was performed during this planning session.
+The original requested targets were a default Personal buyer, two distinct Business sellers, the platform Business balance as the payout source, contributor-operated browser approvals, USD, $10 per test, $500 total, and 50 API calls.
+The readiness plan retains that historical request; the current agreed limit is $1 total including sender fees and 50 runner-issued API attempts.
+Login access and USD 5,000 displayed in all four assigned accounts are contributor-confirmed; dashboard feature observations and $1/50-call accounting are recorded, while transaction suitability and future operator availability remain pending.
+The earlier planning session did not implement budget enforcement or perform participant setup or PayPal experiments; P2 now implements persistent runner limits without real PayPal execution.
 See the [implementation plan](p1-implementation-plan.md), [operator runbook](p1-runbook.md), and [access assessment](evidence/p1-access-assessment.md).
 Authentication succeeded against the fixed sandbox token endpoint with HTTP 200 on 2026-10-09 at 15:51:44.003 UTC.
 Fresh sandbox OAuth also succeeded at 2026-10-11T10:52:20.384Z with HTTP 200 and a 32,400-second token lifetime; no token was printed or persisted.
@@ -41,7 +47,7 @@ These are dashboard observations, not successful API tests or proof of partner a
 No business PayPal writes or sandbox transactions have occurred.
 Credentials remain in the owner's ignored local .env; values and access tokens were not printed or recorded.
 
-## Repository baseline
+## Historical repository baseline before P2
 
 The repository began this phase with a clean Git working tree and 47 project files outside Git internals.
 The web app contains a scaffold landing page.
@@ -58,10 +64,10 @@ Dependencies were installed during P1 using the unchanged frozen lockfile.
 | Phase | Status | Owner | Evidence or remaining work |
 |---|---|---|---|
 | P0 | Complete | Current session | Plan, template, handoff, and README entry point |
-| P1 | In progress | Requesting contributor with account owner | Tooling and OAuth passed; roles and REST credential association recorded; all four logins and USD balances contributor-confirmed; features, operator availability, and accounting still pending |
-| P2 | Not started (implementation planned) | Implementing contributor to confirm ownership | Detailed runner plan covers contracts, allocation/outbox/approval records, $1 cap, 50 calls, browser waits, recovery, and offline validation |
-| P3 | Not started | Unassigned | Prove third-party seller onboarding |
-| P4 | Not started | Unassigned | Prove one single-seller protection path |
+| P1 | In progress | Requesting contributor with account owner | Tooling revalidated on Oct 12; accounts, features, limits and access recorded; future browser-operator availability remains the closeout item |
+| P2 | Offline foundation complete | Current implementing contributor | Contracts, pure checks, seven tables, generated migrations, transport, CLI and recovery verified; real capability adapters deferred to P3-P6 |
+| P3 | Planned; implementation not started | Unassigned | Implement seller onboarding and authoritative consent checks, then collect sandbox evidence |
+| P4 | Planned; implementation not started | Unassigned | Implement and test one eligible protection path, then collect separately approved sandbox evidence |
 | P5 | Not started | Unassigned | Test multiple-payee capture |
 | P6 | Not started | Unassigned | Test Payouts and assess source funding |
 | P7 | Not started | Unassigned | Review evidence and write the payment-path decision |
@@ -88,29 +94,29 @@ Use aliases here and retain credentials and sensitive account mappings privately
 | Buyer | buyer | IN; USD 5,000 displayed | Assigned default Personal account; login and balance contributor-confirmed; payment support untested | Contributor with account owner |
 | Seller A | seller-a | IN; USD 5,000 displayed | Assigned default Business account, distinct from platform; login and balance contributor-confirmed; consent and payment readiness unverified | Contributor with account owner |
 | Seller B | seller-b | IN; USD 5,000 displayed | Assigned remaining distinct Business account; login and balance contributor-confirmed; consent and payment readiness unverified | Contributor with account owner |
-| Intended Payouts sender | payout-sender | Country unknown; USD requested | Platform Business account and sandbox balance requested; mapping, permissions, and balance unverified | Contributor with account owner |
-| Existing Payouts recipient | payout-recipient | Country unknown; USD requested | Select a suitable existing account, potentially seller-b; not yet confirmed | Contributor with account owner |
-| Observed Business account; role unconfirmed | observed-business-1 | IN; USD balance displayed | Supplied screenshots show Business, Verified, USD 5,000, and an associated REST app | Requesting contributor; private account access unverified |
+| Intended Payouts sender | payout-sender = platform | IN; USD 5,000 displayed | Intended sender reuses assigned platform; login and balance contributor-confirmed; usable payout funding and permissions unproven | Contributor with account owner |
+| Existing Payouts recipient | payout-recipient = seller-b | IN; USD 5,000 displayed | Intended recipient reuses assigned seller-b; login and balance contributor-confirmed; payout receipt untested | Contributor with account owner |
+| Historical app-linked Business observation | observed-business-1 = platform | IN; USD 5,000 displayed | Earlier observation of the subsequently assigned platform account; not an additional participant | Contributor with account owner |
 
 Partner approval, seller features, attribution identifiers, and Payouts access remain unknown.
-The requested experiment limits are recorded; their accounting, enforcement, and participant compatibility are pending.
+The $1 total and 50-call accounting rules are agreed and enforced by the P2 foundation; actual transaction compatibility remains unproven.
 Evidence includes supplied dashboard screenshots, not a direct authenticated dashboard inspection by the assistant; OAuth does not establish missing account or feature facts.
 The earlier deferral is historical; the current request plans the remaining tasks without executing account or feature changes.
 The contributor must coordinate private access with the account owner and follow the readiness plan for any later account creation or setting changes.
 
 ## Next contributor: exact starting point
 
-1. Read AGENTS.md, design section 9, and P1 in the plan.
-2. Inspect git status --short and preserve existing contributor changes; the P0/P1 work and redirect cleanup are already committed.
-3. Read the P1 runbook and access assessment; do not repeat completed authentication merely to establish context.
-4. Follow steps 1-3 in the sandbox readiness plan with the account owner; identify existing participants and resolve platform/seller role-sharing before creating missing accounts.
-5. Record dashboard feature observations with dates and identify buyer-approval and seller-consent operators.
-6. Complete the requested operator/limit table in the access assessment, agree the accounting rules for the supplied limits, and confirm browser access and availability.
-7. Close P1 only when its remaining criteria are met and update this handoff.
-8. P2, when explicitly requested, starts with shared probe contracts and the durable outbox boundary.
+1. Read AGENTS.md, the design, the P2 closeout and the P3 implementation plan.
+2. Inspect git status --short and preserve existing work; do not infer commit or merge status from this documentation.
+3. Reuse confirmed account roles, credential association, login access, balances and feature observations from the access assessment.
+4. Confirm future availability for buyer approval and both sellers' consent to close the remaining P1 scheduling item.
+5. Implement P3 contracts, private provider-resource persistence, narrowly scoped transport extensions and the seller-onboarding adapter.
+6. Verify contracts, mocked transport, approval gates, recovery and persistent call limits against an isolated database before real execution.
+7. Prepare any real referral operation for explicit approval and counted execution; record authoritative seller grants separately from dashboard observations.
+8. Follow the P4 plan once the relevant seller and payment-path prerequisites are established; present the concrete purpose, accounts, principal and fee allowance before each money-moving test and wait for approval.
 
-Do not begin referral or payment business writes during P1.
-Before those experiments, P2 must provide the outbox required by the repository instructions.
+P2 has supplied the durable outbox and persistent limits; its real adapter registry remains empty.
+P3/P4 planning authorizes no PayPal execution, and all business capabilities remain not_tested.
 
 ## Checks performed in P0
 
@@ -219,6 +225,24 @@ Rechecked official idempotency and payout-fee guidance; no exact sender fee or c
 Runtime implementation remains not started, and no application source, credentials, migrations, account settings, or PayPal resources were changed during this planning work.
 P1 still retains seller-readiness and future operator-availability gaps; the independent offline P2 foundation can proceed without claiming those gaps resolved.
 Exact next implementation action: define the shared contracts and pure eligibility checks, then add durable allocation, approval, outbox, attempt, and browser-wait storage with disposable-database tests.
+
+## P1 closeout review: 2026-10-12
+
+Created the [P1 closeout review](p1-closeout.md) with completed implementation, account and feature evidence, current limits, audit results, remaining scheduling confirmation, and P2 starting steps.
+Reconciled current payout sender/recipient roles and the already agreed budget accounting; no account or payment capability was inferred from those documentation corrections.
+The preceding read-only audit passed all 54 preflight tests, agents-service typechecking, four-file Biome validation, local configuration/help checks, and documentation checks.
+No new OAuth or business API calls were made, and no application code or credentials were changed.
+P1 tooling is complete; overall P1 remains in progress pending recorded browser-operator availability for future experiments.
+Independent offline P2 work can start with shared contracts and durable allocation/outbox storage.
+
+## P2 foundation implementation: 2026-10-12
+
+Implemented the reviewed foundation and documented its actual behavior in the [P2 runbook](p2-runbook.md) and [implementation record](p2-implementation-record.md).
+All 109 tests and five affected package typechecks passed; generated migrations were applied only to a disposable local PostgreSQL test database.
+No real OAuth, business writes, account changes or payments were performed.
+The real CLI adapter registry is empty and blocks execution before authentication; business capability status remains not_tested.
+Next action: implement the P3 seller-onboarding adapter after checking its official endpoint contract, privately confirming prerequisites and arranging contributor browser availability.
+Payment preparation remains gated on established fees and endpoint readiness, followed by explicit approval for the concrete test.
 
 ## Session closeout format
 

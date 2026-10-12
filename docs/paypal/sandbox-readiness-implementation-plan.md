@@ -6,12 +6,14 @@ The contributor's latest instruction sets USD $1 as the maximum total testing sp
 Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
 Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
 If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
-The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup.
+P2 implements persistent runner accounting as of 2026-10-12; do not use the standalone preflight for uncounted calls during an active experiment.
 No current preflight command enforces money budgets or executes payments.
 Earlier requested amounts retained below are historical inputs and do not authorize spending.
 
 Date: 2026-10-11.
-Status: Planning complete; account assessment and runtime implementation pending.
+Last reviewed: 2026-10-12.
+Status: Account roles, access, feature observations and accounting recorded; P2 offline foundation complete; browser scheduling and real capability evidence remain pending.
 Scope: the six tasks in the reference image supplied by the requesting contributor.
 Parent: [F0 capability plan](f0-plan.md).
 Current progress: [handoff](f0-status.md).
@@ -23,22 +25,25 @@ The contributor requested planning and documentation for the image on 2026-10-11
 The image is a requirements source, not evidence of completed dashboard setup or enabled payment features.
 Its transcription below is retained because the local sources directory is ignored and is not a portable documentation dependency.
 This request resumes planning for the previously deferred work; no dashboard changes or PayPal calls were performed in this session.
-The supplied amounts and roles are planning inputs, not values currently enforced by the code.
+The original image amounts are historical inputs; the current $1 total and 50-call limits are enforced by the P2 runner foundation.
 
 ## Current implementation
 
 | Area | Existing behavior | Work still needed |
 |---|---|---|
 | Configuration and authentication | apps/agents/scripts/f0/preflight.ts validates sandbox credentials and performs one OAuth exchange | Preserve its interface; add runner-specific readiness validation separately |
-| Tests | preflight.test.ts contains the existing isolated suite; 54 tests passed in the previous validation | Add runner, budget, persistence, and transport tests when those components are built |
-| Shared contracts | packages/contracts/src/index.ts defines only MilestoneState | Add sandbox participant, envelope, run, operation, and capability schemas |
-| PayPal adapter | packages/paypal/src/index.ts is empty; SDK 2.5.0 is declared | Implement sandbox transport and endpoint-specific adapters |
-| Database | Client factory and empty schema; no migrations | Add durable campaign, run, outbox, attempt, and browser-wait storage |
-| CLI | Only f0:preflight exists | Add deterministic operator commands for start, inspect, resume, and report |
-| Accounts and features | Platform setup is user-reported; OAuth success is recorded | Inspect participant mappings, countries, currency support, features, and sandbox balances |
+| Tests | P2 verification and retest passed 109 tests, including 54 preflight tests and 18 PostgreSQL scenarios | Add endpoint-specific P3/P4 tests before real experiments |
+| Shared contracts | Strict sandbox operation, approval, budget and report schemas implemented | Add onboarding and protection-path contracts |
+| PayPal adapter | Fixed-sandbox counted transport implemented; real capability registry empty | Implement endpoint-specific adapters and narrowly scoped partner headers |
+| Database | Seven durable sandbox tables and generated migrations implemented; isolated database tested | Add private provider-resource persistence; application database migration remains pending |
+| CLI | start, inspect, approve, resume and report implemented | Register reviewed capability adapters after offline verification |
+| Accounts and features | Four roles, login access, displayed balances and feature observations recorded | Confirm future browser availability and establish actual seller grants and transaction support |
 
 Do not treat the web landing page or ping workflow as payment functionality.
 Keep the operator CLI separate from registered AI workflows and keep packages/core free of I/O.
+Delivered behavior and verification: [P2 closeout](p2-closeout.md), [implementation record](p2-implementation-record.md) and [runbook](p2-runbook.md).
+Next ordered implementation: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md), then [P4 payment protection](p4-payment-protection-implementation-plan.md).
+The remaining steps below retain the original readiness checklist; use the current handoff to distinguish completed observations from outstanding evidence.
 
 ## Image task mapping
 

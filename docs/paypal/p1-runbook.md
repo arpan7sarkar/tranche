@@ -6,7 +6,8 @@ The contributor's latest instruction sets USD $1 as the maximum total testing sp
 Any individual test must fit within the remaining $1 allowance; known sender fees must also fit within that total.
 Before every money-moving test, explain the purpose, sender, recipient, amount, and expected fees, then wait for explicit contributor approval.
 If the amount is insufficient or a test fails, report the reason and proposed next step; do not increase the amount or send another payment without approval.
-The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup; runtime enforcement is still pending.
+The contributor agreed that the 50-call cap counts all runner-issued PayPal requests, including OAuth, reads, writes, retries, polling, recovery, and cleanup.
+P2 implements persistent runner accounting as of 2026-10-12; do not use the standalone preflight for uncounted calls during an active experiment.
 No current preflight command enforces money budgets or executes payments.
 Earlier requested amounts retained below are historical inputs and do not authorize spending.
 
@@ -124,3 +125,9 @@ If something is unavailable, preserve partial progress and identify the missing 
 If the owner explicitly defers remaining work, keep P1 in progress and record the deferred tasks, resolution owners, and resumption steps in the handoff.
 Use blocked for missing prerequisites that prevent requested work, not merely for work the owner has chosen to defer.
 P2 begins with shared probe contracts and durable outbox execution, not with an unprotected payment script.
+
+## P2 continuation: 2026-10-12
+
+The offline runner foundation is now implemented; use the [P2 runbook](p2-runbook.md) for commands and the [implementation record](p2-implementation-record.md) for actual verification and remaining gates.
+The standalone preflight remains unchanged and does not participate in runner budget accounting.
+Do not use it for uncounted authentication or diagnostics during an active runner experiment.

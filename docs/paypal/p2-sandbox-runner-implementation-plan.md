@@ -1,11 +1,18 @@
 # P2 sandbox runner implementation plan
 
 Date: 2026-10-11.
-Status: Planning complete; runtime implementation and payment execution have not started.
+Last reviewed: 2026-10-12.
+Status: Offline runner foundation implemented and verified on 2026-10-12; real capability adapters and payment execution remain deferred to P3-P6.
+Implementation evidence: [P2 implementation record](p2-implementation-record.md).
+Implemented commands and limitations: [P2 operator runbook](p2-runbook.md).
+Completion review: [P2 closeout](p2-closeout.md).
+Next implementation: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md), then [P4 payment protection](p4-payment-protection-implementation-plan.md).
+The ordered tasks below retain the original implementation design; the implementation record identifies the delivered files and tested behavior.
 Parent: [F0 capability plan](f0-plan.md).
 Prerequisites and observations: [access assessment](evidence/p1-access-assessment.md).
 Broader setup: [sandbox readiness plan](sandbox-readiness-implementation-plan.md).
 Current handoff: [f0-status.md](f0-status.md).
+P1 verification and remaining closeout item: [P1 closeout review](p1-closeout.md).
 
 ## Outcome
 
@@ -25,6 +32,7 @@ Use the supplied screenshots in the ignored sources directory as existing privat
 The intended payout route is platform to seller-b; retain the exact participant identifiers and BN code privately before implementing that adapter.
 Future browser-operator availability, seller consent, endpoint prerequisites, actual USD transaction support, and usable payout funding remain execution gates.
 Offline runner implementation can proceed while those execution gates are unresolved; P1 must retain its remaining gaps explicitly.
+The 2026-10-12 closeout review records completed and revalidated P1 tooling; future browser-operator availability remains the overall P1 closeout item.
 
 ## Agreed execution limits
 
@@ -102,12 +110,16 @@ Test concurrent reservations, 100-cent and 50-attempt boundaries, split amounts,
 Build sandbox-only configuration, OAuth, transport, typed operation adapters, and sanitized errors in packages/paypal.
 Inspect the installed SDK and official endpoint documentation before choosing SDK calls or direct fetch adapters.
 Disable hidden retries and automatic redirects, and make each actual request pass through the persistent request counter.
+Give every request a finite timeout and each polling or recovery sequence a finite deadline and attempt bound, all within the remaining allocation.
+Treat a timed-out business write as potentially dispatched until authoritative recovery establishes its outcome; timeout alone must not release its money reservation or authorize a resend.
 Cache OAuth tokens in memory until expiry; never persist or print access tokens.
 Use fixed API sandbox destinations and reject untrusted resource URLs before attaching credentials.
 Validate browser destinations separately and never forward API authorization headers to them.
 Every business write must originate from the durable outbox and include PayPal-Request-Id, as required by AGENTS.md.
 For each adapter, document request-ID support and retention, duplicate keys, authoritative recovery reads, expected terminal states, and bounded polling behavior.
 If the endpoint has no proven safe recovery path, leave an ambiguous operation inconclusive rather than blindly retrying.
+P2 delivers the shared transport and adapter interface, with mocked adapters sufficient to verify the runner end to end.
+Implement capability-specific adapters incrementally for P3-P6 after checking their endpoint contracts and prerequisites; completing every future adapter is not a P2 exit criterion.
 Preserve the existing preflight modes, output, exit codes, manual redirects, and one-attempt behavior; do not route runner authentication through an uncounted preflight subprocess.
 Test redirects, malformed responses, timeouts, denied permission, rate limits, secret-bearing failures, and exactly one transport dispatch per reserved attempt.
 

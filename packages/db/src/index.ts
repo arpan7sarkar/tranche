@@ -16,4 +16,5 @@ export async function migrateDb(db: Db) {
 }
 
 export * from "./magic-links";
+export * from "./sandbox-store";
 export { schema };
