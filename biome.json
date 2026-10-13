@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/drizzle", "!**/*.css"]
+    "includes": ["**", "!**/drizzle", "!**/*.css", "!packages/db/src/schema/auth.ts"]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": {
