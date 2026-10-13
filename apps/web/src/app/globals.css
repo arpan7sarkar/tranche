@@ -121,6 +121,9 @@
   h2 {
     @apply font-serif tracking-tight;
   }
+  .text-xs {
+    word-spacing: 0.12em;
+  }
 }
 
 @utility tabular {
