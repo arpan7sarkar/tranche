@@ -18,6 +18,15 @@ describe("formatMoney", () => {
     expect(formatMoney({ currency: "JPY", minor: 1500 })).toBe("¥1,500");
   });
 
+  it("is exact for amounts beyond float division precision", () => {
+    expect(formatMoney({ currency: "USD", minor: 9007199254740991 })).toBe(
+      "$90,071,992,547,409.91",
+    );
+    expect(formatMoney({ currency: "JPY", minor: 9007199254740991 })).toBe(
+      "¥9,007,199,254,740,991",
+    );
+  });
+
   it("sums minor units", () => {
     expect(totalOf("USD", [100, 250])).toEqual({ currency: "USD", minor: 350 });
   });

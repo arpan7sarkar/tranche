@@ -196,14 +196,67 @@ describe("design tokens", () => {
   });
 });
 
+const ui = (file: string) =>
+  readFileSync(new URL(`../components/ui/${file}`, import.meta.url), "utf8");
+
+function surfaces(scheme: Scheme): [string, Rgb][] {
+  const hover = ui("table.tsx").match(/\bhover:bg-([a-z-]+)(?:\/(\d+))?/);
+  if (!hover?.[1]) throw new Error("table.tsx has no hover:bg-* row class");
+  const background = color("--background", scheme);
+  const row = over(color(`--${hover[1]}`, scheme), Number(hover[2] ?? 100) / 100, background);
+  return [
+    ["background", background],
+    ["card", color("--card", scheme)],
+    ["popover", color("--popover", scheme)],
+    ["sidebar", color("--sidebar", scheme)],
+    [`table row hover (${hover[0]})`, row],
+  ];
+}
+
+function destructiveVariant(file: string, scheme: Scheme) {
+  const variant = ui(file).match(/\bdestructive:\s*"([^"]*)"/);
+  if (!variant?.[1]) throw new Error(`${file} has no destructive variant`);
+  const pick = (re: RegExp) => {
+    const tokens = variant[1]?.split(/\s+/) ?? [];
+    const scoped = scheme === "dark" ? tokens.filter((t) => t.startsWith("dark:")) : [];
+    const base = tokens.filter((t) => !t.includes(":"));
+    for (const t of [...scoped, ...base]) {
+      const m = t.replace(/^dark:/, "").match(re);
+      if (m?.[1]) return m;
+    }
+    return null;
+  };
+  const bg = pick(/^bg-([a-z-]+)(?:\/(\d+))?$/);
+  const fg = pick(/^text-([a-z-]+)$/);
+  if (!bg?.[1] || !fg?.[1])
+    throw new Error(`${file} destructive variant lacks a tint and text color`);
+  return { text: `--${fg[1]}`, tint: `--${bg[1]}`, alpha: Number(bg[2] ?? 100) / 100 };
+}
+
 describe("token contrast", () => {
   for (const scheme of ["light", "dark"] as const) {
     for (const tone of TONES) {
-      it(`${tone} text on its badge background is at least 4.5:1 in ${scheme}`, () => {
-        const fg = color(`--tone-${tone}`, scheme);
-        const badge = over(fg, BADGE_ALPHA[tone], color("--background", scheme));
-        expect(contrast(fg, badge)).toBeGreaterThanOrEqual(4.5);
-      });
+      for (const surface of ["background", "card", "popover", "sidebar", "table row hover"]) {
+        it(`${tone} badge on ${surface} is at least 4.5:1 in ${scheme}`, () => {
+          const fg = color(`--tone-${tone}`, scheme);
+          const base = surfaces(scheme).find(([name]) => name.startsWith(surface))?.[1];
+          if (!base) throw new Error(`no ${surface} surface`);
+          expect(contrast(fg, over(fg, BADGE_ALPHA[tone], base))).toBeGreaterThanOrEqual(4.5);
+        });
+      }
+    }
+
+    for (const file of ["button.tsx", "badge.tsx"]) {
+      for (const surface of ["background", "card"]) {
+        it(`destructive ${file.replace(".tsx", "")} on ${surface} is at least 4.5:1 in ${scheme}`, () => {
+          const v = destructiveVariant(file, scheme);
+          const fg = color(v.text, scheme);
+          const base = surfaces(scheme).find(([name]) => name === surface)?.[1];
+          if (!base) throw new Error(`no ${surface} surface`);
+          const tint = over(color(v.tint, scheme), v.alpha, base);
+          expect(contrast(fg, tint)).toBeGreaterThanOrEqual(4.5);
+        });
+      }
     }
 
     it(`muted-foreground on background is at least 4.5:1 in ${scheme}`, () => {

@@ -1,11 +1,14 @@
 import { MilestoneState } from "@tranche/contracts";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/app-shell";
 import { MilestoneBadge } from "@/components/milestone-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { milestoneTone } from "@/lib/milestone-tone";
+
+const nav = vi.hoisted(() => ({ pathname: "/deals" }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
 const html = (node: ReactNode) => renderToStaticMarkup(node);
 const text = (fragment: string) => fragment.replace(/<[^>]*>/g, "");
@@ -43,10 +46,22 @@ describe("EmptyState", () => {
 });
 
 describe("LoadingState", () => {
-  it("renders four skeletons by default and is aria-busy", () => {
-    const out = html(<LoadingState />);
-    expect(count(out, 'data-slot="skeleton"')).toBe(4);
-    expect(out).toContain('aria-busy="true"');
+  it("renders four skeletons by default", () => {
+    expect(count(html(<LoadingState />), 'data-slot="skeleton"')).toBe(4);
+  });
+
+  it("is a status region", () => {
+    expect(html(<LoadingState />)).toContain('role="status"');
+  });
+
+  it("is not aria-busy, which suppresses the announcement", () => {
+    expect(html(<LoadingState />)).not.toContain("aria-busy");
+  });
+
+  it("contains visually hidden Loading text", () => {
+    expect(html(<LoadingState />)).toMatch(
+      /<[a-z]+\b[^>]*class="[^"]*\bsr-only\b[^"]*"[^>]*>Loading<\/[a-z]+>/,
+    );
   });
 
   it("renders the requested number of skeletons", () => {
@@ -110,6 +125,52 @@ describe("AppShell", () => {
     ]) {
       expect(links).toContainEqual(pair);
     }
+  });
+
+  describe("current page", () => {
+    const current = (pathname: string) => {
+      nav.pathname = pathname;
+      const markup = html(<AppShell user={user}>x</AppShell>);
+      const inner =
+        markup.match(/<nav\b[^>]*\baria-label="Main"[^>]*>([\s\S]*?)<\/nav>/)?.[1] ?? "";
+      return [...inner.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map((m) => ({
+        label: text(m[2] ?? "").trim(),
+        current: m[1]?.match(/\baria-current="([^"]*)"/)?.[1] ?? null,
+      }));
+    };
+    const marked = (pathname: string) =>
+      current(pathname)
+        .filter((l) => l.current !== null)
+        .map((l) => `${l.label}=${l.current}`);
+
+    beforeEach(() => {
+      nav.pathname = "/deals";
+    });
+
+    it("marks the link whose href equals the pathname", () => {
+      expect(marked("/deals")).toEqual(["Deals=page"]);
+      expect(marked("/approvals")).toEqual(["Approvals=page"]);
+      expect(marked("/dashboard")).toEqual(["Cash flow=page"]);
+      expect(marked("/onboarding")).toEqual(["Connections=page"]);
+    });
+
+    it("marks the parent link on nested pages", () => {
+      expect(marked("/deals/abc")).toEqual(["Deals=page"]);
+      expect(marked("/deals/abc/negotiation")).toEqual(["Deals=page"]);
+      expect(marked("/onboarding/github")).toEqual(["Connections=page"]);
+    });
+
+    it("marks nothing on unrelated paths and on look-alike prefixes", () => {
+      expect(marked("/")).toEqual([]);
+      expect(marked("/settings")).toEqual([]);
+      expect(marked("/dealership")).toEqual([]);
+    });
+
+    it("keeps all four links rendered", () => {
+      expect(current("/deals/abc").map((l) => l.label)).toEqual(
+        expect.arrayContaining(["Deals", "Approvals", "Cash flow", "Connections"]),
+      );
+    });
   });
 
   it("shows the workspace and user names", () => {
