@@ -84,7 +84,7 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     [],
   );
 
-  useDealStream(dealId, null, refresh, since);
+  useDealStream(dealId, null, refresh, since, refresh);
 
   async function post(path: string, body?: unknown): Promise<Response | null> {
     setPending(true);
@@ -122,7 +122,10 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     const res = await post("/send");
     if (!res) return;
     if (!res.ok) {
-      toast.error(await errorOf(res, "Could not send the plan."));
+      const error = await errorOf(res, "Could not send the plan.");
+      toast.error(
+        error === "plan_has_no_milestones" ? "Add at least one milestone before sending." : error,
+      );
       return refresh();
     }
     const { portalUrl } = (await res.json()) as { portalUrl: string };
@@ -185,9 +188,21 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
           </div>
         </div>
         {view.deal.status === "draft" ? (
-          <Button data-testid="send-plan" onClick={send} disabled={pending}>
-            Send plan to client
-          </Button>
+          <div className="flex flex-col items-start gap-1.5 sm:items-end">
+            <Button
+              data-testid="send-plan"
+              onClick={send}
+              disabled={pending || view.milestones.length === 0}
+              aria-describedby={view.milestones.length === 0 ? "send-plan-reason" : undefined}
+            >
+              Send plan to client
+            </Button>
+            {view.milestones.length === 0 ? (
+              <p id="send-plan-reason" className="text-xs text-muted-foreground">
+                Add at least one milestone first.
+              </p>
+            ) : null}
+          </div>
         ) : null}
       </header>
 
