@@ -115,6 +115,16 @@ describe.runIf(Boolean(url))("POST /api/deals/[dealId]/send", { timeout: 20_000 
     },
   );
 
+  it("answers 409 plan_has_no_milestones for a draft with no milestones and writes nothing", async () => {
+    const fixture = await createDeal(db);
+    expect(fixture.milestones).toHaveLength(0);
+    await signInTo(fixture.workspaceId);
+    const res = await send(fixture.deal.id);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "plan_has_no_milestones" });
+    await expectNothingHappened(fixture.deal.id, "draft");
+  });
+
   describe("on a draft deal", () => {
     it("answers 200 with exactly { portalUrl }", async () => {
       const { dealId, workspaceId } = await draftDeal();
