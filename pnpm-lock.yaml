@@ -245,6 +245,9 @@ importers:
       next-themes:
         specifier: 0.4.6
         version: 0.4.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       react:
         specifier: 19.3.0
         version: 19.3.0
