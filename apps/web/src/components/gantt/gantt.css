@@ -1,0 +1,94 @@
+@import "@bryntum/gantt/fontawesome/css/fontawesome.css";
+@import "@bryntum/gantt/fontawesome/css/solid.css";
+@import "@bryntum/gantt/gantt.css";
+@import "@bryntum/gantt/svalbard-light.css";
+
+/* Bryntum derives every surface from this neutral scale; mixing the Ledger tokens flips it with the color scheme. */
+html:root:not(.b-nothing) {
+  --b-widget-color-scheme: light;
+  --b-mix: var(--card);
+  --b-opposite: var(--foreground);
+  --b-neutral-100: var(--card);
+  --b-neutral-0: color-mix(in oklab, var(--card) 0%, var(--foreground));
+  --b-neutral-1: color-mix(in oklab, var(--card) 1%, var(--foreground));
+  --b-neutral-2: color-mix(in oklab, var(--card) 2%, var(--foreground));
+  --b-neutral-5: color-mix(in oklab, var(--card) 5%, var(--foreground));
+  --b-neutral-10: color-mix(in oklab, var(--card) 10%, var(--foreground));
+  --b-neutral-15: color-mix(in oklab, var(--card) 15%, var(--foreground));
+  --b-neutral-20: color-mix(in oklab, var(--card) 20%, var(--foreground));
+  --b-neutral-25: color-mix(in oklab, var(--card) 25%, var(--foreground));
+  --b-neutral-30: color-mix(in oklab, var(--card) 30%, var(--foreground));
+  --b-neutral-35: color-mix(in oklab, var(--card) 35%, var(--foreground));
+  --b-neutral-40: color-mix(in oklab, var(--card) 40%, var(--foreground));
+  --b-neutral-45: color-mix(in oklab, var(--card) 45%, var(--foreground));
+  --b-neutral-50: color-mix(in oklab, var(--card) 50%, var(--foreground));
+  --b-neutral-55: color-mix(in oklab, var(--card) 55%, var(--foreground));
+  --b-neutral-60: color-mix(in oklab, var(--card) 60%, var(--foreground));
+  --b-neutral-65: color-mix(in oklab, var(--card) 65%, var(--foreground));
+  --b-neutral-70: color-mix(in oklab, var(--card) 70%, var(--foreground));
+  --b-neutral-75: color-mix(in oklab, var(--card) 75%, var(--foreground));
+  --b-neutral-80: color-mix(in oklab, var(--card) 80%, var(--foreground));
+  --b-neutral-85: color-mix(in oklab, var(--card) 85%, var(--foreground));
+  --b-neutral-90: color-mix(in oklab, var(--card) 90%, var(--foreground));
+  --b-neutral-91: color-mix(in oklab, var(--card) 91%, var(--foreground));
+  --b-neutral-92: color-mix(in oklab, var(--card) 92%, var(--foreground));
+  --b-neutral-93: color-mix(in oklab, var(--card) 93%, var(--foreground));
+  --b-neutral-94: color-mix(in oklab, var(--card) 94%, var(--foreground));
+  --b-neutral-95: color-mix(in oklab, var(--card) 95%, var(--foreground));
+  --b-neutral-96: color-mix(in oklab, var(--card) 96%, var(--foreground));
+  --b-neutral-97: color-mix(in oklab, var(--card) 97%, var(--foreground));
+  --b-neutral-98: color-mix(in oklab, var(--card) 98%, var(--foreground));
+  --b-neutral-99: color-mix(in oklab, var(--card) 99%, var(--foreground));
+  --b-primary: var(--tone-progress);
+  --b-gantt-task-primary: var(--tone-progress);
+  --b-gantt-parent-task-primary: var(--tone-neutral);
+  --b-gantt-milestone-primary: var(--tone-neutral);
+  --b-dependency-color: var(--muted-foreground);
+  --b-widget-border-radius: var(--radius);
+  --b-popup-background: var(--popover);
+  --b-grid-header-background: var(--secondary);
+  --b-grid-header-color: var(--muted-foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:root:not(.b-nothing) {
+    --b-widget-color-scheme: dark;
+  }
+}
+
+.tranche-gantt {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-family: var(--font-sans);
+}
+
+.tranche-tone-neutral {
+  --b-gantt-milestone-primary: var(--tone-neutral);
+}
+.tranche-tone-progress {
+  --b-gantt-milestone-primary: var(--tone-progress);
+}
+.tranche-tone-held {
+  --b-gantt-milestone-primary: var(--tone-held);
+}
+.tranche-tone-verifying {
+  --b-gantt-milestone-primary: var(--tone-verifying);
+}
+.tranche-tone-attention {
+  --b-gantt-milestone-primary: var(--tone-attention);
+}
+.tranche-tone-released {
+  --b-gantt-milestone-primary: var(--tone-released);
+}
+.tranche-tone-danger {
+  --b-gantt-milestone-primary: var(--tone-danger);
+}
+
+.tranche-payment-label {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--foreground);
+}
