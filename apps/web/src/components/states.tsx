@@ -24,7 +24,8 @@ export function EmptyState({
 
 export function LoadingState({ rows = 4 }: { rows?: number }) {
   return (
-    <div role="status" className="flex flex-col gap-3" aria-busy="true" aria-label="Loading">
+    <div role="status" className="flex flex-col gap-3">
+      <span className="sr-only">Loading</span>
       {Array.from({ length: rows }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder rows
         <Skeleton key={i} className="h-10 w-full bg-border" />

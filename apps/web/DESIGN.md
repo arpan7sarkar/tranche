@@ -10,7 +10,9 @@ Use Tailwind token classes such as `bg-background`, `text-muted-foreground`, `bo
 Never use raw hex values or palette classes such as `bg-zinc-50`.
 State colors: `tone-neutral`, `tone-progress`, `tone-held`, `tone-verifying`, `tone-attention`, `tone-released`, `tone-danger`.
 Held money is amber, money that moved is settlement green, verification is indigo.
-Every tone text color keeps at least 4.5:1 contrast on its badge background in light and dark, enforced by `src/app/tokens.test.ts`.
+Every tone text color keeps at least 4.5:1 contrast on its badge tint over the background, card, popover, sidebar and table row hover surfaces, in light and dark.
+The destructive button and badge tints meet the same bar.
+Both are enforced by `src/app/tokens.test.ts`.
 When changing a tone, adjust lightness only and re-run that suite.
 
 ## Type
@@ -38,6 +40,8 @@ Route segments use `loading.tsx` with `LoadingState` and `error.tsx` with `Error
 
 `AppShell` wraps every agency page.
 It is a sidebar from the `md` breakpoint and a scrolling top navigation below it.
+The current page link carries `aria-current="page"` and an active style, set by the client `MainNav`.
+Nav links use an inset focus ring so the scroll container never clips it.
 
 ## Components
 
