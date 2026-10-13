@@ -53,8 +53,9 @@ export default function DealGantt({ view, onMove }: Props) {
         if (disposed || !host.current) return;
         const instance = new bryntum.Gantt({
           appendTo: host.current,
-          columns: [{ type: "name", field: "name", text: "Work", width: 260 }],
+          columns: [{ type: "name", field: "name", text: "Work", width: 320 }],
           viewPreset: "weekAndDayLetter",
+          tickSize: 23,
           barMargin: 8,
           rowHeight: 40,
           autoHeight: true,

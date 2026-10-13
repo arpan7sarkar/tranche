@@ -79,7 +79,7 @@ export function toGanttData(view: DealView): {
     }
     children.push({
       id: paymentId,
-      name: `${m.title} payment`,
+      name: "Payment",
       ...(end ? { startDate: end, endDate: end } : {}),
       manuallyScheduled: true,
       readOnly: true,
