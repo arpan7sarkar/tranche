@@ -115,6 +115,27 @@ describe.runIf(Boolean(url))("deal read model", () => {
         reasoning: "because",
       });
     });
+
+    it("shows a client only the client-side approvals", async () => {
+      const fx = await createDeal(db);
+      const agency = await addApproval(db, fx.deal.id, { decision: null, side: "agency" });
+      const client = await addApproval(db, fx.deal.id, { decision: null, side: "client" });
+      await addApproval(db, fx.deal.id, { decision: "approved", side: "client" });
+
+      const clientView = await getDealView(db, fx.deal.id, { clientId: fx.clientId });
+      expect(clientView?.approvals.map((x) => x.id)).toEqual([client.id]);
+      expect(clientView?.approvals.every((x) => x.side === "client")).toBe(true);
+      expect(JSON.stringify(clientView)).not.toContain(agency.id);
+    });
+
+    it("keeps both sides in the agency view", async () => {
+      const fx = await createDeal(db);
+      const agency = await addApproval(db, fx.deal.id, { decision: null, side: "agency" });
+      const client = await addApproval(db, fx.deal.id, { decision: null, side: "client" });
+
+      const agencyView = await getDealView(db, fx.deal.id, { workspaceId: fx.workspaceId });
+      expect(agencyView?.approvals.map((x) => x.id).sort()).toEqual([agency.id, client.id].sort());
+    });
   });
 
   describe("listDeals", () => {

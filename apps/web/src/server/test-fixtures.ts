@@ -6,6 +6,23 @@ export function one<T>(rows: T[]): T {
   return row;
 }
 
+export async function createUser(db: Db, name = "Test User") {
+  const tag = crypto.randomUUID();
+  return one(
+    await db
+      .insert(schema.user)
+      .values({
+        id: `user-${tag}`,
+        name,
+        email: `user-${tag}@test.dev`,
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning(),
+  );
+}
+
 const RATE_CARD = { currency: "USD", dailyRateMinor: 1, minimumProjectMinor: 0 } as const;
 
 export async function createWorkspace(db: Db, name = `ws-${crypto.randomUUID()}`) {
