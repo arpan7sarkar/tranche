@@ -15,6 +15,7 @@ For P2 completion and its boundaries, read the [P2 closeout](docs/paypal/p2-clos
 Implementation plans: [P3 seller onboarding](docs/paypal/p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](docs/paypal/p4-payment-protection-implementation-plan.md).
 For the implemented onboarding adapter, private consent flow and remaining real-test prerequisites, read the [P3 runbook](docs/paypal/p3-runbook.md) and [implementation record](docs/paypal/p3-implementation-record.md).
 For P3 completion and the agreed P4-first offline implementation order, read the [P3 closeout](docs/paypal/p3-closeout.md).
+For implemented authorization/capture commands, offline verification and the delayed-release blocker, read the [P4 runbook](docs/paypal/p4-runbook.md) and [implementation record](docs/paypal/p4-implementation-record.md).
 
 ## Layout
 

@@ -1,16 +1,22 @@
 # P4 single-seller payment-protection implementation plan
 
 Date: 2026-10-12.
-Status: Planned; payment adapters and real payment tests have not started.
+Status: Authorization/capture implemented, verified offline and confirmed in one US-to-US sandbox transaction; delayed disbursement remains blocked on its release contract.
+Implementation evidence: [P4 record](p4-implementation-record.md).
+Actual payment evidence: [P4 US authorization and capture](evidence/p4-us-authorization-capture-2026-10-12.md).
+Implemented commands and remaining execution prerequisites: [P4 runbook](p4-runbook.md).
 Parent: [F0 plan](f0-plan.md).
 Foundation: [P2 closeout](p2-closeout.md) and [P2 runbook](p2-runbook.md).
 Seller readiness: [P3 implementation plan](p3-seller-onboarding-implementation-plan.md).
-P3 offline implementation is now verified; actual consent and seller grants remain pending as recorded in the [P3 handoff](p3-implementation-record.md).
+P3 onboarding and seller grants were verified for the tested US Business seller before this payment experiment; the earlier offline status remains in the [P3 handoff](p3-implementation-record.md).
 Implementation closeout and agreed sequence: [P3 closeout](p3-closeout.md).
 
 ## Agreed implementation and execution order
 
-P4 offline implementation and tests are the next task and can use mocked seller readiness while actual P3 onboarding is deferred.
+P4 authorization/capture offline implementation and tests are complete using mocked seller readiness while actual P3 onboarding is deferred.
+Build shared payment contracts, persistence, policy and transport first, then implement and test authorization/capture offline.
+Research the delayed-release contract alongside that work; keep delayed payment adapters unregistered until their release confirmation, idempotency and recovery contracts are verified.
+This development order does not select or authorize the actual experiment; delayed disbursement remains preferred when all of its prerequisites are established.
 After P4 offline verification, prepare and separately approve P3 referral execution, complete Seller A's consent and verify the actual permissions required by the selected P4 path.
 Successful offline P4 tests do not establish those real permissions.
 Run a P4 payment experiment only after authoritative P3 readiness, path-specific prerequisites and separate explicit payment approval.
@@ -45,10 +51,30 @@ The alternative is therefore not assumed to bypass missing platform or seller pe
 Recheck the endpoint-specific request-ID support, retention, status interpretation and recovery reads before registration.
 Some integration examples contain live hosts; implement only the fixed sandbox host and validated sandbox browser links.
 
+## Payment deadlines and readiness rechecks
+
+Persist an immutable execution deadline for each payment lifecycle, no more than 24 hours after preparation, and bind it to the approved context.
+This is a conservative local experiment limit, not a claim about PayPal's order or authorization lifetime.
+Prepare actual payment operations near the agreed buyer browser session rather than during offline development.
+Persist any authoritative provider expiry separately and use the earlier applicable deadline to gate a new write.
+An unknown provider expiry must not be replaced by an assumed validity period; verify the endpoint's applicable validity rules before enabling its adapter.
+After expiry, block new payment writes and report unresolved resources; expiry does not release reservations or authorize replacement orders, voids or refunds.
+Allow only explicitly implemented, counted recovery reads within their own persisted deadline and allowance to establish what happened.
+
+Before order creation and every later payment write, perform a counted authoritative seller-readiness check against the same platform app, seller identity and required permissions.
+Repeat the check after buyer browser pauses and process restarts; a previously successful P3 operation alone is insufficient evidence of current readiness.
+Persist the checked identity, permission requirements and observation time with the payment lifecycle and reject mismatched or missing evidence.
+Use a maximum observation age of 15 minutes at dispatch as a local safety policy; stale evidence requires another counted check before proceeding.
+Revalidate the matching order or authorization state through counted provider reads before its dependent write, including amount, currency, seller, path and available buyer identity.
+If a check fails or cannot fit within the remaining request allowance, block the new write and preserve existing reservations.
+Delayed-path readiness must establish the required DELAY_FUNDS_DISBURSEMENT feature; P3's current PAYMENT/REFUND configuration does not establish that feature.
+Review and extend P3's feature and evidence contracts with regression tests if the selected path requires additional permissions before actual onboarding.
+
 ## Step 1: Define payment-path contracts and private references
 
 Extend contracts with explicit delayed_disbursement and authorization_capture path types, typed provider-resource relationships and sanitized evidence results.
 Bind buyer/seller mapping versions, USD principal, every sender-fee bound and path choice to the immutable approved request.
+Bind lifecycle deadlines, required permissions and the planned request allowance as well; changing these inputs must invalidate the existing approval.
 Validate nested purchase-unit amounts, payee identity and request body against the human summary; checking the summary alone is insufficient.
 Use one purchase unit and one seller in P4; multiple payees remain P5.
 Persist order, authorization, capture and release references privately before completing each corresponding operation.
@@ -65,6 +91,8 @@ The current generic store checks only broad predecessor kinds; extend pure polic
 For authorization capture, require the matching successful authorization rather than accepting order creation alone.
 For referenced release, require the matching delayed capture and never substitute an unrelated capture or seller.
 Generate and review migrations for any necessary resource/evidence additions and test against the disposable database.
+The original authorization/capture implementation used generated migration `0003_majestic_domino`; it was tested on a disposable database and applied to the existing local application database before sandbox execution.
+After P3 merged, the current fresh-database sequence uses P3's `0003_chubby_stingray` and the regenerated P4 `0004_gorgeous_spencer_smythe`; the existing local database needs migration-journal reconciliation before applying that new sequence.
 
 ## Step 3: Implement the order and browser-approval stage
 
@@ -85,7 +113,9 @@ After verified buyer approval and fresh contributor approval, capture through PO
 Validate the capture outcome and obtain evidence that distinguishes delayed disbursement from immediate settlement.
 Prepare referenced release through POST /v1/payments/referenced-payouts-items using the correct persisted capture relationship, then obtain fresh approval before dispatch.
 Confirm terminal release through the reviewed endpoint-specific resource/status contract; accepted submission alone is insufficient.
-The integration guide's referenced-release link resolves to a general Payouts overview, so the precise referenced-release response, lookup and idempotency contract still needs resolution before enabling this adapter.
+The precise referenced-release response, terminal-success evidence, lookup and idempotency contract still needs resolution before enabling this adapter.
+Record authoritative references and representative sanitized success, pending and failure fixtures before registering the delayed path.
+Offline authorization/capture completion must not be reported as delayed-disbursement implementation or capability success.
 If an authoritative release confirmation or safe recovery contract cannot be established, block the delayed experiment before capture rather than deliberately leaving an unconfirmable payment.
 Do not substitute a standard platform-balance payout for referenced release.
 
@@ -110,6 +140,16 @@ Failed, timed-out or pending writes retain their reservations until an explicitl
 Refunds, voids and cleanup must not replenish the authorized allowance or bypass outbox, request counting and applicable approvals.
 No cleanup adapter is assumed to exist; plan any required cleanup before the experiment and report unresolved resources if it cannot be performed within the limits.
 Hold adequate authentication and bounded confirmation/recovery calls before each write; preserve the 50-attempt cap across P3, P4 and later phases.
+Replace the generic non-onboarding request estimate with a payment-path allowance that covers the whole planned lifecycle before the first order write.
+Include seller-readiness checks, order/authorization validation reads, all business writes, confirmation reads and bounded recovery or planned cleanup.
+Budget an OAuth attempt for each separately invoked command or resume that may create a fresh client; browser pauses must not assume a cached token survives.
+Persist the remaining lifecycle allowance and per-stage recovery-read counts so restarts, repeated resumes and polling cannot reset them.
+Reserve that allowance atomically against the shared allocation and transfer stage reservations without double counting or releasing calls needed by later stages.
+The current store holds calls per operation rather than for an entire payment path, so implement and test lifecycle reservations before registering payment adapters.
+An estimate displayed to the operator is insufficient without persistent enforcement; unrelated runs must not consume calls already held for the approved path.
+Each actual attempt consumes its reserved call, including failed authentication and recovery reads; no automatic retry or extra poll is authorized by the estimate.
+If more calls are needed, report the remaining allocation and proposed bounded reads before extending a reservation within the existing 50-call limit.
+Any changed write plan requires fresh approval, and no request-limit increase is authorized.
 Stop with pending or inconclusive evidence at exhaustion rather than sending uncounted requests.
 
 ## Step 6: Verify before payment execution
@@ -120,6 +160,8 @@ Stop with pending or inconclusive evidence at exhaustion rather than sending unc
 | Policy and lineage | Capture before approval, authorization capture without authorization, mixed paths and unrelated capture/release references |
 | Approval | Changed request or context, reused decision, missing approval before each write and no automatic fallback |
 | Database | Atomic resource persistence, principal counted once, additional fees, new commitment limits and restart recovery |
+| Lifecycle limits | Whole-path call reservations, stage transfers, competing runs, OAuth after each resume and persistent polling/recovery exhaustion |
+| Readiness and deadlines | Revoked grants, changed app/seller mapping, stale observations, browser delays, provider expiry and expired local write deadlines |
 | Transport | Controlled partner/assertion headers, sandbox destinations, request IDs, redaction and no hidden retries |
 | Browser | Correct order, denied checkout, expired link, pending status and resume after restart |
 | Recovery | Timeout after provider success, missing local resource reference, bounded reads, stale worker and no duplicate write |
@@ -141,6 +183,7 @@ If an error occurs, report the stage and reason before proposing another attempt
 ## Exit criteria and handoff
 
 Implementation completion requires reviewed adapters, path-specific policy/persistence checks and passing relevant offline/database tests.
+Record implementation status separately for authorization_capture and delayed_disbursement; if the release contract remains unresolved, close only the implemented path and keep delayed implementation explicitly blocked.
 P4 payment-path success additionally requires actual authoritative evidence of delayed capture plus referenced release, or authorization plus terminal capture, for the tested seller and configuration.
 Order creation, buyer approval or an accepted write is insufficient by itself.
 If permissions, fee bounds, minimums, browser participation or release contracts block execution, record that specific blocker and retain missing capability evidence.

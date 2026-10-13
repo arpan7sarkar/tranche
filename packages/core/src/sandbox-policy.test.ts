@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { SandboxAllocation, SandboxOperationSpec } from "@tranche/contracts";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { needsSandboxApproval, sandboxApprovalMatches, sandboxEligibility } from "./sandbox-policy";
+import {
+  needsSandboxApproval,
+  sandboxApprovalMatches,
+  sandboxEligibility,
+  sandboxPaymentPredecessor,
+} from "./sandbox-policy";
 
 const allocation: SandboxAllocation = {
   id: 1,
@@ -28,6 +33,58 @@ const spec: SandboxOperationSpec = {
 };
 
 describe("sandbox policy", () => {
+  it("requires matching authorized lineage before capture", () => {
+    const p = { stage: "capture_order" as const, orderId: "ORDER1", authorizationId: "AUTH1" };
+    expect(
+      sandboxPaymentPredecessor(p, {
+        evidence: "authorized",
+        orderId: "ORDER1",
+        authorizationId: "AUTH1",
+      }),
+    ).toBe(true);
+    expect(sandboxPaymentPredecessor(p, { evidence: "buyer_approved", orderId: "ORDER1" })).toBe(
+      false,
+    );
+    expect(
+      sandboxPaymentPredecessor(p, {
+        evidence: "authorized",
+        orderId: "OTHER",
+        authorizationId: "AUTH1",
+      }),
+    ).toBe(false);
+  });
+  it("never substitutes another authorization or order", () => {
+    fc.assert(
+      fc.property(
+        fc.uuid(),
+        fc.uuid(),
+        fc.uuid(),
+        fc.uuid(),
+        (orderId, authorizationId, otherOrder, otherAuthorization) => {
+          expect(
+            sandboxPaymentPredecessor(
+              { stage: "capture_order", orderId, authorizationId },
+              { evidence: "authorized", orderId: otherOrder, authorizationId: otherAuthorization },
+            ),
+          ).toBe(orderId === otherOrder && authorizationId === otherAuthorization);
+        },
+      ),
+      { numRuns: 1000 },
+    );
+  });
+  it("allows a stage transfer without reserving its calls twice", () => {
+    expect(
+      sandboxEligibility({
+        allocation: { ...allocation, consumedCalls: 12, heldCalls: 38 },
+        spec,
+        additionalCents: 0,
+        requiredCalls: 0,
+      }),
+    ).toBe("allowed");
+    expect(sandboxEligibility({ allocation, spec, additionalCents: 0, requiredCalls: -1 })).toBe(
+      "invalid",
+    );
+  });
   it("binds approval to an unchanged payload and one unused dispatch attempt", () => {
     const payloadHash = "a".repeat(64);
     const approval = { payloadHash, attempt: 1, consumed: false };

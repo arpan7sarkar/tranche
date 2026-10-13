@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tranche/contracts": "workspace:*",
-    "@paypal/paypal-server-sdk": "2.5.0"
+    "@paypal/paypal-server-sdk": "2.5.0",
+    "zod": "4.6.5"
   }
 }

@@ -3,18 +3,21 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   onboardingApprovalSummary,
+  paymentApproval,
   SandboxApprovalSummary,
   SandboxOperationSpec,
   SandboxReferralRecoveryInput,
 } from "@tranche/contracts";
 import { createSandboxStore, type SandboxStore } from "@tranche/db";
-import { onboardingSpec } from "@tranche/paypal";
+import { onboardingSpec, paymentSpec } from "@tranche/paypal";
 import { onboardingAdapter } from "./adapters";
+import { paymentAdapters } from "./payment-adapters";
 import { PrivateSandboxArtifacts } from "./private-artifacts";
 import { SandboxRunner } from "./runner";
 
 export const sandboxHelp =
-  "Sandbox runner: onboard <private-input-file> | start <private-spec-file> | inspect <run-id> | report <run-id> | approve <operation-id> <payload-hash> <attempt> | resume <operation-id> | consent-file <operation-id> | refresh-consent <operation-id> | referral-recovery <operation-id> <private-input-file> | approve-referral-recovery <id> <approval-hash> | apply-referral-recovery <id>. Only seller onboarding has a real adapter; all writes require approval.";
+  "Read-only maintenance: maintenance <operation-id> <private-input-file> | approve-maintenance <id> <approval-hash> | apply-maintenance <id>. " +
+  "Sandbox runner: onboard <private-input-file> | protect <private-input-file> | buyer-change <order-operation-id> <private-input-file> | approve-buyer-change <change-id> <approval-hash> | apply-buyer-change <change-id> | payment-next <operation-id> | checkout-file <operation-id> | referral-recovery <operation-id> <private-input-file> | approve-referral-recovery <id> <approval-hash> | apply-referral-recovery <id> | start <private-spec-file> | inspect <run-id> | report <run-id> | approve <operation-id> <payload-hash> <attempt> | resume <operation-id> | consent-file <operation-id> | refresh-consent <operation-id>. Onboarding and authorization/capture adapters are available; delayed disbursement is blocked. All writes require approval.";
 
 export async function sandboxCli(
   args: string[],
@@ -25,6 +28,26 @@ export async function sandboxCli(
   ),
 ): Promise<unknown> {
   const [command, first, second, third] = args;
+  if (command === "maintenance" && args.length === 3 && first && second)
+    return store.proposeMaintenance(first, JSON.parse(await readFile(second, "utf8")));
+  if (command === "approve-maintenance" && args.length === 3 && first && second) {
+    await store.approveMaintenance(first, second);
+    return { approvalRecorded: true };
+  }
+  if (command === "apply-maintenance" && args.length === 2 && first) {
+    await runner.maintain(first);
+    return store.maintenanceSummary(await store.maintenanceRecord(first));
+  }
+  if (command === "buyer-change" && args.length === 3 && first && second)
+    return store.proposeBuyerChange(first, JSON.parse(await readFile(second, "utf8")));
+  if (command === "approve-buyer-change" && args.length === 3 && first && second) {
+    await store.approveBuyerChange(first, second);
+    return { approvalRecorded: true };
+  }
+  if (command === "apply-buyer-change" && args.length === 2 && first) {
+    await runner.changeBuyer(first);
+    return store.buyerChangeSummary(await store.buyerChange(first));
+  }
   if (command === "referral-recovery" && args.length === 3 && first && second) {
     const input = SandboxReferralRecoveryInput.parse(JSON.parse(await readFile(second, "utf8")));
     return store.proposeReferralRecovery(first, input.referralId);
@@ -37,9 +60,16 @@ export async function sandboxCli(
     await runner.recoverReferral(first);
     return { applied: true };
   }
-  if (["start", "onboard"].includes(command ?? "") && args.length === 2 && first) {
+  if (["start", "onboard", "protect"].includes(command ?? "") && args.length === 2 && first) {
     const input: unknown = JSON.parse(await readFile(first, "utf8"));
-    const spec = command === "onboard" ? onboardingSpec(input) : SandboxOperationSpec.parse(input);
+    const spec =
+      command === "onboard"
+        ? onboardingSpec(input)
+        : command === "protect"
+          ? paymentSpec(input)
+          : SandboxOperationSpec.parse(input);
+    if (command === "protect" && !spec.payment?.context.checkout)
+      throw new Error("checkout_destinations_required");
     const runId = await store.start();
     const op = await store.prepare(runId, randomUUID(), spec);
     return {
@@ -52,6 +82,7 @@ export async function sandboxCli(
         sender: op.spec.sender,
         recipients: op.spec.recipients,
         feeBoundCents: op.spec.feeBoundCents,
+        ...(op.spec.payment ? { payment: paymentApproval(op.spec.payment.context) } : {}),
         ...(op.spec.onboarding
           ? { onboarding: onboardingApprovalSummary(op.spec.onboarding) }
           : {}),
@@ -61,6 +92,36 @@ export async function sandboxCli(
   }
   if (command === "inspect" && args.length === 2 && first) return store.inspect(first);
   if (command === "report" && args.length === 2 && first) return store.report(first);
+  if (command === "payment-next" && args.length === 2 && first) {
+    const previous = await store.operation(first);
+    if (
+      previous.state !== "succeeded" ||
+      !previous.spec.payment ||
+      previous.spec.payment.stage === "capture_order"
+    )
+      throw new Error("payment_not_advanceable");
+    const r = await store.paymentResource(previous.commitmentId);
+    const next =
+      previous.spec.payment.stage === "create_order" ? "authorize_order" : "capture_order";
+    const references = {
+      ...(r.result.orderId ? { orderId: r.result.orderId } : {}),
+      ...(r.result.authorizationId ? { authorizationId: r.result.authorizationId } : {}),
+    };
+    const op = await store.prepare(
+      previous.runId,
+      randomUUID(),
+      paymentSpec(r.context, previous.commitmentId, next, references),
+    );
+    return { operationId: op.id, inspection: await store.inspect(previous.runId) };
+  }
+  if (command === "checkout-file" && args.length === 2 && first) {
+    const op = await store.operation(first);
+    const r = await store.paymentResource(op.commitmentId);
+    if (!op.spec.payment || op.state !== "waiting_for_browser" || !r.result.artifactKey)
+      throw new Error("checkout_unavailable");
+    await artifacts.readBrowserUrl(r.result.artifactKey);
+    return { buyer: "buyer", privateFile: artifacts.filePath(r.result.artifactKey) };
+  }
   if (command === "consent-file" && args.length === 2 && first) {
     const consent = await store.consentArtifact(first);
     await artifacts.readBrowserUrl(consent.artifactKey);
@@ -74,6 +135,8 @@ export async function sandboxCli(
     return { approvalRecorded: true };
   }
   if ((command === "resume" || command === "refresh-consent") && args.length === 2 && first) {
+    if (command === "refresh-consent" && !(await store.operation(first)).spec.onboarding)
+      throw new Error("not_onboarding");
     await runner.resume(first, { refreshConsent: command === "refresh-consent" });
     return { report: await store.report((await store.operation(first)).runId) };
   }
@@ -98,7 +161,10 @@ async function main() {
         clientId: process.env.PAYPAL_CLIENT_ID ?? "",
         clientSecret: process.env.PAYPAL_CLIENT_SECRET ?? "",
       },
-      [onboardingAdapter(store, artifacts, process.env.PAYPAL_CLIENT_ID ?? "")],
+      [
+        onboardingAdapter(store, artifacts, process.env.PAYPAL_CLIENT_ID ?? ""),
+        ...paymentAdapters(store, artifacts, process.env.PAYPAL_CLIENT_ID ?? ""),
+      ],
     );
     console.log(JSON.stringify(await sandboxCli(args, store, runner, artifacts), null, 2));
   } finally {

@@ -1,6 +1,10 @@
 import type {
+  SandboxMaintenanceInput,
+  SandboxOnboardingContext,
   SandboxOnboardingEvidence,
   SandboxOperationSpec,
+  SandboxPaymentContext,
+  SandboxPaymentResult,
   SandboxState,
 } from "@tranche/contracts";
 import { sql } from "drizzle-orm";
@@ -121,6 +125,57 @@ export const sandboxOnboarding = pgTable("sandbox_onboarding", {
   evidence: jsonb().$type<SandboxOnboardingEvidence>(),
   checkUntil: timestamp("check_until", { withTimezone: true }).notNull(),
   checkedAt: timestamp("checked_at", { withTimezone: true }),
+});
+
+export const sandboxPayment = pgTable(
+  "sandbox_payment",
+  {
+    commitmentId: uuid("commitment_id")
+      .primaryKey()
+      .references(() => sandboxCommitment.id),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => sandboxRun.id),
+    context: jsonb().$type<SandboxPaymentContext>().notNull(),
+    remainingCalls: integer("remaining_calls").notNull(),
+    result: jsonb().$type<SandboxPaymentResult>().notNull(),
+    readinessAt: timestamp("readiness_at", { withTimezone: true }),
+  },
+  (t) => [check("sandbox_payment_calls", sql`${t.remainingCalls} BETWEEN 0 AND 50`)],
+);
+
+export const sandboxBuyerChange = pgTable("sandbox_buyer_change", {
+  id: uuid().primaryKey(),
+  operationId: uuid("operation_id")
+    .notNull()
+    .unique()
+    .references(() => sandboxOperation.id),
+  orderId: text("order_id").notNull(),
+  sourceSpec: jsonb("source_spec").$type<SandboxOperationSpec>().notNull(),
+  targetSpec: jsonb("target_spec").$type<SandboxOperationSpec>().notNull(),
+  approvalHash: text("approval_hash").notNull(),
+  state: text().$type<"awaiting_approval" | "approved" | "applied">().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+});
+
+export const sandboxMaintenance = pgTable("sandbox_maintenance", {
+  id: uuid().primaryKey(),
+  operationId: uuid("operation_id")
+    .notNull()
+    .unique()
+    .references(() => sandboxOperation.id),
+  input: jsonb().$type<SandboxMaintenanceInput>().notNull(),
+  sourceSpec: jsonb("source_spec").$type<SandboxOperationSpec>().notNull(),
+  targetContext: jsonb("target_context").$type<SandboxOnboardingContext>(),
+  orderId: text("order_id"),
+  approvalHash: text("approval_hash").notNull(),
+  state: text().$type<"awaiting_approval" | "approved" | "applied" | "failed">().notNull(),
+  claimToken: uuid("claim_token"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
 });
 
 export const sandboxReferralRecovery = pgTable("sandbox_referral_recovery", {

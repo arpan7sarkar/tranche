@@ -8,5 +8,7 @@ export * from "./negotiation";
 export * from "./plan";
 export * from "./policy";
 export * from "./sandbox-capabilities";
+export * from "./sandbox-maintenance";
 export * from "./sandbox-onboarding";
+export * from "./sandbox-protection";
 export * from "./states";
