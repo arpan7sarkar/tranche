@@ -2,7 +2,7 @@ import type { MilestoneState } from "@tranche/contracts";
 import { milestoneTone, type Tone } from "@/lib/milestone-tone";
 import { cn } from "@/lib/utils";
 
-const TONE_CLASS: Record<Tone, string> = {
+export const TONE_CLASS: Record<Tone, string> = {
   neutral: "bg-tone-neutral/12 text-tone-neutral",
   progress: "bg-tone-progress/12 text-tone-progress",
   held: "bg-tone-held/15 text-tone-held",

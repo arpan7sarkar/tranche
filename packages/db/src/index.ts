@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -12,7 +13,9 @@ export function createDb(url = process.env.DATABASE_URL) {
 export type Db = ReturnType<typeof createDb>;
 
 export async function migrateDb(db: Db) {
-  await migrate(db, { migrationsFolder: fileURLToPath(new URL("../drizzle", import.meta.url)) });
+  await migrate(db, {
+    migrationsFolder: join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle"),
+  });
 }
 
 export * from "./magic-links";

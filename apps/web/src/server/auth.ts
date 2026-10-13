@@ -1,3 +1,4 @@
+import "server-only";
 import { schema } from "@tranche/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";

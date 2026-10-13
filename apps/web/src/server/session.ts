@@ -1,7 +1,9 @@
+import "server-only";
 import { schema } from "@tranche/db";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { isUuid } from "@/lib/uuid";
 import { auth } from "./auth";
 import { getDb } from "./db";
 
@@ -10,8 +12,6 @@ export type Member = { userId: string; name: string; workspaceId: string; worksp
 export type DealAccess =
   | { ok: true; userId: string; workspaceId: string }
   | { ok: false; response: Response };
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function memberFor(h: Headers): Promise<Member | null> {
   const session = await auth.api.getSession({ headers: h });
@@ -47,7 +47,7 @@ export async function requireDealAccess(dealId: string): Promise<DealAccess> {
     ok: false,
     response: Response.json({ error: "not_found" }, { status: 404 }),
   } as const;
-  if (!UUID.test(dealId)) return notFound;
+  if (!isUuid(dealId)) return notFound;
   const [deal] = await getDb()
     .select({ id: schema.deal.id })
     .from(schema.deal)

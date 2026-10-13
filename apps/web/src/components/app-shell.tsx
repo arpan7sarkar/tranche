@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { type ReactNode, Suspense } from "react";
 import { MainNav, NavLinks } from "@/components/main-nav";
+import { SignOutButton } from "@/components/sign-out-button";
 
 export function AppShell({
   user,
@@ -10,14 +11,17 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[232px_1fr]">
+    <div className="grid min-h-screen grid-cols-1 grid-rows-[auto_1fr] md:grid-cols-[232px_1fr] md:grid-rows-1">
       <aside className="flex flex-col gap-3 border-b bg-sidebar px-4 py-3 md:gap-6 md:border-r md:border-b-0 md:py-6">
-        <Link
-          href="/deals"
-          className="rounded-sm font-serif text-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Tranche
-        </Link>
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href="/deals"
+            className="rounded-sm font-serif text-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Tranche
+          </Link>
+          <SignOutButton />
+        </div>
         <Suspense fallback={<NavLinks pathname="" />}>
           <MainNav />
         </Suspense>

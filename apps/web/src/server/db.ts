@@ -1,3 +1,4 @@
+import "server-only";
 import { createDb, type Db } from "@tranche/db";
 
 let db: Db | undefined;
