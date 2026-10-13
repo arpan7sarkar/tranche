@@ -218,6 +218,9 @@ importers:
       '@base-ui/react':
         specifier: 1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@bryntum/gantt':
+        specifier: npm:@bryntum/gantt-trial@7.3.7
+        version: '@bryntum/gantt-trial@7.3.7'
       '@tranche/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -768,6 +771,13 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@bryntum/gantt-trial-lib@1.0.1':
+    resolution: {integrity: sha512-VWtowNi9FBCC6EWz8zZjrnPALCsFrYt4HPwmsgqv3qediQPfyYM/5Bq3rFuEUa1/2C/1u7YXzW2q1HZykHnp+Q==}
+
+  '@bryntum/gantt-trial@7.3.7':
+    resolution: {integrity: sha512-OHvlsCYDGzxdDcFF6JHjPDWiCOynJr8tP1RRteJSZ6c9NT0+DOtgwVyj8MABXmIY61rKABQ+t6csik5ZT1BMqA==}
+    engines: {node: '>=0.10.0'}
 
   '@dotenvx/dotenvx@1.75.1':
     resolution: {integrity: sha512-/BITOC9dmS/edY2zQwZNicQ059O6RKabtQfyEafV0nGtfYRNHYy1DIPiYVcov40+tob9hfmBnbR963dS+EQ1DQ==}
@@ -4868,6 +4878,12 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.15':
     optional: true
+
+  '@bryntum/gantt-trial-lib@1.0.1': {}
+
+  '@bryntum/gantt-trial@7.3.7':
+    dependencies:
+      '@bryntum/gantt-trial-lib': 1.0.1
 
   '@dotenvx/dotenvx@1.75.1':
     dependencies:

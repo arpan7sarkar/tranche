@@ -38,6 +38,7 @@ export type DealView = {
     endDate: string | null;
     criteria: AcceptanceCriteria;
     hold: { status: HoldStatus; expiresAt: string } | null;
+    fundDueAt?: string | null;
     evidence: Array<{
       id: string;
       kind: EvidenceKind;
@@ -98,7 +99,7 @@ export async function getDealView(
     .where(eq(schema.milestone.dealId, dealId))
     .orderBy(asc(schema.milestone.position));
   const milestoneIds = milestones.map((m) => m.id);
-  const [tasks, holds, evidence, activity, approvals] = await Promise.all([
+  const [tasks, holds, evidence, activity, approvals, funding] = await Promise.all([
     db
       .select()
       .from(schema.task)
@@ -139,6 +140,22 @@ export async function getDealView(
         ),
       )
       .orderBy(asc(schema.approval.createdAt)),
+    milestoneIds.length
+      ? db
+          .select({
+            milestoneId: schema.scheduledAction.milestoneId,
+            dueAt: schema.scheduledAction.dueAt,
+          })
+          .from(schema.scheduledAction)
+          .where(
+            and(
+              inArray(schema.scheduledAction.milestoneId, milestoneIds),
+              eq(schema.scheduledAction.kind, "fund"),
+              eq(schema.scheduledAction.status, "pending"),
+            ),
+          )
+          .orderBy(asc(schema.scheduledAction.dueAt))
+      : [],
   ]);
   const taskIds = tasks.map((t) => t.id);
   const dependencies = taskIds.length
@@ -171,6 +188,7 @@ export async function getDealView(
         endDate: m.endDate,
         criteria: m.criteria,
         hold: hold ? { status: hold.status, expiresAt: hold.expiresAt.toISOString() } : null,
+        fundDueAt: funding.find((f) => f.milestoneId === m.id)?.dueAt.toISOString() ?? null,
         evidence: evidence
           .filter((e) => e.milestoneId === m.id)
           .map((e) => ({
