@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  SandboxOnboardingApproval,
+  SandboxOnboardingContext,
+  SandboxOnboardingEvidence,
+  SandboxOnboardingResult,
+  SandboxPartnerContext,
+  SandboxSeller,
+} from "./sandbox-onboarding";
 
 export const SandboxAlias = z.enum(["platform", "buyer", "seller-a", "seller-b"]);
 export const SandboxCents = z.number().int().min(0).max(100);
@@ -39,10 +47,25 @@ export const SandboxOperationSpec = z
       method: z.enum(["GET", "POST"]),
       path: z.string().regex(/^\/v[12]\/[A-Za-z0-9/_-]+$/),
       body: z.json().optional(),
+      partner: SandboxPartnerContext.optional(),
     }),
+    onboarding: SandboxOnboardingContext.optional(),
     recoveryCalls: z.number().int().min(1).max(10),
   })
   .superRefine((spec, ctx) => {
+    if (spec.kind === "onboard_seller" && !spec.onboarding)
+      ctx.addIssue({ code: "custom", message: "Onboarding configuration required" });
+    if (
+      spec.onboarding &&
+      (spec.kind !== "onboard_seller" ||
+        spec.sender !== "platform" ||
+        spec.recipients.length !== 1 ||
+        spec.recipients[0]?.alias !== spec.onboarding.seller ||
+        spec.recipients[0]?.cents !== 0 ||
+        spec.feeBoundCents !== 0)
+    ) {
+      ctx.addIssue({ code: "custom", message: "Invalid onboarding mapping" });
+    }
     if (new Set(spec.recipients.map((r) => r.alias)).size !== spec.recipients.length) {
       ctx.addIssue({ code: "custom", message: "Duplicate recipient" });
     }
@@ -107,16 +130,21 @@ export const SandboxApprovalSummary = z.strictObject({
   sender: SandboxAlias,
   recipients: z.array(z.strictObject({ alias: SandboxAlias, cents: SandboxCents })),
   feeBoundCents: SandboxCents,
+  onboarding: SandboxOnboardingApproval.optional(),
 });
 
 export const SandboxOutcome = z.discriminatedUnion("state", [
-  z.strictObject({ state: z.literal("succeeded") }),
-  z.strictObject({ state: z.literal("failed") }),
-  z.strictObject({ state: z.literal("inconclusive") }),
+  z.strictObject({ state: z.literal("succeeded"), onboarding: SandboxOnboardingResult.optional() }),
+  z.strictObject({ state: z.literal("failed"), onboarding: SandboxOnboardingResult.optional() }),
+  z.strictObject({
+    state: z.literal("inconclusive"),
+    onboarding: SandboxOnboardingResult.optional(),
+  }),
   z.strictObject({
     state: z.literal("waiting_for_browser"),
     expectedAlias: SandboxAlias,
     artifactKey: z.uuid(),
+    onboarding: SandboxOnboardingResult.optional(),
   }),
 ]);
 export type SandboxOutcome = z.infer<typeof SandboxOutcome>;
@@ -133,6 +161,15 @@ export const SandboxReport = z.strictObject({
       attempts: z.number().int().nonnegative(),
     }),
   ),
+  onboarding: z
+    .array(
+      z.strictObject({
+        operationId: z.uuid(),
+        seller: SandboxSeller,
+        evidence: SandboxOnboardingEvidence,
+      }),
+    )
+    .optional(),
 });
 export type SandboxReport = z.infer<typeof SandboxReport>;
 

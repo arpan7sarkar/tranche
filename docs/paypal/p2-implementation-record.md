@@ -4,6 +4,7 @@ Date: 2026-10-12.
 Status: Offline runner foundation implemented and verified.
 Real PayPal business adapters: Deferred to P3-P6 as specified in the reviewed plan.
 Payment capability status: All not_tested.
+Subsequent P3 implementation: [onboarding record](p3-implementation-record.md) and [runbook](p3-runbook.md); the empty adapter registry described below is the historical P2 baseline.
 
 ## Delivered implementation
 

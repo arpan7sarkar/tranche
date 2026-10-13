@@ -1,4 +1,8 @@
-import type { SandboxOperationSpec, SandboxState } from "@tranche/contracts";
+import type {
+  SandboxOnboardingEvidence,
+  SandboxOperationSpec,
+  SandboxState,
+} from "@tranche/contracts";
 import { sql } from "drizzle-orm";
 import { check, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
@@ -104,4 +108,31 @@ export const sandboxBrowserWait = pgTable("sandbox_browser_wait", {
   expectedAlias: text("expected_alias").notNull(),
   artifactKey: uuid("artifact_key").notNull(),
   resolved: integer().notNull().default(0),
+});
+
+export const sandboxOnboarding = pgTable("sandbox_onboarding", {
+  operationId: uuid("operation_id")
+    .primaryKey()
+    .references(() => sandboxOperation.id),
+  sellerKey: text("seller_key").notNull().unique(),
+  trackingKey: text("tracking_key").notNull().unique(),
+  referralId: text("referral_id"),
+  artifactKey: uuid("artifact_key"),
+  evidence: jsonb().$type<SandboxOnboardingEvidence>(),
+  checkUntil: timestamp("check_until", { withTimezone: true }).notNull(),
+  checkedAt: timestamp("checked_at", { withTimezone: true }),
+});
+
+export const sandboxReferralRecovery = pgTable("sandbox_referral_recovery", {
+  id: uuid().primaryKey(),
+  operationId: uuid("operation_id")
+    .notNull()
+    .unique()
+    .references(() => sandboxOperation.id),
+  referralId: text("referral_id").notNull(),
+  approvalHash: text("approval_hash").notNull(),
+  state: text().$type<"awaiting_approval" | "approved" | "applied" | "failed">().notNull(),
+  claimToken: uuid("claim_token"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
 });

@@ -14,6 +14,30 @@ function setup(fetcher: typeof fetch) {
 }
 
 describe("counted sandbox transport", () => {
+  it("sends validated partner attribution without accepting arbitrary headers", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValue(Response.json({}));
+    const { client } = setup(fetcher);
+    await expect(
+      client.request({
+        method: "GET",
+        path: "/v1/customer/partners/FAKE",
+        partner: { attributionId: "bad\r\nheader" },
+      }),
+    ).rejects.toThrow("sandbox_configuration");
+    expect(fetcher).not.toHaveBeenCalled();
+    await client.request({
+      method: "GET",
+      path: "/v1/customer/partners/FAKE",
+      partner: { attributionId: "FAKE_BN" },
+    });
+    expect(fetcher.mock.calls[1]?.[1]?.headers).toMatchObject({
+      "PayPal-Partner-Attribution-Id": "FAKE_BN",
+      Authorization: "Bearer FAKE_TOKEN",
+    });
+  });
   it("counts OAuth once, caches its token and counts every read", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

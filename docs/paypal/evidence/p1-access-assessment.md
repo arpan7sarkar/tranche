@@ -1,6 +1,8 @@
 # P1 sandbox access assessment
 
 Current implementation handoff: [P2 closeout](../p2-closeout.md), [P3 seller-onboarding plan](../p3-seller-onboarding-implementation-plan.md) and [P4 payment-protection plan](../p4-payment-protection-implementation-plan.md).
+P3 update, 2026-10-12: the [onboarding adapter](../p3-implementation-record.md) passed offline/database verification; actual partner access and seller grants remain untested, with execution steps in the [P3 runbook](../p3-runbook.md).
+The [P3 closeout](../p3-closeout.md) records the contributor's decision to implement P4 offline before actual onboarding; browser availability and actual grants remain execution prerequisites afterward.
 
 ## Current testing authorization: 2026-10-11
 

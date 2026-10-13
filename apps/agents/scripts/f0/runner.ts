@@ -12,9 +12,12 @@ export interface SandboxAdapter {
   validate(spec: SandboxOperationSpec): void;
   prepare(operation: StoredOperation): SandboxRequest;
   interpret(body: unknown, operation: StoredOperation): Promise<unknown>;
+  recoverReferral?(body: unknown, operation: StoredOperation, expectedId: string): Promise<unknown>;
+  failure?(error: unknown): unknown;
   recover(
     operation: StoredOperation,
     read: (request: SandboxRequest) => Promise<unknown>,
+    options?: { refreshConsent?: boolean },
   ): Promise<unknown>;
 }
 
@@ -58,11 +61,37 @@ export class SandboxRunner {
     );
   }
 
-  async resume(operationId: string): Promise<void> {
+  async recoverReferral(id: string): Promise<void> {
+    const row = await this.store.referralRecovery(id);
+    const op = await this.store.operation(row.operationId);
+    const recover = this.adapter(op).recoverReferral;
+    if (!recover || !op.spec.onboarding) throw new Error("referral_recovery_unavailable");
+    const claim = await this.store.beginReferralRecovery(id);
+    try {
+      const body = await this.client(claim).request(
+        {
+          method: "GET",
+          partner: op.spec.onboarding.partner,
+          path: `/v2/customer/partner-referrals/${encodeURIComponent(row.referralId)}`,
+        },
+        { recovery: true, signal: AbortSignal.timeout(30_000) },
+      );
+      const outcome = await recover(body, op, row.referralId);
+      await this.store.finishReferralRecovery(claim, id, outcome);
+    } catch (error) {
+      await this.store.failReferralRecovery(claim, id);
+      throw error;
+    }
+  }
+
+  async resume(operationId: string, options: { refreshConsent?: boolean } = {}): Promise<void> {
+    if (await this.store.finalizeOnboardingExpiry(operationId))
+      throw new Error("onboarding_recovery_limit");
     const op = await this.store.operation(operationId);
     if (["succeeded", "failed", "blocked", "awaiting_approval"].includes(op.state)) return;
     const adapter = this.adapter(op);
     if (op.state === "ready") {
+      if (options.refreshConsent) throw new Error("not_recoverable");
       const request = adapter.prepare(op);
       if (sandboxPayloadHash(request) !== sandboxPayloadHash(op.spec.request))
         throw new Error("request_changed");
@@ -83,8 +112,8 @@ export class SandboxRunner {
         outcome = SandboxOutcome.parse(
           await bounded(signal, () => adapter.interpret(body, claim.operation)),
         );
-      } catch {
-        outcome = { state: "inconclusive" };
+      } catch (error) {
+        outcome = SandboxOutcome.parse(adapter.failure?.(error) ?? { state: "inconclusive" });
       }
       await this.store.finish(claim, outcome);
       return;
@@ -98,15 +127,19 @@ export class SandboxRunner {
     try {
       outcome = SandboxOutcome.parse(
         await bounded(signal, () =>
-          adapter.recover(claim.operation, async (request) => {
-            if (request.method !== "GET" || remaining-- <= 0 || Date.now() >= deadline)
-              throw new Error("recovery_bound");
-            return client.request(request, { recovery: true, signal });
-          }),
+          adapter.recover(
+            claim.operation,
+            async (request) => {
+              if (request.method !== "GET" || remaining-- <= 0 || Date.now() >= deadline)
+                throw new Error("recovery_bound");
+              return client.request(request, { recovery: true, signal });
+            },
+            options,
+          ),
         ),
       );
-    } catch {
-      outcome = { state: "inconclusive" };
+    } catch (error) {
+      outcome = SandboxOutcome.parse(adapter.failure?.(error) ?? { state: "inconclusive" });
     }
     await this.store.finishRecovery(claim, outcome);
   }

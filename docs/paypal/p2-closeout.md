@@ -4,6 +4,7 @@ Date: 2026-10-12.
 Status: Complete for the reviewed offline runner foundation scope.
 Code state: Local implementation and tests; this document does not establish a commit, push or merge.
 Evidence: [Implementation record](p2-implementation-record.md) and [operator runbook](p2-runbook.md).
+Subsequent P3 update: [onboarding implementation record](p3-implementation-record.md) and [current onboarding runbook](p3-runbook.md); P2 boundaries below describe its closeout baseline.
 
 ## What P2 completed
 

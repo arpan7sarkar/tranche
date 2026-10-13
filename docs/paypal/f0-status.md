@@ -19,7 +19,10 @@ Ordered runtime implementation: [P2 runner plan](p2-sandbox-runner-implementatio
 P1 verification and remaining closeout item: [P1 closeout review](p1-closeout.md).
 Implemented runner commands and evidence: [P2 runbook](p2-runbook.md), [P2 implementation record](p2-implementation-record.md).
 Foundation completion: [P2 closeout](p2-closeout.md).
-Next implementation plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md), then [P4 payment protection](p4-payment-protection-implementation-plan.md).
+Implementation plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](p4-payment-protection-implementation-plan.md).
+P3 implementation and execution handoff: [P3 record](p3-implementation-record.md) and [runbook](p3-runbook.md).
+P3 onboarding recovery review fixes: [recovery fix](p3-onboarding-recovery-fix.md).
+P3 implementation closure and agreed next phase: [P3 closeout](p3-closeout.md).
 
 ## Current position
 
@@ -27,6 +30,8 @@ P0, planning and handoff, is complete.
 F0 as a whole is not complete.
 P1 tooling and real sandbox authentication are verified.
 P2's offline runner foundation is implemented and verified with 109 passing tests, including 18 disposable PostgreSQL scenarios; real capability adapters are deferred to P3-P6.
+P3's seller-onboarding adapter and durable consent verification are now implemented; the combined workspace passes 295 tests, with only the separately opted-in real sandbox test skipped.
+No actual referral, seller-consent verification or payment capability experiment has been executed.
 P1 is partially complete; the owner deferred remaining work on 2026-10-09, and the contributor requested a plan for that work on 2026-10-11.
 The original requested targets were a default Personal buyer, two distinct Business sellers, the platform Business balance as the payout source, contributor-operated browser approvals, USD, $10 per test, $500 total, and 50 API calls.
 The readiness plan retains that historical request; the current agreed limit is $1 total including sender fees and 50 runner-issued API attempts.
@@ -66,7 +71,7 @@ Dependencies were installed during P1 using the unchanged frozen lockfile.
 | P0 | Complete | Current session | Plan, template, handoff, and README entry point |
 | P1 | In progress | Requesting contributor with account owner | Tooling revalidated on Oct 12; accounts, features, limits and access recorded; future browser-operator availability remains the closeout item |
 | P2 | Offline foundation complete | Current implementing contributor | Contracts, pure checks, seven tables, generated migrations, transport, CLI and recovery verified; real capability adapters deferred to P3-P6 |
-| P3 | Planned; implementation not started | Unassigned | Implement seller onboarding and authoritative consent checks, then collect sandbox evidence |
+| P3 | Offline implementation complete; actual sandbox evidence pending | Current implementing contributor | Durable onboarding adapter, private consent flow and verification tested; actual referral and consent require separate approval |
 | P4 | Planned; implementation not started | Unassigned | Implement and test one eligible protection path, then collect separately approved sandbox evidence |
 | P5 | Not started | Unassigned | Test multiple-payee capture |
 | P6 | Not started | Unassigned | Test Payouts and assess source funding |
@@ -109,14 +114,24 @@ The contributor must coordinate private access with the account owner and follow
 1. Read AGENTS.md, the design, the P2 closeout and the P3 implementation plan.
 2. Inspect git status --short and preserve existing work; do not infer commit or merge status from this documentation.
 3. Reuse confirmed account roles, credential association, login access, balances and feature observations from the access assessment.
-4. Confirm future availability for buyer approval and both sellers' consent to close the remaining P1 scheduling item.
-5. Implement P3 contracts, private provider-resource persistence, narrowly scoped transport extensions and the seller-onboarding adapter.
-6. Verify contracts, mocked transport, approval gates, recovery and persistent call limits against an isolated database before real execution.
-7. Prepare any real referral operation for explicit approval and counted execution; record authoritative seller grants separately from dashboard observations.
-8. Follow the P4 plan once the relevant seller and payment-path prerequisites are established; present the concrete purpose, accounts, principal and fee allowance before each money-moving test and wait for approval.
+4. Read the P3 closeout and P4 plan; P3 offline contracts, persistence, adapter and tests are complete.
+5. Implement and verify P4 offline using mocked readiness and an isolated database; do not create an actual P3 referral during development.
+6. After P4 offline verification, privately confirm known merchant IDs, app context, required product/scopes, the intended migrated database's existing allocation and future browser availability.
+7. Prepare the actual P3 operation near the browser session, obtain explicit referral approval, complete Seller A's consent and record authoritative seller grants.
+8. Before actual P4 payment testing, verify P3 readiness and path-specific gates, present the purpose, accounts, principal and sender fees, and wait for separate approval before money-moving execution.
 
-P2 has supplied the durable outbox and persistent limits; its real adapter registry remains empty.
+P2 has supplied the durable outbox and persistent limits; P3 now registers onboarding only, with payment adapters still unavailable.
 P3/P4 planning authorizes no PayPal execution, and all business capabilities remain not_tested.
+
+## P3 offline implementation: 2026-10-12
+
+Implemented onboarding preparation, the approved referral adapter, private consent-file and read-only refresh commands, durable resource/evidence persistence and authoritative merchant/grant checks.
+The [P3 record](p3-implementation-record.md) documents the delivered files and 295 passing workspace tests, including 19 new P3 database scenarios; only the real sandbox opt-in test was skipped.
+All package typechecks, Biome, migration consistency, documentation and configured-credential privacy checks passed.
+The generated migration was applied only to the isolated local test database; .env, the application database and PayPal accounts were unchanged.
+No real OAuth or business PayPal request was made.
+Next action: implement and test P4 offline under its plan; the contributor agreed to defer actual P3 onboarding until afterward, with P3 readiness still required before any P4 payment test.
+Seller onboarding capability remains not_tested until that execution produces dated authoritative evidence; P4 implementation and payment testing have not started.
 
 ## Checks performed in P0
 

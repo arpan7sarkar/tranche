@@ -12,7 +12,9 @@ For the requested accounts, browser approvals, USD test limits, and feature chec
 For the durable runner, approval gates, and agreed test limits, use the [P2 runner implementation plan](docs/paypal/p2-sandbox-runner-implementation-plan.md).
 For implemented runner commands and verification results, read the [P2 runbook](docs/paypal/p2-runbook.md) and [implementation record](docs/paypal/p2-implementation-record.md).
 For P2 completion and its boundaries, read the [P2 closeout](docs/paypal/p2-closeout.md).
-Next implementation plans: [P3 seller onboarding](docs/paypal/p3-seller-onboarding-implementation-plan.md), followed by [P4 payment protection](docs/paypal/p4-payment-protection-implementation-plan.md).
+Implementation plans: [P3 seller onboarding](docs/paypal/p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](docs/paypal/p4-payment-protection-implementation-plan.md).
+For the implemented onboarding adapter, private consent flow and remaining real-test prerequisites, read the [P3 runbook](docs/paypal/p3-runbook.md) and [implementation record](docs/paypal/p3-implementation-record.md).
+For P3 completion and the agreed P4-first offline implementation order, read the [P3 closeout](docs/paypal/p3-closeout.md).
 
 ## Layout
 

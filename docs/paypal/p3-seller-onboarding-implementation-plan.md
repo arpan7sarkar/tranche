@@ -1,7 +1,12 @@
 # P3 seller-onboarding implementation plan
 
 Date: 2026-10-12.
-Status: Planned; adapter implementation and real onboarding tests have not started.
+Status: Offline adapter implementation verified on 2026-10-12; actual sandbox onboarding remains not tested.
+Delivered behavior and tests: [P3 implementation record](p3-implementation-record.md).
+Operator commands and current prerequisites: [P3 runbook](p3-runbook.md).
+Implementation closeout: [P3 closeout](p3-closeout.md).
+Agreed scheduling: Complete P4 offline implementation first, then separately validate P3 onboarding before any P4 payment experiment.
+The ordered steps below retain the reviewed design; the implementation record identifies delivered choices and remaining execution work.
 Parent: [F0 plan](f0-plan.md).
 Starting evidence: [P2 closeout](p2-closeout.md), [P2 runbook](p2-runbook.md), [P1 assessment](evidence/p1-access-assessment.md).
 Next phase: [P4 payment protection](p4-payment-protection-implementation-plan.md).
