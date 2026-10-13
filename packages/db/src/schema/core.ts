@@ -29,6 +29,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { user } from "./auth";
 
 const id = () => uuid().primaryKey().defaultRandom();
 const instant = () => timestamp({ withTimezone: true });
@@ -53,7 +54,9 @@ export const workspaceMember = pgTable(
     workspaceId: uuid()
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
-    userId: text().notNull(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
     role: text().$type<"owner" | "member">().notNull().default("member"),
   },
   (t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
