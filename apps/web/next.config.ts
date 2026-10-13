@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
-  transpilePackages: ["@tranche/contracts"],
+  transpilePackages: ["@tranche/contracts", "@tranche/db"],
   turbopack: {
     rules: {
       "*.css": {
