@@ -6,6 +6,7 @@ export const PayPalOpaqueId = z.string().regex(/^[A-Za-z0-9_-]{1,127}$/);
 export const PayPalReferralId = z
   .string()
   .regex(/^(?:[A-Za-z0-9+/=]{1,255}|[A-Za-z0-9_-]{1,127})$/);
+export const SandboxReferralRecoveryInput = z.strictObject({ referralId: PayPalReferralId });
 export const SandboxPartnerContext = z.strictObject({
   attributionId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
 });

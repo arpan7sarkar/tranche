@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { resolve } from "node:path";
 
 export function sandboxBrowserUrl(value: string): string {
   const url = new URL(value);
@@ -18,11 +18,16 @@ export function sandboxBrowserUrl(value: string): string {
 export class PrivateSandboxArtifacts {
   constructor(private readonly directory: string) {}
 
+  filePath(key: string): string {
+    if (!/^[a-f0-9-]{36}$/.test(key)) throw new Error("artifact_key");
+    return resolve(this.directory, `${key}.json`);
+  }
+
   async saveBrowserUrl(value: string): Promise<string> {
     const url = sandboxBrowserUrl(value);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const key = randomUUID();
-    await writeFile(join(this.directory, `${key}.json`), JSON.stringify({ url }), {
+    await writeFile(this.filePath(key), JSON.stringify({ url }), {
       mode: 0o600,
       flag: "wx",
     });
@@ -30,10 +35,7 @@ export class PrivateSandboxArtifacts {
   }
 
   async readBrowserUrl(key: string): Promise<string> {
-    if (!/^[a-f0-9-]{36}$/.test(key)) throw new Error("artifact_key");
-    const artifact: unknown = JSON.parse(
-      await readFile(join(this.directory, `${key}.json`), "utf8"),
-    );
+    const artifact: unknown = JSON.parse(await readFile(this.filePath(key), "utf8"));
     if (
       !artifact ||
       typeof artifact !== "object" ||

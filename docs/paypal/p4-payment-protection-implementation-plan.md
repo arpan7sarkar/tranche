@@ -91,7 +91,8 @@ The current generic store checks only broad predecessor kinds; extend pure polic
 For authorization capture, require the matching successful authorization rather than accepting order creation alone.
 For referenced release, require the matching delayed capture and never substitute an unrelated capture or seller.
 Generate and review migrations for any necessary resource/evidence additions and test against the disposable database.
-Implemented authorization/capture uses generated migration 0003_majestic_domino; it was tested on the disposable database and subsequently applied to the existing local application database before sandbox execution.
+The original authorization/capture implementation used generated migration `0003_majestic_domino`; it was tested on a disposable database and applied to the existing local application database before sandbox execution.
+After P3 merged, the current fresh-database sequence uses P3's `0003_chubby_stingray` and the regenerated P4 `0004_gorgeous_spencer_smythe`; the existing local database needs migration-journal reconciliation before applying that new sequence.
 
 ## Step 3: Implement the order and browser-approval stage
 

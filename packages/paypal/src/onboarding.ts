@@ -109,6 +109,27 @@ export function parseReferral(body: unknown): { referralId: string; browserUrl: 
   return { referralId, browserUrl: browser.href };
 }
 
+export function verifyReferralRecovery(
+  body: unknown,
+  context: SandboxOnboardingContext,
+  expectedReferralId: string,
+): { referralId: string; browserUrl: string } {
+  const response = body as {
+    partner_referral_id?: unknown;
+    referral_data?: { tracking_id?: unknown };
+    submitter_client_id?: unknown;
+  } | null;
+  const referral = parseReferral(body);
+  if (
+    referral.referralId !== expectedReferralId ||
+    response?.partner_referral_id !== expectedReferralId ||
+    response?.referral_data?.tracking_id !== context.trackingId ||
+    response.submitter_client_id !== context.platformClientId
+  )
+    throw new Error("referral_recovery_mismatch");
+  return referral;
+}
+
 export function verifyOnboarding(
   body: unknown,
   context: SandboxOnboardingContext,

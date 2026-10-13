@@ -29,13 +29,18 @@ A capture lost in transit can be recovered from its order and a matching capture
 | packages/paypal/src/protection.ts | Exact requests, private checkout validation and authoritative order/authorization/capture checks |
 | packages/paypal/src/client.ts | Controlled PayPal-Auth-Assertion generation and representation requests |
 | packages/db/src/sandbox-schema.ts and sandbox-store.ts | Lifecycle resources, whole-path reservations, atomic evidence, consent gates and stage transfers |
-| packages/db/drizzle/0003_majestic_domino.sql and generated metadata | Generated payment lifecycle table and migration journal |
+| packages/db/drizzle/0004_gorgeous_spencer_smythe.sql and generated metadata | Current P4 payment, buyer-change and maintenance tables after P3's merged 0003 migration |
 | apps/agents/scripts/f0/payment-adapters.ts | Seller checks, browser wait, stage interpretation and bounded read-only recovery |
 | apps/agents/scripts/f0/runner.ts and index.ts | Counted pre-write reads, adapter registration and explicit operator commands |
 | Package-local tests and protection.sandbox.test.ts | Offline contracts, policy properties, transport, disposable database cases and disabled real-stage test |
 | packages/paypal/package.json and pnpm-lock.yaml | Explicit Zod dependency for provider-response validation |
 
 ## Persistent limits
+
+After P3 merged, the P4 branch was rebased through a merge onto the P3 migration history: `0003_chubby_stingray` creates referral recovery and generated `0004_gorgeous_spencer_smythe` creates the P4 tables.
+The older P4 migration names below describe tests and applications performed before that merge; they are historical evidence, not the current migration sequence.
+The existing local sandbox application database was not migrated or reset during this merge and may still record those older P4 migrations, so its migration journal needs a separately reviewed reconciliation before running the new sequence against it.
+Fresh disposable database migration and database-backed runner tests validate the current sequence.
 
 Preparation reserves principal once plus all three stage fee bounds against the shared 100-cent allowance.
 No stage, restart, replacement payment or new run resets that allowance.

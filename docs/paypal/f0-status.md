@@ -21,6 +21,7 @@ Implemented runner commands and evidence: [P2 runbook](p2-runbook.md), [P2 imple
 Foundation completion: [P2 closeout](p2-closeout.md).
 Implementation plans: [P3 seller onboarding](p3-seller-onboarding-implementation-plan.md) and [P4 payment protection](p4-payment-protection-implementation-plan.md).
 P3 implementation and execution handoff: [P3 record](p3-implementation-record.md) and [runbook](p3-runbook.md).
+P3 onboarding recovery review fixes: [recovery fix](p3-onboarding-recovery-fix.md).
 P3 implementation closure and agreed next phase: [P3 closeout](p3-closeout.md).
 P4 authorization/capture commands and verification: [P4 runbook](p4-runbook.md) and [implementation record](p4-implementation-record.md).
 Actual US-to-US transaction evidence: [P4 authorization and capture](evidence/p4-us-authorization-capture-2026-10-12.md).

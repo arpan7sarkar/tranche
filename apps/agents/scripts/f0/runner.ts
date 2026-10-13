@@ -24,6 +24,7 @@ export interface SandboxAdapter {
     claim: DispatchClaim,
   ): Promise<void>;
   interpret(body: unknown, operation: StoredOperation): Promise<unknown>;
+  recoverReferral?(body: unknown, operation: StoredOperation, expectedId: string): Promise<unknown>;
   failure?(error: unknown): unknown;
   recover(
     operation: StoredOperation,
@@ -131,7 +132,32 @@ export class SandboxRunner {
     }
   }
 
+  async recoverReferral(id: string): Promise<void> {
+    const row = await this.store.referralRecovery(id);
+    const op = await this.store.operation(row.operationId);
+    const recover = this.adapter(op).recoverReferral;
+    if (!recover || !op.spec.onboarding) throw new Error("referral_recovery_unavailable");
+    const claim = await this.store.beginReferralRecovery(id);
+    try {
+      const body = await this.client(claim).request(
+        {
+          method: "GET",
+          partner: op.spec.onboarding.partner,
+          path: `/v2/customer/partner-referrals/${encodeURIComponent(row.referralId)}`,
+        },
+        { recovery: true, signal: AbortSignal.timeout(30_000) },
+      );
+      const outcome = await recover(body, op, row.referralId);
+      await this.store.finishReferralRecovery(claim, id, outcome);
+    } catch (error) {
+      await this.store.failReferralRecovery(claim, id);
+      throw error;
+    }
+  }
+
   async resume(operationId: string, options: { refreshConsent?: boolean } = {}): Promise<void> {
+    if (await this.store.finalizeOnboardingExpiry(operationId))
+      throw new Error("onboarding_recovery_limit");
     const op = await this.store.operation(operationId);
     if (["succeeded", "failed", "blocked", "awaiting_approval"].includes(op.state)) return;
     const adapter = this.adapter(op);

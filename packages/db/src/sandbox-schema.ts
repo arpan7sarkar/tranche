@@ -177,3 +177,17 @@ export const sandboxMaintenance = pgTable("sandbox_maintenance", {
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
 });
+
+export const sandboxReferralRecovery = pgTable("sandbox_referral_recovery", {
+  id: uuid().primaryKey(),
+  operationId: uuid("operation_id")
+    .notNull()
+    .unique()
+    .references(() => sandboxOperation.id),
+  referralId: text("referral_id").notNull(),
+  approvalHash: text("approval_hash").notNull(),
+  state: text().$type<"awaiting_approval" | "approved" | "applied" | "failed">().notNull(),
+  claimToken: uuid("claim_token"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+});

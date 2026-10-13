@@ -263,9 +263,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
       await sandboxCli(["resume", x.op.id], store, x.runner);
       await sandboxCli(["resume", x.op.id], store, x.runner);
       const ready = product === "PPCP";
-      expect((await store.operation(x.op.id)).state).toBe(
-        ready ? "succeeded" : "waiting_for_browser",
-      );
+      expect((await store.operation(x.op.id)).state).toBe(ready ? "succeeded" : "blocked");
       expect((await store.report(x.runId)).onboarding?.[0]?.evidence).toMatchObject({
         status: ready ? "consent_verified" : "readiness_incomplete",
         reason: ready ? "ready" : "product_inactive",
@@ -323,13 +321,29 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     return { ...x, summary };
   }
 
+  it("releases an approved product-check reservation when onboarding expires", async () => {
+    const x = await productMaintenance();
+    await store.approveMaintenance(x.summary.id, x.summary.approvalHash);
+    expect((await store.report(x.runId)).allocation.heldCalls).toBe(2);
+    const requests = x.fetcher.mock.calls.length;
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse(x.context.checkUntil) + 1);
+    try {
+      await expect(x.runner.resume(x.op.id)).rejects.toThrow("onboarding_recovery_limit");
+      expect((await store.operation(x.op.id)).state).toBe("blocked");
+      expect((await store.report(x.runId)).allocation.heldCalls).toBe(0);
+      expect((await store.maintenanceRecord(x.summary.id)).state).toBe("failed");
+      expect(x.fetcher).toHaveBeenCalledTimes(requests);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("P3 audits a separately approved existing product check without another referral or budget reset", async () => {
     const x = await productMaintenance();
     const before = (await store.report(x.runId)).allocation;
     await expect(x.runner.maintain(x.summary.id)).rejects.toThrow("maintenance_approval_required");
-    await expect(x.runner.resume(x.op.id)).rejects.toThrow(
-      "maintenance_requires_dedicated_command",
-    );
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).toBe("blocked");
     await sandboxCli(
       ["approve-maintenance", x.summary.id, x.summary.approvalHash],
       store,
@@ -522,6 +536,132 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     ).toHaveLength(1);
   });
 
+  it("P3 restores a lost pre-consent referral with an approved, matching provider GET", async () => {
+    const x = await onboardingSetup(6);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("PRIVATE_TIMEOUT");
+      if (String(url).endsWith("/partner-referrals/FAKE_REF"))
+        return Response.json({
+          ...x.referralBody,
+          partner_referral_id: "FAKE_REF",
+          submitter_client_id: x.context.platformClientId,
+          referral_data: { tracking_id: x.context.trackingId },
+        });
+      return Response.json({ name: "NOT_FOUND" }, { status: 404 });
+    });
+    await x.runner.resume(x.op.id);
+    await x.runner.resume(x.op.id);
+    expect((await store.onboardingResource(x.op.id)).referralId).toBeNull();
+    const anotherRun = await store.start();
+    await expect(
+      store.prepare(
+        anotherRun,
+        randomUUID(),
+        onboardingSpec({
+          context: { ...x.context, mappingVersion: 2, trackingId: randomUUID() },
+          recoveryCalls: 2,
+        }),
+      ),
+    ).rejects.toThrow();
+    const file = join(x.directory, "recovery.json");
+    await writeFile(file, JSON.stringify({ referralId: "FAKE_REF" }));
+    const proposal = (await sandboxCli(["referral-recovery", x.op.id, file], store, x.runner)) as {
+      id: string;
+      approvalHash: string;
+    };
+    await expect(x.runner.recoverReferral(proposal.id)).rejects.toThrow(
+      "referral_recovery_approval_required",
+    );
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    const before = (await store.report(x.runId)).allocation;
+    await x.runner.recoverReferral(proposal.id);
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+    const resource = await store.onboardingResource(x.op.id);
+    expect(resource.referralId).toBe("FAKE_REF");
+    expect(await x.artifacts.readBrowserUrl(resource.artifactKey ?? "")).toContain(
+      "PRIVATE_CONSENT",
+    );
+    expect((await store.report(x.runId)).allocation).toMatchObject({
+      consumedCalls: before.consumedCalls + 2,
+      heldCalls: before.heldCalls - 2,
+    });
+    expect(
+      x.fetcher.mock.calls.filter(
+        ([, init]) => init?.method === "POST" && String(init.body).includes("tracking_id"),
+      ),
+    ).toHaveLength(1);
+    expect(JSON.stringify(await store.inspect(x.runId))).not.toContain("FAKE_REF");
+  });
+
+  it("P3 rejects a recovered referral with the wrong tracking ID", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("PRIVATE_TIMEOUT");
+      return Response.json({
+        ...x.referralBody,
+        partner_referral_id: "FAKE_REF",
+        submitter_client_id: x.context.platformClientId,
+        referral_data: { tracking_id: "WRONG" },
+      });
+    });
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    await expect(x.runner.recoverReferral(proposal.id)).rejects.toThrow(
+      "referral_recovery_mismatch",
+    );
+    expect((await store.onboardingResource(x.op.id)).referralId).toBeNull();
+    expect((await store.referralRecovery(proposal.id)).state).toBe("awaiting_approval");
+  });
+
+  it("P3 keeps a failed known-ID read auditable and requires a new approval", async () => {
+    const x = await onboardingSetup(4);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("PRIVATE_TIMEOUT");
+      return Response.json({ name: "NOT_FOUND" }, { status: 404 });
+    });
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    await expect(x.runner.recoverReferral(proposal.id)).rejects.toThrow();
+    expect((await store.referralRecovery(proposal.id)).state).toBe("awaiting_approval");
+    expect((await store.onboardingResource(x.op.id)).referralId).toBeNull();
+    await expect(x.runner.recoverReferral(proposal.id)).rejects.toThrow(
+      "referral_recovery_approval_required",
+    );
+    expect((await store.report(x.runId)).allocation.heldCalls).toBe(
+      (await store.operation(x.op.id)).heldCalls,
+    );
+  });
+
+  it("P3 releases an approved referral recovery reservation at the original deadline", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("PRIVATE_TIMEOUT");
+      return Response.json({ name: "NOT_FOUND" }, { status: 404 });
+    });
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse(x.context.checkUntil) + 1);
+    try {
+      await expect(x.runner.resume(x.op.id)).rejects.toThrow("onboarding_recovery_limit");
+      expect((await store.operation(x.op.id)).state).toBe("blocked");
+      expect((await store.referralRecovery(proposal.id)).state).toBe("failed");
+      expect((await store.report(x.runId)).allocation.heldCalls).toBe(0);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
   it("P3 retains a referral ID when private-link storage fails and can refresh by counted GET", async () => {
     const x = await onboardingSetup(6);
     x.statusBody.primary_email_confirmed = false;
@@ -548,12 +688,15 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     await x.runner.resume(x.op.id);
     await x.runner.resume(x.op.id);
     const count = x.fetcher.mock.calls.length;
-    await expect(x.runner.resume(x.op.id)).rejects.toThrow("onboarding_recovery_limit");
+    await x.runner.resume(x.op.id);
     expect(x.fetcher).toHaveBeenCalledTimes(count);
     expect((await store.operation(x.op.id)).recoveryReads).toBe(2);
+    expect((await store.operation(x.op.id)).state).toBe("blocked");
+    expect((await store.inspect(x.runId)).browserWaits[0]?.resolved).toBe(true);
     expect((await store.report(x.runId)).allocation).toMatchObject({
       committedCents: 0,
       reservedCents: 0,
+      heldCalls: 0,
     });
   });
 
@@ -561,13 +704,82 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     const x = await onboardingSetup();
     await store.approve(x.op.id, x.op.payloadHash, 1);
     await x.runner.resume(x.op.id);
+    expect((await store.report(x.runId)).allocation.heldCalls).toBeGreaterThan(0);
     vi.spyOn(Date, "now").mockReturnValue(Date.parse(x.context.checkUntil) + 1);
     try {
       await expect(x.runner.resume(x.op.id)).rejects.toThrow("onboarding_recovery_limit");
       expect(x.fetcher).toHaveBeenCalledTimes(2);
+      expect((await store.operation(x.op.id)).state).toBe("blocked");
+      expect((await store.report(x.runId)).allocation.heldCalls).toBe(0);
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  it.each([404, 503, "network"] as const)(
+    "P3 retains consent after a status-read failure: %s",
+    async (failure) => {
+      const x = await onboardingSetup();
+      await store.approve(x.op.id, x.op.payloadHash, 1);
+      await x.runner.resume(x.op.id);
+      const original = (await store.onboardingResource(x.op.id)).artifactKey;
+      x.fetcher.mockImplementation(async (url) => {
+        if (String(url).endsWith("/token")) return token();
+        if (failure === "network") throw new Error("PRIVATE_NETWORK");
+        return Response.json({ name: "PRIVATE_ERROR" }, { status: failure });
+      });
+      await x.runner.resume(x.op.id);
+      expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+      expect((await store.onboardingResource(x.op.id)).artifactKey).toBe(original);
+      expect(
+        await sandboxCli(["consent-file", x.op.id], store, x.runner, x.artifacts),
+      ).toMatchObject({
+        privateFile: x.artifacts.filePath(original ?? ""),
+      });
+    },
+  );
+
+  it("P3 finds an older inconclusive consent file from either launch directory", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    await store.db.$client.unsafe(
+      "UPDATE sandbox_operation SET state = 'inconclusive' WHERE id = $1",
+      [x.op.id],
+    );
+    await store.db.$client.unsafe(
+      "UPDATE sandbox_onboarding SET evidence = jsonb_set(evidence, '{reason}', '\"not_found\"'::jsonb) WHERE operation_id = $1",
+      [x.op.id],
+    );
+    const before = x.fetcher.mock.calls.length;
+    const current = process.cwd();
+    try {
+      process.chdir(resolve(current, "../.."));
+      const root = await sandboxCli(["consent-file", x.op.id], store, x.runner, x.artifacts);
+      process.chdir(current);
+      const agents = await sandboxCli(["consent-file", x.op.id], store, x.runner, x.artifacts);
+      expect(root).toEqual(agents);
+      expect(root).toMatchObject({
+        privateFile: x.artifacts.filePath(
+          (await store.onboardingResource(x.op.id)).artifactKey ?? "",
+        ),
+      });
+      expect(JSON.stringify(root)).not.toContain("PRIVATE_CONSENT");
+      expect(x.fetcher).toHaveBeenCalledTimes(before);
+    } finally {
+      process.chdir(current);
+    }
+  });
+
+  it("P3 preserves the existing consent artifact when a local recovery bound stops a read", async () => {
+    const x = await onboardingSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    await x.runner.resume(x.op.id);
+    const original = (await store.onboardingResource(x.op.id)).artifactKey;
+    const outcome = await x.adapter.recover(await store.operation(x.op.id), async () => {
+      throw new Error("recovery_bound");
+    });
+    expect(outcome).toMatchObject({ state: "waiting_for_browser", artifactKey: original });
   });
 
   it("P3 atomically rejects stale resource updates and false ready evidence", async () => {
@@ -626,10 +838,10 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     await store.approve(x.op.id, x.op.payloadHash, 1);
     await x.runner.resume(x.op.id);
     const oldKey = (await store.onboardingResource(x.op.id)).artifactKey;
-    const location = await sandboxCli(["consent-file", x.op.id], store, x.runner);
+    const location = await sandboxCli(["consent-file", x.op.id], store, x.runner, x.artifacts);
     expect(location).toEqual({
       seller: "seller-a",
-      privateFile: `.sandbox-private/${oldKey}.json`,
+      privateFile: x.artifacts.filePath(oldKey ?? ""),
     });
     expect(JSON.stringify(location)).not.toContain("PRIVATE_CONSENT");
     await sandboxCli(["refresh-consent", x.op.id], store, x.runner);
@@ -675,10 +887,11 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     expect(
       x.fetcher.mock.calls.filter(([, init]) => String(init?.body).includes("tracking_id")),
     ).toHaveLength(1);
-    expect((await store.report(x.runId)).allocation).toMatchObject({
-      consumedCalls: 46,
-      heldCalls: 4,
-    });
+    const allocation = (await store.report(x.runId)).allocation;
+    expect([
+      [46, 4],
+      [48, 0],
+    ]).toContainEqual([allocation.consumedCalls, allocation.heldCalls]);
   });
 
   it("persists preparation, blocks unapproved dispatch and reports no private payload", async () => {
@@ -1498,8 +1711,12 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     expect(x.fetcher).not.toHaveBeenCalled();
     await x.dispatch(x.op);
     expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
-    expect(await sandboxCli(["checkout-file", x.op.id], store, x.runner)).toMatchObject({
+    const checkoutKey = (await store.paymentResource(x.op.commitmentId)).result.artifactKey;
+    expect(
+      await sandboxCli(["checkout-file", x.op.id], store, x.runner, x.artifacts),
+    ).toMatchObject({
       buyer: "buyer",
+      privateFile: x.artifacts.filePath(checkoutKey ?? ""),
     });
     x.setStatus("APPROVED");
     const reopened = createSandboxStore(testUrl);

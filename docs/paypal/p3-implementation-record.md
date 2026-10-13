@@ -51,6 +51,10 @@ Persist a maximum 24-hour onboarding deadline and an immutable recovery-read bud
 One initial referral, one initial OAuth and conservative recovery OAuth/read reservations must fit within the existing 50-call allocation.
 Zero-dollar onboarding does not increase or replenish the shared $1 payment allowance.
 A missing referral ID after an ambiguous write may prevent link recovery; authoritative matching integration evidence can still confirm consent, but no replacement referral is sent automatically.
+The subsequent [P3 recovery fix](p3-onboarding-recovery-fix.md) adds an audited, separately approved two-call GET for an authoritative original referral ID, without replaying the write.
+It also releases unused onboarding call reservations at expiry or read exhaustion and keeps a valid consent file accessible after transient status-read failures.
+The generated `sandbox_referral_recovery` migration records the private provider reference, approval, claim and application state without changing the original seller or tracking uniqueness keys.
+The new behavior was checked offline with fake PayPal responses and a disposable database; no real provider request was made for this fix.
 Actual app partner approval, seller grants, product availability and transaction suitability remain unproven.
 Before real execution, select and migrate the intended authorized database privately, inspect its allocation, confirm private mappings/products/scopes and arrange the contributor's browser availability.
 Present the concrete non-payment referral and request allowance for approval, then collect seller consent and dated API evidence separately.

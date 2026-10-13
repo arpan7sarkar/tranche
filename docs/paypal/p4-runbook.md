@@ -102,7 +102,8 @@ The generic capability field remains not_tested; record actual dated results sep
 
 Changing the buyer does not establish seller currency eligibility or fix UNSUPPORTED_PAYEE_CURRENCY by itself.
 The contributor reported creating a US Personal sandbox buyer, confirming its country and a displayed USD 5,000 balance after the original Indian-account checkout failed.
-Apply generated migration 0004_absurd_madame_hydra to the intended database before using the buyer-change commands.
+For a fresh database, apply the current generated migration sequence through `0004_gorgeous_spencer_smythe` before using the buyer-change commands.
+The existing local sandbox application database used before the P3/P4 merge has an older migration journal; do not run the new sequence against it until that journal and its existing tables are reconciled without resetting payment or allocation records.
 Store only buyerMerchantId and buyerMappingVersion in an ignored private JSON file; the mapping version must advance by exactly one.
 Do not pass the full payment context or change money, seller, currency, deadlines, fees, recovery policy or provider order references.
 Preparation creates a durable proposal with the original and proposed specifications; it makes no PayPal call and changes neither the active buyer nor the allocation.

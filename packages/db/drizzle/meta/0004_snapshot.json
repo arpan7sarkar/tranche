@@ -1,6 +1,6 @@
 {
-  "id": "f693f458-14c8-4615-b95d-d69171d00518",
-  "prevId": "1ea33d79-9a08-4135-abce-e943370a56bc",
+  "id": "c87187a9-7ac4-432b-8ba3-4912da86c4b0",
+  "prevId": "6c7ac3ad-cd79-43d8-9a9e-7158cca6a264",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -440,6 +440,114 @@
       },
       "isRLSEnabled": false
     },
+    "public.sandbox_maintenance": {
+      "name": "sandbox_maintenance",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input": {
+          "name": "input",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_spec": {
+          "name": "source_spec",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_context": {
+          "name": "target_context",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approval_hash": {
+          "name": "approval_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sandbox_maintenance_operation_id_sandbox_operation_id_fk": {
+          "name": "sandbox_maintenance_operation_id_sandbox_operation_id_fk",
+          "tableFrom": "sandbox_maintenance",
+          "tableTo": "sandbox_operation",
+          "columnsFrom": [
+            "operation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sandbox_maintenance_operation_id_unique": {
+          "name": "sandbox_maintenance_operation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "operation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.sandbox_onboarding": {
       "name": "sandbox_onboarding",
       "schema": "",
@@ -752,6 +860,89 @@
           "value": "\"sandbox_payment\".\"remaining_calls\" BETWEEN 0 AND 50"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.sandbox_referral_recovery": {
+      "name": "sandbox_referral_recovery",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "referral_id": {
+          "name": "referral_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approval_hash": {
+          "name": "approval_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sandbox_referral_recovery_operation_id_sandbox_operation_id_fk": {
+          "name": "sandbox_referral_recovery_operation_id_sandbox_operation_id_fk",
+          "tableFrom": "sandbox_referral_recovery",
+          "tableTo": "sandbox_operation",
+          "columnsFrom": [
+            "operation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sandbox_referral_recovery_operation_id_unique": {
+          "name": "sandbox_referral_recovery_operation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "operation_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.sandbox_run": {
