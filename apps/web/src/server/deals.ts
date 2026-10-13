@@ -131,7 +131,13 @@ export async function getDealView(
         schema.proposedAction,
         eq(schema.proposedAction.id, schema.approval.proposedActionId),
       )
-      .where(and(eq(schema.proposedAction.dealId, dealId), isNull(schema.approval.decision)))
+      .where(
+        and(
+          eq(schema.proposedAction.dealId, dealId),
+          isNull(schema.approval.decision),
+          "clientId" in scope ? eq(schema.approval.side, "client") : undefined,
+        ),
+      )
       .orderBy(asc(schema.approval.createdAt)),
   ]);
   const taskIds = tasks.map((t) => t.id);

@@ -1,4 +1,5 @@
 import { type Db, schema } from "@tranche/db";
+import { eq, sql } from "drizzle-orm";
 
 function workspaceName(userName: string): string {
   const first = userName.trim().split(/\s+/)[0];
@@ -10,6 +11,13 @@ export async function createWorkspaceFor(
   user: { id: string; name: string },
 ): Promise<string> {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${user.id}))`);
+    const [existing] = await tx
+      .select({ workspaceId: schema.workspaceMember.workspaceId })
+      .from(schema.workspaceMember)
+      .where(eq(schema.workspaceMember.userId, user.id))
+      .limit(1);
+    if (existing) return existing.workspaceId;
     const [ws] = await tx
       .insert(schema.workspace)
       .values({

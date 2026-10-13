@@ -43,6 +43,13 @@
       "when": 1791892081453,
       "tag": "0005_lazy_ted_forrester",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791893383516,
+      "tag": "0006_overjoyed_golden_guardian",
+      "breakpoints": true
     }
   ]
 }
