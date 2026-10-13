@@ -370,10 +370,12 @@ describe.runIf(Boolean(url))("GET /api/stream", { timeout: 30_000 }, () => {
         const reader = frameReader(res);
         opened.push({ controller, cancel: () => reader.cancel() });
 
-        const [{ newest }] = await db
-          .select({ newest: max(schema.event.id) })
-          .from(schema.event)
-          .where(eq(schema.event.dealId, dealId));
+        const newest = (
+          await db
+            .select({ newest: max(schema.event.id) })
+            .from(schema.event)
+            .where(eq(schema.event.dealId, dealId))
+        )[0]?.newest;
         const expected = (
           await db
             .select({ id: schema.event.id })

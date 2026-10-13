@@ -141,7 +141,10 @@ describe.runIf(Boolean(url))("deal read model", () => {
   describe("listDeals", () => {
     it("lists deals with totals", async () => {
       const deals = await listDeals(db, ids.workspaceId);
-      expect(deals[0]?.total).toEqual({ currency: "USD", minor: 840000 });
+      expect(deals.find((d) => d.id === ids.dealId)?.total).toEqual({
+        currency: "USD",
+        minor: 840000,
+      });
     });
 
     it("totals a deal with zero milestones as 0 rather than dropping it", async () => {
