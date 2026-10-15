@@ -5,6 +5,7 @@ import { CircleCheck, CircleX } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
 import type { DealView } from "@/server/deals";
 
@@ -27,8 +28,6 @@ const TITLES: Record<ActionType, string> = {
 export function proposalTitle(type: ActionType): string {
   return TITLES[type];
 }
-
-const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 function proposer(agent: string): string {
   return agent === "system" ? "Proposed by Tranche" : `Proposed by the ${agent} agent`;
@@ -67,7 +66,7 @@ function Details({ payload }: { payload: ActionPayload }) {
           {payload.shifts.length === 1 ? "1 task moves" : `${payload.shifts.length} tasks move`},
           starting{" "}
           <span className="tabular">
-            {DAY.format(new Date(`${payload.shifts.map((s) => s.start).sort()[0]}T00:00:00Z`))}
+            {formatDay(payload.shifts.map((s) => s.start).sort()[0] ?? "")}
           </span>
           . <span className="break-words">{payload.reason}</span>
         </p>
@@ -75,8 +74,7 @@ function Details({ payload }: { payload: ActionPayload }) {
     case "flag_risk":
       return (
         <p className="text-sm break-words">
-          <span className="font-medium capitalize">{payload.severity} risk.</span>{" "}
-          {payload.message}
+          <span className="font-medium capitalize">{payload.severity} risk.</span> {payload.message}
         </p>
       );
     case "send_reminder":

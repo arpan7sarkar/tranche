@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const OPTIONS = [
   { value: "off", label: "Never, I release each milestone myself" },

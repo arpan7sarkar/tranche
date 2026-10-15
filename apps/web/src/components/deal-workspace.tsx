@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDealStream } from "@/hooks/use-deal-stream";
 import { describeCheck } from "@/lib/criteria";
+import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
 import type { DealView } from "@/server/deals";
 
@@ -34,12 +35,6 @@ const DELIVERABLE: ReadonlySet<MilestoneState> = new Set([
   "in_progress",
   "changes_requested",
 ]);
-
-const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
-function formatDay(iso: string): string {
-  return DAY.format(new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso));
-}
 
 async function errorOf(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => ({}))) as { error?: unknown };

@@ -16,7 +16,7 @@ async function Pending() {
       />
     );
   }
-  return <ApprovalsList approvals={approvals} />;
+  return <ApprovalsList approvals={approvals} decideBase="/api/approvals" />;
 }
 
 export default function ApprovalsPage() {

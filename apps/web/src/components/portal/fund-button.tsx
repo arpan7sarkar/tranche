@@ -143,7 +143,10 @@ export function FundButton({
     });
     order.catch(settle);
     if (FAKE_PAYPAL) {
-      void order.then((o) => setFakeOrderId(o.orderId), () => {});
+      void order.then(
+        (o) => setFakeOrderId(o.orderId),
+        () => {},
+      );
       return;
     }
     // Started synchronously in the click so browsers allow the PayPal window.
@@ -152,8 +155,10 @@ export function FundButton({
         { presentationMode: "auto" },
         order.then((o) => ({ orderId: o.orderId })),
       )
-      .then((result) => {
-        if (result?.redirectURL) window.location.assign(result.redirectURL);
+      // The SDK's intersected session type hides start's `{ redirectURL }` result.
+      .then((result: unknown) => {
+        const url = (result as { redirectURL?: string } | undefined)?.redirectURL;
+        if (url) window.location.assign(url);
       })
       .catch(() => {
         if (handledOwnFailure.current) return;
