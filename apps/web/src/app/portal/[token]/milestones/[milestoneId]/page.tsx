@@ -1,4 +1,4 @@
-import { ArrowLeft, CircleCheck, CircleDashed, CircleX } from "lucide-react";
+import { ArrowLeft, CircleCheck, CircleDashed, CircleX, ImageOff } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -8,17 +8,11 @@ import { PortalLive } from "@/components/portal/portal-live";
 import { ReleaseButton } from "@/components/portal/release-button";
 import { LoadingState } from "@/components/states";
 import { describeCheck } from "@/lib/criteria";
+import { trustedImageUrl } from "@/lib/evidence-image";
 import { formatMoney } from "@/lib/money";
 import { getDb } from "@/server/db";
-import { type DealView, getDealView } from "@/server/deals";
+import { getDealView } from "@/server/deals";
 import { resolvePortalToken, submittedClientReleases } from "@/server/portal";
-
-type EvidenceItem = DealView["milestones"][number]["evidence"][number];
-
-function imageUrlOf(e: EvidenceItem): string | null {
-  const url = typeof e.data.imageUrl === "string" ? URL.parse(e.data.imageUrl) : null;
-  return url && (url.protocol === "https:" || url.protocol === "http:") ? url.href : null;
-}
 
 function CheckIcon({ passed }: { passed: boolean | undefined | null }) {
   if (passed === true) {
@@ -52,10 +46,13 @@ async function Evidence({ params }: { params: Promise<{ token: string; milestone
   const amount = formatMoney({ currency: view.deal.currency, minor: m.priceMinor });
   const latest = (i: number) => m.evidence.find((e) => e.checkIndex === i);
   const verdict = m.evidence.find((e) => e.kind === "ai_verdict");
-  const screenshots = m.evidence.flatMap((e) => {
-    const src = e.kind === "screenshot" ? imageUrlOf(e) : null;
-    return src ? [{ id: e.id, src, alt: e.summary }] : [];
-  });
+  const screenshots = m.evidence
+    .filter((e) => e.kind === "screenshot")
+    .map((e) => ({
+      id: e.id,
+      src: trustedImageUrl(e.data.imageUrl, process.env.EVIDENCE_IMAGE_ORIGIN),
+      alt: e.summary,
+    }));
 
   return (
     <div className="flex flex-col gap-8">
@@ -155,17 +152,34 @@ async function Evidence({ params }: { params: Promise<{ token: string; milestone
             Screenshots
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {screenshots.map((s) => (
-              // biome-ignore lint/performance/noImgElement: evidence images are external and unoptimized by design
-              <img
-                key={s.id}
-                src={s.src}
-                alt={s.alt}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                className="w-full rounded-md border bg-muted"
-              />
-            ))}
+            {screenshots.map((s) =>
+              s.src ? (
+                // biome-ignore lint/performance/noImgElement: evidence images are external and unoptimized by design
+                <img
+                  key={s.id}
+                  src={s.src}
+                  alt={s.alt}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  className="w-full rounded-md border bg-muted"
+                />
+              ) : (
+                <figure
+                  key={s.id}
+                  className="flex aspect-video flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-muted px-4 text-center"
+                >
+                  <ImageOff className="size-5 text-muted-foreground" aria-hidden />
+                  <figcaption className="flex flex-col gap-0.5">
+                    <span className="text-sm">Screenshot unavailable</span>
+                    {s.alt ? (
+                      <span className="line-clamp-2 text-xs break-words text-muted-foreground">
+                        {s.alt}
+                      </span>
+                    ) : null}
+                  </figcaption>
+                </figure>
+              ),
+            )}
           </div>
         </section>
       ) : null}
