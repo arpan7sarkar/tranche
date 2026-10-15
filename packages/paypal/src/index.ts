@@ -18,7 +18,6 @@ export {
   type Transport,
 } from "./http";
 export * from "./onboarding";
-export { PAYPAL_OUTBOX_KINDS, type PayPalOutboxKind, runPayPalOutbox } from "./outbox";
 export * from "./protection";
 export * from "./sandbox-client";
 export { PAYPAL_WEBHOOK_EVENTS } from "./webhook-events";
