@@ -104,6 +104,7 @@ export function rescheduleTasks(
     let earliest: string | null = null;
     let blocker = "";
     for (const d of task.dependsOn) {
+      if (!byKey.has(d)) throw new Error(`task "${key}" depends on missing task "${d}"`);
       const w = visit(d);
       if (earliest === null || w.end > earliest) {
         earliest = w.end;
