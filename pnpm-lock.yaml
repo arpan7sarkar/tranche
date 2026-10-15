@@ -227,6 +227,9 @@ importers:
       '@bryntum/gantt':
         specifier: npm:@bryntum/gantt-trial@7.3.7
         version: '@bryntum/gantt-trial@7.3.7'
+      '@tranche/agents-service':
+        specifier: workspace:*
+        version: link:../agents
       '@tranche/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
