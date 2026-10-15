@@ -157,3 +157,34 @@ export async function confirmRelease(
     { now },
   );
 }
+
+// PayPal declined a hold that never became active. A first funding goes back to agreed and is
+// rescheduled; a failed renewal leaves the old hold in place and alerts.
+export async function failPendingHold(
+  tx: Tx,
+  hold: HoldRow,
+  reason: string,
+  now: Date,
+): Promise<void> {
+  if (hold.status !== "pending") return;
+  await tx.update(schema.hold).set({ status: "failed" }).where(eq(schema.hold.id, hold.id));
+  if (!hold.replacesHoldId) {
+    await advanceMilestone(tx, hold.milestoneId, { type: "funding_failed", reason }, { now });
+    return;
+  }
+  const [m] = await tx
+    .select({ dealId: schema.milestone.dealId })
+    .from(schema.milestone)
+    .where(eq(schema.milestone.id, hold.milestoneId));
+  await appendEvent(tx, {
+    type: "alert.raised",
+    dealId: m?.dealId ?? null,
+    milestoneId: hold.milestoneId,
+    payload: {
+      kind: "renewal_failed",
+      holdId: hold.id,
+      replacesHoldId: hold.replacesHoldId,
+      reason,
+    },
+  });
+}

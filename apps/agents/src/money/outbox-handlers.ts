@@ -4,7 +4,7 @@ import { holdFromOrder, type PlaceHoldResult } from "@tranche/paypal";
 import { eq, inArray } from "drizzle-orm";
 import type { Deps } from "./deps";
 import { errorMessage } from "./errors";
-import { activateHold, confirmRelease, getHold, type HoldRow } from "./holds";
+import { activateHold, confirmRelease, failPendingHold, getHold, type HoldRow } from "./holds";
 import { advanceMilestone } from "./milestones";
 import { type OutboxHandler, type OutboxKind, requestedMilestoneId } from "./outbox";
 import { timerOutboxHandlers } from "./timer-outbox-handlers";
@@ -54,8 +54,18 @@ const placeHold: OutboxHandler = {
       }
     }
     // Funds in review are not guaranteed: the hold stays pending and the milestone in funding
-    // until PAYMENT.CAPTURE.COMPLETED or a CREATED authorization arrives by webhook.
-    if (r.status === "pending") return;
+    // until the webhook or reconciliation sees a COMPLETED capture or CREATED authorization.
+    // The ids are kept so the portal can show "payment pending review".
+    if (r.status === "pending") {
+      await tx
+        .update(schema.hold)
+        .set({
+          paypalCaptureId: r.captureId ?? hold.paypalCaptureId,
+          paypalAuthorizationId: r.authorizationId ?? hold.paypalAuthorizationId,
+        })
+        .where(eq(schema.hold.id, hold.id));
+      return;
+    }
     await activateHold(
       tx,
       hold,
@@ -70,14 +80,11 @@ const placeHold: OutboxHandler = {
     );
   },
   async fail(tx, deps, row, err) {
-    const hold = await getHold(tx, String(row.request.holdId));
-    if (hold.status !== "pending") return;
-    await tx.update(schema.hold).set({ status: "failed" }).where(eq(schema.hold.id, hold.id));
-    await advanceMilestone(
+    await failPendingHold(
       tx,
-      hold.milestoneId,
-      { type: "funding_failed", reason: errorMessage(err) },
-      { now: deps.now() },
+      await getHold(tx, String(row.request.holdId)),
+      errorMessage(err),
+      deps.now(),
     );
   },
 };
