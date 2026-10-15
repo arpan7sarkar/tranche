@@ -78,3 +78,58 @@ export function withinMandate(
   }
   return { ok: true };
 }
+
+export type PlacedTask = { key: string; start: string; durationDays: number; dependsOn: string[] };
+
+export function rescheduleTasks(
+  tasks: PlacedTask[],
+  moves: Array<{ key: string; start: string }>,
+): { ok: true; schedule: Map<string, Window> } | { ok: false; reason: string } {
+  const byKey = new Map(tasks.map((t) => [t.key, t]));
+  const requested = new Map<string, string>();
+  for (const m of moves) {
+    if (!byKey.has(m.key)) return { ok: false, reason: `unknown task "${m.key}"` };
+    requested.set(m.key, m.start);
+  }
+  const out = new Map<string, Window>();
+  const visiting = new Set<string>();
+
+  const visit = (key: string): Window => {
+    const done = out.get(key);
+    if (done) return done;
+    const task = byKey.get(key);
+    if (!task) throw new Error(`unknown task "${key}"`);
+    if (visiting.has(key)) throw new Error(`dependency cycle at "${key}"`);
+    visiting.add(key);
+    let earliest: string | null = null;
+    let blocker = "";
+    for (const d of task.dependsOn) {
+      const w = visit(d);
+      if (earliest === null || w.end > earliest) {
+        earliest = w.end;
+        blocker = d;
+      }
+    }
+    visiting.delete(key);
+    const want = requested.get(key);
+    let start: string;
+    if (want !== undefined) {
+      if (earliest !== null && want < earliest) {
+        throw new Error(`task "${key}" cannot start before "${blocker}" ends on ${earliest}`);
+      }
+      start = want;
+    } else {
+      start = earliest === null ? task.start : maxDate(task.start, earliest);
+    }
+    const w = { start, end: addDays(start, task.durationDays) };
+    out.set(key, w);
+    return w;
+  };
+
+  try {
+    for (const t of tasks) visit(t.key);
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true, schedule: out };
+}
