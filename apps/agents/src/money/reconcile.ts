@@ -1,4 +1,5 @@
 import { type HoldMechanism, type HoldStatus, toPayPalValue } from "@tranche/contracts";
+import { pendingOrderVerdict } from "@tranche/core";
 import { schema } from "@tranche/db";
 import { holdFromOrder, type OrderRes, PayPalError, type PlaceHoldResult } from "@tranche/paypal";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
@@ -100,29 +101,42 @@ export async function reconcile(
   for (const hold of pending) {
     if (busy.has(hold.id) || busy.has(hold.milestoneId)) continue;
     checked++;
-    let order: OrderRes;
+    let order: OrderRes | null = null;
     try {
       order = await deps.paypal.getOrder(hold.paypalOrderId);
     } catch (err) {
-      if (unreachable(err)) {
-        unreachableHolds.push(hold.id);
-        lastError = errorMessage(err);
+      const notFound = err instanceof PayPalError && err.status === 404;
+      if (!notFound) {
+        if (unreachable(err)) {
+          unreachableHolds.push(hold.id);
+          lastError = errorMessage(err);
+          continue;
+        }
+        const theirs = `ERROR: ${errorMessage(err)}`;
+        mismatches++;
+        if (await alreadyAlerted(deps, hold.id, theirs)) continue;
+        await deps.db.transaction((tx) =>
+          appendEvent(tx, {
+            type: "alert.raised",
+            dealId: null,
+            milestoneId: hold.milestoneId,
+            payload: { kind: "reconciliation", holdId: hold.id, ours: hold.status, theirs },
+          }),
+        );
         continue;
       }
-      const theirs = `ERROR: ${errorMessage(err)}`;
-      mismatches++;
-      if (await alreadyAlerted(deps, hold.id, theirs)) continue;
-      await deps.db.transaction((tx) =>
-        appendEvent(tx, {
-          type: "alert.raised",
-          dealId: null,
-          milestoneId: hold.milestoneId,
-          payload: { kind: "reconciliation", holdId: hold.id, ours: hold.status, theirs },
-        }),
-      );
+    }
+    // An abandoned checkout (order gone, voided, or past its TTL) fails quietly, exactly as the
+    // portal and timer fund paths treat it; the next funding attempt creates a fresh order.
+    if (!order || pendingOrderVerdict(order.status, hold.expiresAt, now) === "dead") {
+      await deps.db
+        .update(schema.hold)
+        .set({ status: "failed" })
+        .where(and(eq(schema.hold.id, hold.id), eq(schema.hold.status, "pending")));
       continue;
     }
-    if (await deps.db.transaction((tx) => replayPending(tx, deps, hold, order))) recovered++;
+    const found = order;
+    if (await deps.db.transaction((tx) => replayPending(tx, deps, hold, found))) recovered++;
   }
   if (unreachableHolds.length > 0) {
     await deps.db.transaction((tx) =>
