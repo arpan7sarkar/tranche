@@ -36,7 +36,9 @@ export async function processInbox(deps: Deps, limit = 20): Promise<number> {
       if (!row) return null;
       // The savepoint discards everything a failing handler wrote, but keeps the attempt record.
       try {
-        await tx.transaction((sp) => handleMessage(sp, deps, InboxMessage.parse(row.message)));
+        await tx.transaction((sp) =>
+          handleMessage(sp, deps, InboxMessage.parse(row.message), row.id),
+        );
         await tx
           .update(schema.inbox)
           .set({ processedAt: deps.now(), attempts: row.attempts + 1, lastError: null })
@@ -68,12 +70,17 @@ export async function processInbox(deps: Deps, limit = 20): Promise<number> {
   return seen.length;
 }
 
-export async function handleMessage(tx: Tx, deps: Deps, message: InboxMessage): Promise<void> {
+export async function handleMessage(
+  tx: Tx,
+  deps: Deps,
+  message: InboxMessage,
+  inboxId: string,
+): Promise<void> {
   switch (message.type) {
     case "paypal.webhook":
       return handlePayPalEvent(tx, deps, message.eventType, message.resource);
     case "delivery.detected":
-      return handleDelivery(tx, deps, message);
+      return handleDelivery(tx, deps, message, inboxId);
     case "timer.due":
       return handleTimerDue(tx, deps, message.scheduledActionId);
   }
@@ -83,6 +90,7 @@ async function handleDelivery(
   tx: Tx,
   deps: Deps,
   m: Extract<InboxMessage, { type: "delivery.detected" }>,
+  inboxId: string,
 ): Promise<void> {
   const now = deps.now();
   const [milestone] = await tx
@@ -91,11 +99,13 @@ async function handleDelivery(
     .where(eq(schema.milestone.id, m.milestoneId));
   if (!milestone) throw new Error(`milestone ${m.milestoneId} not found`);
   const payload = {
+    deliveryId: inboxId,
     source: m.source,
     repo: m.repo,
     sha: m.sha,
     prNumber: m.prNumber,
     urls: m.urls,
+    notes: m.notes ?? null,
   };
   if (milestone.state === "held") {
     await mustAdvance(tx, m.milestoneId, { type: "work_started" }, { now });

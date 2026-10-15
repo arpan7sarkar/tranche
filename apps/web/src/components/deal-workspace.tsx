@@ -6,6 +6,7 @@ import {
   CircleCheck,
   CircleDashed,
   CircleX,
+  LoaderCircle,
   Pencil,
   TriangleAlert,
   X,
@@ -30,8 +31,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useDealStream } from "@/hooks/use-deal-stream";
-import { describeCheck } from "@/lib/criteria";
+import { describeCheck, needsPullRequest } from "@/lib/criteria";
 import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
 import { explainReschedule } from "@/lib/reschedule";
@@ -77,6 +79,10 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     message: string;
   } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [deliverError, setDeliverError] = useState<{
+    field: "url" | "form";
+    message: string;
+  } | null>(null);
   const [since] = useState(initialView.activity[0]?.id);
   const dealId = view.deal.id;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,20 +180,9 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     refresh();
   }
 
-  async function deliver(milestone: Milestone, url: string): Promise<boolean> {
-    const res = await post(`/milestones/${milestone.id}/deliver`, { urls: [url] });
-    refresh();
-    if (!res) return false;
-    if (res.status === 404) {
-      toast.error("Marking a delivery is not available yet.");
-      return false;
-    }
-    if (!res.ok) {
-      toast.error(await errorOf(res, "Could not record the delivery."));
-      return false;
-    }
-    toast.success("Delivery recorded. Verification starts shortly.");
-    return true;
+  function openDelivery(milestone: Milestone | null) {
+    setDeliverError(null);
+    setDelivering(milestone);
   }
 
   async function saveTask(e: FormEvent<HTMLFormElement>) {
@@ -203,8 +198,35 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
   async function submitDelivery(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!delivering) return;
-    const url = String(new FormData(e.currentTarget).get("url") ?? "");
-    if (await deliver(delivering, url)) setDelivering(null);
+    const form = new FormData(e.currentTarget);
+    const url = String(form.get("url") ?? "").trim();
+    const notes = String(form.get("notes") ?? "").trim();
+    if (!/^https?:\/\//i.test(url) || !URL.canParse(url)) {
+      setDeliverError({ field: "url", message: "Enter a full link that starts with https://." });
+      return;
+    }
+    const res = await post(`/milestones/${delivering.id}/deliveries`, {
+      url,
+      notes: notes || undefined,
+    });
+    if (!res) return;
+    if (!res.ok) {
+      setDeliverError({
+        field: res.status === 400 ? "url" : "form",
+        message: await errorOf(res, "Could not submit the delivery. Try again."),
+      });
+      return refresh();
+    }
+    const { status } = (await res.json().catch(() => ({}))) as { status?: unknown };
+    toast.success(
+      status === "already_submitted"
+        ? "This delivery was already submitted. Verification starts shortly."
+        : status === "resubmitted"
+          ? "Delivery resubmitted. Verification starts shortly."
+          : "Delivery submitted. Verification starts shortly.",
+    );
+    openDelivery(null);
+    refresh();
   }
 
   const total = totalOf(
@@ -300,7 +322,7 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
                     currency={view.deal.currency}
                     tasks={view.tasks.filter((t) => t.milestoneId === m.id)}
                     onEditTask={editTask}
-                    onDeliver={setDelivering}
+                    onDeliver={openDelivery}
                   />
                 ))}
               </ol>
@@ -395,13 +417,14 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={delivering !== null} onOpenChange={(open) => !open && setDelivering(null)}>
+      <Dialog open={delivering !== null} onOpenChange={(open) => !open && openDelivery(null)}>
         <DialogContent>
-          <form onSubmit={submitDelivery} className="flex flex-col gap-4">
+          <form onSubmit={submitDelivery} noValidate className="flex flex-col gap-4">
             <DialogHeader>
-              <DialogTitle>Mark as delivered</DialogTitle>
+              <DialogTitle>Submit delivery</DialogTitle>
               <DialogDescription>
-                {delivering?.title}. The verifier checks this URL against the acceptance criteria.
+                {delivering?.title}. The verifier checks this link against the acceptance criteria
+                before the client is asked to release payment.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2">
@@ -410,17 +433,52 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
                 id="delivery-url"
                 name="url"
                 type="url"
+                inputMode="url"
+                autoComplete="url"
                 required
                 placeholder="https://staging.example.com"
                 data-testid="delivery-url-input"
+                aria-invalid={deliverError?.field === "url" ? true : undefined}
+                aria-describedby={deliverError?.field === "url" ? "delivery-url-error" : undefined}
+                onChange={() => deliverError?.field === "url" && setDeliverError(null)}
+              />
+              {deliverError?.field === "url" ? (
+                <p id="delivery-url-error" role="alert" className="text-sm text-destructive">
+                  {deliverError.message}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="delivery-notes">
+                Notes
+                <span className="font-normal text-muted-foreground">Optional</span>
+              </Label>
+              <Textarea
+                id="delivery-notes"
+                name="notes"
+                rows={3}
+                maxLength={2000}
+                placeholder="What changed, test logins, anything the reviewer should know"
+                data-testid="delivery-notes-input"
+                className="max-h-48"
               />
             </div>
+            {deliverError?.field === "form" ? (
+              <Alert variant="destructive" data-testid="delivery-error">
+                <CircleAlert />
+                <AlertTitle>Delivery not submitted</AlertTitle>
+                <AlertDescription>{deliverError.message}</AlertDescription>
+              </Alert>
+            ) : null}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDelivering(null)}>
+              <Button type="button" variant="outline" onClick={() => openDelivery(null)}>
                 Cancel
               </Button>
               <Button type="submit" data-testid="submit-delivery" disabled={pending}>
-                Submit delivery
+                {pending ? (
+                  <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden />
+                ) : null}
+                {pending ? "Submitting" : "Submit delivery"}
               </Button>
             </DialogFooter>
           </form>
@@ -564,16 +622,52 @@ function MilestoneCard({
         </div>
       ) : null}
 
-      {DELIVERABLE.has(m.state) ? (
+      {!DELIVERABLE.has(m.state) ? null : m.deliveryStatus === "pending" ? (
+        <p
+          role="status"
+          data-testid={`delivery-pending-${m.key}`}
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+          Delivery submitted. Verification starts shortly.
+        </p>
+      ) : m.deliveryStatus === "failed" ? (
+        <Alert variant="destructive" data-testid={`delivery-failed-${m.key}`}>
+          <CircleAlert />
+          <AlertTitle>Verification could not start</AlertTitle>
+          {needsPullRequest(m.criteria) ? (
+            <AlertDescription data-testid={`delivery-failed-hint-${m.key}`}>
+              The last delivery could not be processed. A new push or merged pull request triggers
+              verification again.
+            </AlertDescription>
+          ) : (
+            <AlertDescription className="flex flex-col items-start gap-2">
+              <span>The last delivery could not be processed. Submit it again to retry.</span>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid={`resubmit-delivery-${m.key}`}
+                onClick={() => onDeliver(m)}
+              >
+                Resubmit delivery
+              </Button>
+            </AlertDescription>
+          )}
+        </Alert>
+      ) : needsPullRequest(m.criteria) ? (
+        <p data-testid={`delivery-via-pr-${m.key}`} className="text-sm text-muted-foreground">
+          Delivered automatically when the pull request merges.
+        </p>
+      ) : (
         <Button
           variant="outline"
           className="self-start"
           data-testid={`mark-delivered-${m.key}`}
           onClick={() => onDeliver(m)}
         >
-          Mark as delivered
+          Submit delivery
         </Button>
-      ) : null}
+      )}
     </li>
   );
 }

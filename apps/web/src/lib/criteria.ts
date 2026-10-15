@@ -1,4 +1,8 @@
-import type { MachineCheck } from "@tranche/contracts";
+import type { AcceptanceCriteria, MachineCheck } from "@tranche/contracts";
+
+// A manual delivery has no repo, so these checks could only ever fail on it.
+export const needsPullRequest = (criteria: AcceptanceCriteria): boolean =>
+  criteria.checks.some((c) => c.kind === "pr_merged" || c.kind === "ci_green");
 
 export function describeCheck(check: MachineCheck): string {
   switch (check.kind) {
