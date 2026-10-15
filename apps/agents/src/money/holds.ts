@@ -4,6 +4,7 @@ import type { Tx } from "./db";
 import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { advanceMilestone } from "./milestones";
+import { enqueueOutbox } from "./outbox";
 
 export type HoldRow = typeof schema.hold.$inferSelect;
 
@@ -66,18 +67,26 @@ export async function activateHold(
     { type: "hold_confirmed", amountMinor: facts.amountMinor },
     { now },
   );
-  if (!r.applied) {
-    const [m] = await tx
-      .select({ dealId: schema.milestone.dealId })
-      .from(schema.milestone)
-      .where(eq(schema.milestone.id, hold.milestoneId));
-    await appendEvent(tx, {
-      type: "alert.raised",
-      dealId: m?.dealId ?? null,
-      milestoneId: hold.milestoneId,
-      payload: { kind: "hold_mismatch", holdId: hold.id, reason: r.reason },
-    });
+  if (r.applied) return;
+  const [m] = await tx
+    .select({ dealId: schema.milestone.dealId, state: schema.milestone.state })
+    .from(schema.milestone)
+    .where(eq(schema.milestone.id, hold.milestoneId));
+  // Funds that land after a cancellation go straight back; nothing may stay locked or pay out.
+  if (m?.state === "cancelled") {
+    await enqueueOutbox(
+      tx,
+      { kind: "void_hold", request: { holdId: hold.id }, requestId: `void:${hold.id}` },
+      now,
+    );
+    return;
   }
+  await appendEvent(tx, {
+    type: "alert.raised",
+    dealId: m?.dealId ?? null,
+    milestoneId: hold.milestoneId,
+    payload: { kind: "hold_mismatch", holdId: hold.id, reason: r.reason },
+  });
 }
 
 // A refused transition is fine: the sync PayPal response and the webhook confirm the same release.
@@ -87,6 +96,19 @@ export async function confirmRelease(
   facts: { captureId: string | null; amountMinor: number },
   now: Date,
 ): Promise<void> {
+  if (hold.status === "pending") {
+    const [m] = await tx
+      .select({ dealId: schema.milestone.dealId })
+      .from(schema.milestone)
+      .where(eq(schema.milestone.id, hold.milestoneId));
+    await appendEvent(tx, {
+      type: "alert.raised",
+      dealId: m?.dealId ?? null,
+      milestoneId: hold.milestoneId,
+      payload: { kind: "release_before_hold", holdId: hold.id, captureId: facts.captureId },
+    });
+    return;
+  }
   if (hold.status !== "released") {
     await tx
       .update(schema.hold)

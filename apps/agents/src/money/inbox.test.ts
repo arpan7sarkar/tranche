@@ -25,6 +25,7 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("processInbox", () => {
     const row = {
       source: "paypal" as const,
       sourceEventId: "WH-1",
+      nextAttemptAt: NOW,
       message: {
         type: "paypal.webhook" as const,
         eventType: "PAYMENT.AUTHORIZATION.CREATED",
@@ -58,6 +59,7 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("processInbox", () => {
     await db.insert(schema.inbox).values({
       source: "timer",
       sourceEventId: must(timer).id,
+      nextAttemptAt: NOW,
       message: { type: "timer.due", scheduledActionId: must(timer).id },
     });
     await processInbox(testDeps(db));

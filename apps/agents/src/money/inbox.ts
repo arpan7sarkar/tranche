@@ -1,6 +1,6 @@
 import { InboxMessage } from "@tranche/contracts";
 import { schema } from "@tranche/db";
-import { and, asc, eq, isNull, lt, notInArray } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, lte, notInArray } from "drizzle-orm";
 import type { Tx } from "./db";
 import type { Deps } from "./deps";
 import { errorMessage } from "./errors";
@@ -11,7 +11,11 @@ import { handlePayPalEvent } from "./paypal-events";
 
 const MAX_ATTEMPTS = 10;
 
+// 1, 2, 4 ... minutes capped at an hour: a deploy or a lock storm never dead-letters a real event.
+const backoffMs = (attempt: number) => Math.min(60_000 * 2 ** (attempt - 1), 3_600_000);
+
 export async function processInbox(deps: Deps, limit = 20): Promise<number> {
+  const now = deps.now();
   const seen: string[] = [];
   while (seen.length < limit) {
     const id = await deps.db.transaction(async (tx) => {
@@ -22,6 +26,7 @@ export async function processInbox(deps: Deps, limit = 20): Promise<number> {
           and(
             isNull(schema.inbox.processedAt),
             lt(schema.inbox.attempts, MAX_ATTEMPTS),
+            lte(schema.inbox.nextAttemptAt, now),
             seen.length > 0 ? notInArray(schema.inbox.id, seen) : undefined,
           ),
         )
@@ -40,7 +45,11 @@ export async function processInbox(deps: Deps, limit = 20): Promise<number> {
         const attempts = row.attempts + 1;
         await tx
           .update(schema.inbox)
-          .set({ attempts, lastError: errorMessage(err) })
+          .set({
+            attempts,
+            lastError: errorMessage(err),
+            nextAttemptAt: new Date(now.getTime() + backoffMs(attempts)),
+          })
           .where(eq(schema.inbox.id, row.id));
         if (attempts >= MAX_ATTEMPTS) {
           await appendEvent(tx, {
