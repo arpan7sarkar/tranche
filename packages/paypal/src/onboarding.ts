@@ -9,7 +9,8 @@ import {
   SandboxOperationSpec,
   type SandboxOutcome,
 } from "@tranche/contracts";
-import { type SandboxRequest, SandboxTransportError } from "./client";
+import type { z } from "zod";
+import { type SandboxRequest, SandboxTransportError } from "./sandbox-client";
 
 export function onboardingRequest(context: SandboxOnboardingContext): SandboxRequest {
   const c = SandboxOnboardingContext.parse(context);
@@ -130,6 +131,17 @@ export function verifyReferralRecovery(
   return referral;
 }
 
+export function platformGrantScopes(
+  oauthIntegrations: z.infer<typeof PayPalIntegrationResponse>["oauth_integrations"],
+  platformClientId: string,
+): string[][] {
+  return (oauthIntegrations ?? [])
+    .filter((i) => i.integration_type === "OAUTH_THIRD_PARTY" && i.integration_method === "PAYPAL")
+    .flatMap((i) => i.oauth_third_party ?? [])
+    .filter((g) => g.partner_client_id === platformClientId)
+    .map((g) => g.scopes);
+}
+
 export function verifyOnboarding(
   body: unknown,
   context: SandboxOnboardingContext,
@@ -139,13 +151,10 @@ export function verifyOnboarding(
   const data = result.data;
   if (data.merchant_id !== context.sellerMerchantId || data.tracking_id !== context.trackingId)
     return onboardingEvidence("identity_mismatch");
-  const grants = (data.oauth_integrations ?? [])
-    .filter((i) => i.integration_type === "OAUTH_THIRD_PARTY" && i.integration_method === "PAYPAL")
-    .flatMap((i) => i.oauth_third_party ?? [])
-    .filter((g) => g.partner_client_id === context.platformClientId);
+  const grants = platformGrantScopes(data.oauth_integrations, context.platformClientId);
   // Require one integration grant to cover the requested scopes.
-  const grant = grants.find((g) => context.requiredScopes.every((s) => g.scopes.includes(s)));
-  const scopes = grant?.scopes ?? grants[0]?.scopes ?? [];
+  const grant = grants.find((g) => context.requiredScopes.every((s) => g.includes(s)));
+  const scopes = grant ?? grants[0] ?? [];
   const missingScopes = context.requiredScopes.filter((s) => !scopes.includes(s));
   const productActive = data.products.some(
     (p) =>

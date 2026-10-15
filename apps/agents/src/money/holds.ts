@@ -1,9 +1,10 @@
 import { type Db, schema } from "@tranche/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { Tx } from "./db";
 import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { advanceMilestone } from "./milestones";
+import { enqueueOutbox } from "./outbox";
 import { planRenewal } from "./timers";
 
 export type HoldRow = typeof schema.hold.$inferSelect;
@@ -61,29 +62,60 @@ export async function activateHold(
       expiresAt: facts.expiresAt,
     })
     .where(eq(schema.hold.id, hold.id));
-  await planRenewal(tx, {
-    milestoneId: hold.milestoneId,
-    mechanism: hold.mechanism,
-    originalAuthorizedAt: facts.anchorAt,
-  });
   const r = await advanceMilestone(
     tx,
     hold.milestoneId,
     { type: "hold_confirmed", amountMinor: facts.amountMinor },
     { now },
   );
-  if (!r.applied) {
-    const [m] = await tx
-      .select({ dealId: schema.milestone.dealId })
-      .from(schema.milestone)
-      .where(eq(schema.milestone.id, hold.milestoneId));
-    await appendEvent(tx, {
-      type: "alert.raised",
-      dealId: m?.dealId ?? null,
+  if (r.applied) {
+    await planRenewal(tx, {
       milestoneId: hold.milestoneId,
-      payload: { kind: "hold_mismatch", holdId: hold.id, reason: r.reason },
+      mechanism: hold.mechanism,
+      originalAuthorizedAt: facts.anchorAt,
     });
+    return;
   }
+  const [m] = await tx
+    .select({
+      dealId: schema.milestone.dealId,
+      title: schema.milestone.title,
+      state: schema.milestone.state,
+    })
+    .from(schema.milestone)
+    .where(eq(schema.milestone.id, hold.milestoneId));
+  const [kept] = await tx
+    .select({ id: schema.hold.id })
+    .from(schema.hold)
+    .where(
+      and(
+        eq(schema.hold.milestoneId, hold.milestoneId),
+        eq(schema.hold.status, "active"),
+        ne(schema.hold.id, hold.id),
+      ),
+    )
+    .limit(1);
+  // Funds that land after a cancellation, or a second confirmed order, go straight back.
+  if (kept || m?.state === "cancelled") {
+    await enqueueOutbox(
+      tx,
+      { kind: "void_hold", request: { holdId: hold.id }, requestId: `void:${hold.id}` },
+      now,
+    );
+    if (!kept) return;
+  }
+  await appendEvent(tx, {
+    type: "alert.raised",
+    dealId: m?.dealId ?? null,
+    milestoneId: hold.milestoneId,
+    payload: {
+      kind: kept ? "duplicate_funding" : "hold_mismatch",
+      holdId: hold.id,
+      ...(kept ? { keptHoldId: kept.id } : {}),
+      reason: r.reason,
+      title: m?.title,
+    },
+  });
 }
 
 // A refused transition is fine: the sync PayPal response and the webhook confirm the same release.
@@ -93,6 +125,19 @@ export async function confirmRelease(
   facts: { captureId: string | null; amountMinor: number },
   now: Date,
 ): Promise<void> {
+  if (hold.status === "pending") {
+    const [m] = await tx
+      .select({ dealId: schema.milestone.dealId })
+      .from(schema.milestone)
+      .where(eq(schema.milestone.id, hold.milestoneId));
+    await appendEvent(tx, {
+      type: "alert.raised",
+      dealId: m?.dealId ?? null,
+      milestoneId: hold.milestoneId,
+      payload: { kind: "release_before_hold", holdId: hold.id, captureId: facts.captureId },
+    });
+    return;
+  }
   if (hold.status !== "released") {
     await tx
       .update(schema.hold)

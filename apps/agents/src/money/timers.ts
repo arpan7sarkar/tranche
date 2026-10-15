@@ -68,6 +68,7 @@ export async function claimDueTimers(deps: Deps, limit = 50): Promise<number> {
           source: "timer",
           sourceEventId: timer.id,
           message: { type: "timer.due", scheduledActionId: timer.id },
+          nextAttemptAt: deps.now(),
         })
         .onConflictDoNothing();
       await tx

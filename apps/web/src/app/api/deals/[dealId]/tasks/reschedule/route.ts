@@ -20,7 +20,12 @@ export async function POST(
     const result = await getDb().transaction((tx) =>
       applyReschedule(tx, dealId, [parsed.data], "Moved on the Gantt", new Date()),
     );
-    return Response.json(result);
+    const { warnings, ...dated } = result;
+    return Response.json(
+      warnings.length > 0
+        ? { ...dated, warning: warnings.map((w) => w.message).join("; ") }
+        : dated,
+    );
   } catch (err) {
     if (err instanceof RescheduleError)
       return Response.json({ error: err.message }, { status: 422 });
