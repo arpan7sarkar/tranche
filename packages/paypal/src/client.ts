@@ -67,8 +67,6 @@ export function requiredSellerFeatures(mechanism: HoldMechanism): SellerFeature[
   );
 }
 
-const REFERRAL_FEATURES = [...SELLER_FEATURES, "ACCESS_MERCHANT_INFORMATION"];
-
 // PayPal reports granted third-party features as OAuth scopes (seller status docs); not yet seen in our sandbox.
 const FEATURE_SCOPES: Record<SellerFeature, string> = {
   PAYMENT: "https://uri.paypal.com/services/payments/payment/authcapture",
@@ -167,11 +165,12 @@ export function createPayPalClient(config: PayPalConfig) {
     async createSellerReferral(input: {
       trackingId: string;
       returnUrl: string;
+      mechanism: HoldMechanism;
     }): Promise<{ actionUrl: string }> {
       const res = await t.request<{ links: Link[] }>({
         method: "POST",
         path: "/v2/customer/partner-referrals",
-        requestId: `referral-${input.trackingId}`,
+        requestId: `referral-${input.mechanism}-${input.trackingId}`,
         body: {
           tracking_id: input.trackingId,
           partner_config_override: { return_url: input.returnUrl },
@@ -182,7 +181,12 @@ export function createPayPalClient(config: PayPalConfig) {
                 rest_api_integration: {
                   integration_method: "PAYPAL",
                   integration_type: "THIRD_PARTY",
-                  third_party_details: { features: REFERRAL_FEATURES },
+                  third_party_details: {
+                    features: [
+                      ...requiredSellerFeatures(input.mechanism),
+                      "ACCESS_MERCHANT_INFORMATION",
+                    ],
+                  },
                 },
               },
             },
