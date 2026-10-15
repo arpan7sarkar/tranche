@@ -45,6 +45,7 @@ const Refund = z.object({
   id: z.string(),
   amount: Amount,
   links: z.array(z.object({ rel: z.string(), href: z.string() })),
+  seller_payable_breakdown: z.object({ total_refunded_amount: Amount.optional() }).optional(),
 });
 const Dispute = z.object({
   dispute_id: z.string(),
@@ -142,8 +143,9 @@ export async function handlePayPalEvent(
         .where(eq(schema.milestone.id, hold.milestoneId));
       // Our own cancellation refunds a delayed hold; that refund needs no further handling.
       if (!m || m.state === "cancelled" || m.state === "refunded") return;
-      const refundedMinor = minor(r.amount);
-      const full = refundedMinor === hold.amountMinor;
+      // The capture's running total, so partial refunds that add up to the whole amount count.
+      const refundedMinor = minor(r.seller_payable_breakdown?.total_refunded_amount ?? r.amount);
+      const full = refundedMinor >= hold.amountMinor;
       const applied =
         full &&
         (
@@ -247,28 +249,6 @@ export async function handlePayPalEvent(
           milestoneId: hold.milestoneId,
           payload: { kind: "dispute_outcome_unknown", disputeId: r.dispute_id, outcome: code },
         });
-      }
-      return;
-    }
-    case "PAYMENT.PAYOUTSBATCH.SUCCESS": {
-      const batchId = z
-        .object({ batch_header: z.object({ payout_batch_id: z.string() }) })
-        .parse(resource).batch_header.payout_batch_id;
-      const done = await tx
-        .update(schema.payout)
-        .set({ status: "completed" })
-        .where(eq(schema.payout.paypalRef, batchId))
-        .returning({ milestoneId: schema.payout.milestoneId });
-      for (const milestoneId of new Set(done.map((d) => d.milestoneId))) {
-        const open = await tx
-          .select({ id: schema.payout.id })
-          .from(schema.payout)
-          .where(
-            and(eq(schema.payout.milestoneId, milestoneId), ne(schema.payout.status, "completed")),
-          );
-        if (open.length === 0) {
-          await advanceMilestone(tx, milestoneId, { type: "payout_confirmed" }, { now });
-        }
       }
       return;
     }
