@@ -1,16 +1,18 @@
 import "server-only";
+import type { HoldMechanism } from "@tranche/contracts";
 import { type Db, schema } from "@tranche/db";
-import { type PayPal, REQUIRED_SELLER_FEATURES, type SellerFeature } from "@tranche/paypal";
+import { type PayPal, requiredSellerFeatures, type SellerFeature } from "@tranche/paypal";
 import { and, eq, ne } from "drizzle-orm";
 
 export async function startOnboarding(
   db: Db,
   paypal: Pick<PayPal, "createSellerReferral">,
-  input: { workspaceId: string; appUrl: string },
+  input: { workspaceId: string; appUrl: string; mechanism: HoldMechanism },
 ): Promise<{ actionUrl: string }> {
   const { actionUrl } = await paypal.createSellerReferral({
     trackingId: input.workspaceId,
     returnUrl: `${input.appUrl}/api/paypal/onboarding/return`,
+    mechanism: input.mechanism,
   });
   await db
     .update(schema.workspace)
@@ -27,7 +29,7 @@ export async function startOnboarding(
 export async function completeOnboarding(
   db: Db,
   paypal: Pick<PayPal, "getSellerStatus">,
-  input: { workspaceId: string },
+  input: { workspaceId: string; mechanism: HoldMechanism },
 ): Promise<{
   status: "active" | "pending" | "not_started";
   missingFeatures: SellerFeature[];
@@ -40,7 +42,7 @@ export async function completeOnboarding(
       .where(eq(schema.workspace.id, input.workspaceId));
     return { status: ws?.onboarding ?? "not_started", missingFeatures: [] };
   }
-  const missingFeatures = REQUIRED_SELLER_FEATURES.filter(
+  const missingFeatures = requiredSellerFeatures(input.mechanism).filter(
     (f) => !seller.grantedFeatures.includes(f),
   );
   const status =
