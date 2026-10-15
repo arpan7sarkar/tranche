@@ -183,4 +183,102 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("hold renewal", () => {
     await expect(run).rejects.toThrow("no vaulted payment method to renew the hold");
     expect(paypal.createFundingOrder).not.toHaveBeenCalled();
   });
+
+  describe("never renews against the milestone's state", () => {
+    const gateWith = async (state: "cancelled" | "released", extra?: () => Promise<void>) => {
+      const { milestoneId } = await makeMilestone(db, { state, heldMinor: 100000 });
+      const old = await makeHold(db, milestoneId, {
+        status: "active",
+        authorizationId: "AUTH-1",
+        anchorAt: NOW,
+      });
+      await extra?.();
+      return { milestoneId, old };
+    };
+    const voidRows = () =>
+      db.select().from(schema.outbox).where(eq(schema.outbox.kind, "void_hold"));
+
+    it("voids the hold of a cancelled milestone instead of renewing it", async () => {
+      const { milestoneId, old } = await gateWith("cancelled");
+      const paypal = fakePayPal();
+      await renew(paypal, milestoneId, 27);
+      expect(paypal.createFundingOrder).not.toHaveBeenCalled();
+      expect((await voidRows()).map((r) => r.requestId)).toEqual([`void:${old.id}`]);
+      expect(await pendingRenewals(milestoneId)).toHaveLength(0);
+    });
+
+    it("does not renew while a release of the hold is in flight", async () => {
+      const { milestoneId, old } = await makeMilestone(db, {
+        state: "release_pending",
+        heldMinor: 100000,
+      }).then(async (m) => ({
+        ...m,
+        old: await makeHold(db, m.milestoneId, {
+          status: "active",
+          authorizationId: "AUTH-1",
+          anchorAt: NOW,
+        }),
+      }));
+      await db.insert(schema.outbox).values({
+        kind: "release",
+        request: { holdId: old.id, amountMinor: 100000 },
+        requestId: `release:${old.id}`,
+        nextAttemptAt: NOW,
+      });
+      const paypal = fakePayPal();
+      await renew(paypal, milestoneId, 27);
+      expect(paypal.createFundingOrder).not.toHaveBeenCalled();
+      expect(await db.select().from(schema.hold)).toHaveLength(1);
+    });
+
+    it("voids a fresh authorization when the milestone was cancelled during the renewal", async () => {
+      const { milestoneId } = await makeMilestone(db, { state: "in_progress", heldMinor: 100000 });
+      const old = await makeHold(db, milestoneId, {
+        status: "active",
+        authorizationId: "AUTH-1",
+        anchorAt: NOW,
+      });
+      const deps = testDeps(db, fakePayPal(), daysAfter(27));
+      const [row] = await db
+        .insert(schema.outbox)
+        .values({
+          kind: "renew_hold",
+          request: { milestoneId },
+          requestId: `renew:${milestoneId}:1`,
+          nextAttemptAt: NOW,
+        })
+        .returning();
+      const response = await renewHandler.call(deps, row as never);
+      await db
+        .update(schema.milestone)
+        .set({ state: "cancelled" })
+        .where(eq(schema.milestone.id, milestoneId));
+      await db.transaction((tx) => renewHandler.settle(tx, deps, row as never, response));
+      const fresh = (await db.select().from(schema.hold)).find((h) => h.id !== old.id);
+      expect((await voidRows()).map((r) => r.requestId).sort()).toEqual(
+        [`void:${old.id}`, `void:${fresh?.id}`].sort(),
+      );
+      expect(await pendingRenewals(milestoneId)).toHaveLength(0);
+    });
+
+    it("plans no renewal for a hold confirmed after the milestone was cancelled", async () => {
+      const { milestoneId } = await gateWith("cancelled");
+      const orphan = await makeHold(db, milestoneId);
+      await db.transaction((tx) =>
+        activateHold(
+          tx,
+          orphan,
+          {
+            authorizationId: "AUTH-9",
+            anchorAt: NOW,
+            expiresAt: new Date(NOW.getTime() + 29 * DAY),
+            amountMinor: 100000,
+          },
+          NOW,
+        ),
+      );
+      expect(await pendingRenewals(milestoneId)).toHaveLength(0);
+      expect((await voidRows()).map((r) => r.requestId)).toContain(`void:${orphan.id}`);
+    });
+  });
 });

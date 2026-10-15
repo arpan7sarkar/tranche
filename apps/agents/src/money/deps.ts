@@ -11,6 +11,11 @@ type Hold = {
   vaultId: string | null;
 };
 export type PayPal = {
+  getOrder(orderId: string): Promise<{
+    id: string;
+    status: string;
+    links?: Array<{ href: string; rel: string }>;
+  }>;
   createFundingOrder(input: {
     requestId: string;
     mechanism: HoldMechanism;

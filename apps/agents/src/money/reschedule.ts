@@ -12,6 +12,7 @@ export class RescheduleError extends Error {}
 const LOCKED: MilestoneState[] = ["released", "paid_out", "refunded", "cancelled"];
 
 type Dated = { id: string; startDate: string; endDate: string };
+export type RescheduleWarning = { milestoneId: string; message: string };
 
 export async function applyReschedule(
   tx: Tx,
@@ -19,7 +20,7 @@ export async function applyReschedule(
   moves: Array<{ taskId: string; start: string }>,
   reason: string,
   now: Date,
-): Promise<{ tasks: Dated[]; milestones: Dated[] }> {
+): Promise<{ tasks: Dated[]; milestones: Dated[]; warnings: RescheduleWarning[] }> {
   const [deal] = await tx
     .select({ id: schema.deal.id })
     .from(schema.deal)
@@ -90,6 +91,7 @@ export async function applyReschedule(
     schedule,
   );
   const datedMilestones: Dated[] = [];
+  const warnings: RescheduleWarning[] = [];
   for (const m of milestones) {
     const w = windows.get(m.id);
     if (!w) continue;
@@ -99,6 +101,29 @@ export async function applyReschedule(
       .update(schema.milestone)
       .set({ startDate: w.start, endDate: w.end, updatedAt: now })
       .where(eq(schema.milestone.id, m.id));
+    if (w.end !== m.endDate) {
+      const [hold] = await tx
+        .select({ expiresAt: schema.hold.expiresAt })
+        .from(schema.hold)
+        .where(and(eq(schema.hold.milestoneId, m.id), eq(schema.hold.status, "active")))
+        .limit(1);
+      const deadline = hold?.expiresAt.toISOString().slice(0, 10);
+      if (deadline && w.end > deadline) {
+        const message = `"${m.title}" now ends ${w.end}, after its hold expires on ${deadline}`;
+        warnings.push({ milestoneId: m.id, message });
+        await appendEvent(tx, {
+          type: "alert.raised",
+          dealId,
+          milestoneId: m.id,
+          payload: {
+            kind: "reschedule_past_hold_deadline",
+            title: m.title,
+            endDate: w.end,
+            holdExpiresAt: deadline,
+          },
+        });
+      }
+    }
     if (w.start === m.startDate || m.state !== "agreed") continue;
     const pending = await tx
       .select({ id: schema.scheduledAction.id })
@@ -134,5 +159,6 @@ export async function applyReschedule(
       return { id: t.id, startDate: w.start, endDate: w.end };
     }),
     milestones: datedMilestones,
+    warnings,
   };
 }
