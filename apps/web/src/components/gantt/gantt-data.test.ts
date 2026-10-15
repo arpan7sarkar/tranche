@@ -44,6 +44,7 @@ function view(state: MilestoneState = "held"): DealView {
       title: "D",
       status: "active",
       currency: "USD",
+      agencyName: "A",
       clientName: "C",
       clientEmail: "c@x.dev",
       clientPolicy: null,
