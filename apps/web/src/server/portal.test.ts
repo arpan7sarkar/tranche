@@ -1,9 +1,9 @@
+import { planVersion } from "@tranche/core";
 import { createDb, type Db, migrateDb, schema } from "@tranche/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   agreeFromPortal,
-  planVersion,
   setAutoRelease,
   submitClientRelease,
   submittedClientReleases,

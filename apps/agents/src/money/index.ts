@@ -1,4 +1,10 @@
-export { agreeToPlan, type Decider, decideApproval, submitHumanAction } from "./actions";
+export {
+  type AgreeToPlanResult,
+  agreeToPlan,
+  type Decider,
+  decideApproval,
+  submitHumanAction,
+} from "./actions";
 export type { Tx } from "./db";
 export type { Deps, PayPal } from "./deps";
 export { ForbiddenError } from "./errors";

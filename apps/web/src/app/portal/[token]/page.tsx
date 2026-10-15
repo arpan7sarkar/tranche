@@ -1,3 +1,4 @@
+import { planVersion } from "@tranche/core";
 import { ArrowRight, CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,7 +17,7 @@ import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
 import { getDb } from "@/server/db";
 import { type DealView, getDealView } from "@/server/deals";
-import { planVersion, resolvePortalToken, submittedClientReleases } from "@/server/portal";
+import { resolvePortalToken, submittedClientReleases } from "@/server/portal";
 
 type Milestone = DealView["milestones"][number];
 
