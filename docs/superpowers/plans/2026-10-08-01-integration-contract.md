@@ -53,6 +53,8 @@ The verifier stores screenshot locations in `evidence.data.imageUrl` (E2 Task 6)
 - `verificationGate(criteria, evidence: EvidenceFact[])` with `EvidenceFact = { checkIndex: number | null; passed: boolean | null; createdAt: string }` (H1 Task 3); E2 passes `createdAt` as an ISO string.
 - Approvals, human actions, plan agreement and rescheduling have one implementation each, in `@tranche/agents-service/money` (H3 Task 9 and H4 Task 5): `decideApproval`, `submitHumanAction`, `agreeToPlan`, `applyReschedule`.
   H5's approvals screen and client portal call these; they do not reimplement them.
+  `agreeToPlan(db, dealId, expectedPlanVersion)` takes the `planVersion` (from `@tranche/core`) of the plan the client reviewed, checks it under the deal lock in the same transaction, and returns `"plan_changed"` instead of agreeing when it differs.
+  It returns `"already_agreed"` or `"not_agreeable"` from the same locked read of the deal status, so it never throws for a deal that moved on.
 - `hold.expiresAt` is the hard deadline (authorization: original authorization plus 29 days; delayed disbursement: capture plus 27 days).
   `placeHold` and `renewHold` also return `honorExpiresAt` (H2 Task 3).
 - PayPal rejects reauthorization inside the honor period, so H4 reauthorizes only when at least 4 full days have passed since the original authorization (`elapsedDays >= HONOR_DAYS + 1`); it creates a fresh authorization from the vault at day 27.
@@ -85,7 +87,8 @@ H5 implements the `data-testid` and `data-state` attributes listed in E5 Task 8 
 ## 8. Defaults
 
 - The default agency policy lists `reschedule` in `alwaysAsk`, because Monitor reschedules are suggestions.
-- `defaultClientPolicy(totalMinor)` lives in `apps/web/src/server/portal.ts` (H5 Task 11) and is the only default client policy.
+- `defaultClientPolicy()` lives in `apps/web/src/server/portal.ts` (H5 Task 11) and is the only default client policy.
+  It always asks before a release: every cap is 0 and `alwaysAsk` is `["release"]`, so client-side agents never release on their own.
 - `schema.user` from Better Auth is exported through `packages/db/src/schema/index.ts` (H5 Task 3) so E4 can look up the agency owner's email.
 
 ## 9. Manual delivery and the slip journey (owner: Person H; Person E updates E5 Task 8)

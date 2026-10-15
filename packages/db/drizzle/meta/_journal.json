@@ -78,6 +78,13 @@
       "when": 1792062258274,
       "tag": "0010_hold_replaces_hold",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792068868724,
+      "tag": "0011_workspace_paypal_seller_status",
+      "breakpoints": true
     }
   ]
 }
