@@ -1,21 +1,14 @@
 import type { Payee } from "@tranche/contracts";
+import { platformFee } from "@tranche/core";
 import { schema } from "@tranche/db";
-import { platformFeeFor } from "@tranche/paypal";
+import type { PlaceHoldResult } from "@tranche/paypal";
 import { desc, eq, inArray } from "drizzle-orm";
-import type { Tx } from "./db";
 import type { Deps } from "./deps";
 import { errorMessage, must } from "./errors";
 import { activateHold, confirmRelease, getHold, type HoldRow } from "./holds";
 import { advanceMilestone } from "./milestones";
-import type { OutboxKind } from "./outbox";
-
-export type OutboxRow = typeof schema.outbox.$inferSelect;
-export type OutboxHandler = {
-  call: (deps: Deps, row: OutboxRow) => Promise<Record<string, unknown>>;
-  settle: (tx: Tx, deps: Deps, row: OutboxRow, response: Record<string, unknown>) => Promise<void>;
-  // Runs when the row fails for good, in the same transaction that marks it failed.
-  fail?: (tx: Tx, deps: Deps, row: OutboxRow, err: unknown) => Promise<void>;
-};
+import type { OutboxHandler, OutboxKind } from "./outbox";
+import { timerOutboxHandlers } from "./timer-outbox-handlers";
 
 type Sub = Extract<Payee, { kind: "subcontractor" }>;
 const splitMode = () => process.env.SUBCONTRACTOR_SPLIT ?? "agency_pays";
@@ -44,25 +37,8 @@ const placeHold: OutboxHandler = {
   },
   async settle(tx, deps, row, res) {
     if (res.skipped) return;
-    const r = res as {
-      captureId: string | null;
-      authorizationId: string | null;
-      expiresAt: string;
-      vaultId: string | null;
-    };
+    const r = res as PlaceHoldResult;
     const hold = await getHold(tx, String(row.request.holdId));
-    await activateHold(
-      tx,
-      hold,
-      {
-        captureId: r.captureId,
-        authorizationId: r.authorizationId,
-        anchorAt: deps.now(),
-        expiresAt: new Date(r.expiresAt),
-        amountMinor: hold.amountMinor,
-      },
-      deps.now(),
-    );
     if (r.vaultId) {
       const [m] = await tx
         .select({ clientId: schema.deal.clientId })
@@ -76,6 +52,21 @@ const placeHold: OutboxHandler = {
           .where(eq(schema.client.id, m.clientId));
       }
     }
+    // Funds in review are not guaranteed: the hold stays pending and the milestone in funding
+    // until PAYMENT.CAPTURE.COMPLETED or a CREATED authorization arrives by webhook.
+    if (r.status === "pending") return;
+    await activateHold(
+      tx,
+      hold,
+      {
+        captureId: r.captureId,
+        authorizationId: r.authorizationId,
+        anchorAt: deps.now(),
+        expiresAt: new Date(r.expiresAt),
+        amountMinor: hold.amountMinor,
+      },
+      deps.now(),
+    );
   },
   async fail(tx, deps, row, err) {
     const hold = await getHold(tx, String(row.request.holdId));
@@ -102,7 +93,7 @@ const release: OutboxHandler = {
       authorizationId: hold.paypalAuthorizationId,
       amount,
       // Delayed disbursement already charged the fee when the order was captured.
-      platformFee: hold.mechanism === "authorization" ? platformFeeFor(amount) : undefined,
+      platformFee: hold.mechanism === "authorization" ? platformFee(amount) : undefined,
       payeeMerchantId: await merchantOf(deps, hold.milestoneId),
     });
   },
@@ -140,7 +131,7 @@ const voidHold: OutboxHandler = {
       // A delayed hold is refunded, and the buyer gets the platform fee back too.
       platformFee:
         hold.mechanism === "delayed_disbursement"
-          ? platformFeeFor(amountOf(hold, hold.amountMinor))
+          ? platformFee(amountOf(hold, hold.amountMinor))
           : undefined,
       payeeMerchantId: await merchantOf(deps, hold.milestoneId),
     });
@@ -239,9 +230,5 @@ export const outboxHandlers: Partial<Record<OutboxKind, OutboxHandler>> = {
   void_hold: voidHold,
   payout,
   dispute_evidence: disputeEvidence,
+  ...timerOutboxHandlers,
 };
-
-// Lets other lanes (H4 `fund`, `renew_hold`) add handlers from their own modules.
-export function registerOutboxHandler(kind: OutboxKind, handler: OutboxHandler): void {
-  outboxHandlers[kind] = handler;
-}

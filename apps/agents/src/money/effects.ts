@@ -1,11 +1,11 @@
-import { type Effect, fundingDueDate, type MilestoneSnapshot } from "@tranche/core";
+import type { Effect, MilestoneSnapshot } from "@tranche/core";
 import { schema } from "@tranche/db";
 import { and, count, eq, sql } from "drizzle-orm";
 import type { Tx } from "./db";
 import { appendEvent } from "./events";
 import { activeHold } from "./holds";
 import { enqueueOutbox } from "./outbox";
-import { cancelTimers, scheduleTimer } from "./timers";
+import { cancelTimers, fundingDueAt, scheduleTimer } from "./timers";
 
 const HOUR_MS = 3_600_000;
 const REMIND_AFTER_HOURS = 24;
@@ -33,16 +33,13 @@ export async function applyEffects(tx: Tx, ctx: EffectContext, effects: Effect[]
         });
         break;
       }
-      case "schedule_funding": {
-        const today = now.toISOString().slice(0, 10);
-        const due = fundingDueDate(ctx.milestone.startDate ?? today, today);
+      case "schedule_funding":
         await scheduleTimer(tx, {
           milestoneId,
           kind: "fund",
-          dueAt: due === today ? now : new Date(`${due}T00:00:00Z`),
+          dueAt: fundingDueAt(ctx.milestone.startDate, now),
         });
         break;
-      }
       case "schedule_auto_release": {
         const [d] = await tx
           .select({ clientPolicy: schema.deal.clientPolicy })

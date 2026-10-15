@@ -1,5 +1,6 @@
-import { fromPayPalValue } from "@tranche/contracts";
+import { fromPayPalValue, type HoldMechanism } from "@tranche/contracts";
 import { schema } from "@tranche/db";
+import { holdFromOrder } from "@tranche/paypal";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "./db";
@@ -10,14 +11,19 @@ import { activateHold, confirmRelease, holdWhere } from "./holds";
 import { advanceMilestone } from "./milestones";
 import { enqueueOutbox } from "./outbox";
 
-// The same deadlines @tranche/paypal's holdFromOrder computes, so the webhook path and the
-// synchronous placeHold path always store one expiry for the same hold.
-const DAY_MS = 86_400_000;
-const DELAYED_SAFE_DAYS = 27;
-const authorizationExpiresAt = (expirationTime: string) =>
-  new Date(Date.parse(expirationTime) - DAY_MS);
-const delayedExpiresAt = (capturedAt: Date) =>
-  new Date(capturedAt.getTime() + DELAYED_SAFE_DAYS * DAY_MS);
+// One expiry rule for both paths: the webhook resource goes through the same holdFromOrder that
+// the synchronous placeHold uses. Null means PayPal has not guaranteed the funds yet.
+function heldUntil(
+  mechanism: HoldMechanism,
+  payment: { id: string; status: string; create_time: string; expiration_time?: string },
+): Date | null {
+  const payments =
+    mechanism === "authorization"
+      ? { authorizations: [{ ...payment, expiration_time: payment.expiration_time ?? "" }] }
+      : { captures: [payment] };
+  const h = holdFromOrder({ id: "", status: "", purchase_units: [{ payments }] }, mechanism);
+  return h?.status === "active" ? new Date(h.expiresAt) : null;
+}
 
 const BUYER_WINS = new Set(["RESOLVED_BUYER_FAVOUR", "ACCEPTED"]);
 const SELLER_WINS = new Set(["RESOLVED_SELLER_FAVOUR", "CANCELED_BY_BUYER", "DENIED"]);
@@ -73,16 +79,23 @@ export async function handlePayPalEvent(
     case "PAYMENT.AUTHORIZATION.CREATED": {
       const r = Authorization.parse(resource);
       // A PENDING authorization guarantees nothing yet; the milestone stays in funding.
-      if (r.status !== undefined && r.status !== "CREATED") return;
       const hold = await holdWhere(tx, "paypalOrderId", r.supplementary_data.related_ids.order_id);
       if (!hold) return;
+      const createdAt = r.create_time ?? now.toISOString();
+      const expiresAt = heldUntil("authorization", {
+        ...r,
+        status: r.status ?? "CREATED",
+        create_time: createdAt,
+      });
+      // A PENDING authorization guarantees nothing yet; the milestone stays in funding.
+      if (!expiresAt) return;
       await activateHold(
         tx,
         hold,
         {
           authorizationId: r.id,
-          anchorAt: new Date(r.create_time ?? now.toISOString()),
-          expiresAt: authorizationExpiresAt(r.expiration_time),
+          anchorAt: new Date(createdAt),
+          expiresAt,
           amountMinor: minor(r.amount),
         },
         now,
@@ -95,14 +108,20 @@ export async function handlePayPalEvent(
       const hold = await holdWhere(tx, "paypalOrderId", r.supplementary_data.related_ids.order_id);
       if (!hold) return;
       if (hold.mechanism === "delayed_disbursement" && hold.status === "pending") {
-        const anchorAt = new Date(r.create_time ?? now.toISOString());
+        const capturedAt = r.create_time ?? now.toISOString();
+        const expiresAt = heldUntil("delayed_disbursement", {
+          ...r,
+          status: r.status ?? "COMPLETED",
+          create_time: capturedAt,
+        });
+        if (!expiresAt) return;
         await activateHold(
           tx,
           hold,
           {
             captureId: r.id,
-            anchorAt,
-            expiresAt: delayedExpiresAt(anchorAt),
+            anchorAt: new Date(capturedAt),
+            expiresAt,
             amountMinor: minor(r.amount),
           },
           now,
@@ -167,6 +186,18 @@ export async function handlePayPalEvent(
       const hold = await holdWhere(tx, "paypalAuthorizationId", id);
       if (!hold || hold.status === "voided") return;
       await tx.update(schema.hold).set({ status: "voided" }).where(eq(schema.hold.id, hold.id));
+      const [replacement] = await tx
+        .select({ id: schema.hold.id })
+        .from(schema.hold)
+        .where(
+          and(
+            eq(schema.hold.milestoneId, hold.milestoneId),
+            eq(schema.hold.status, "active"),
+            ne(schema.hold.id, hold.id),
+          ),
+        )
+        .limit(1);
+      if (replacement) return;
       const [m] = await tx
         .select()
         .from(schema.milestone)

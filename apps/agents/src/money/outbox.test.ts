@@ -3,7 +3,7 @@ import { createTestDb, truncateAll } from "@tranche/db/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { must } from "./errors";
-import { executeOutbox } from "./outbox";
+import { executeOutbox } from "./outbox-executor";
 import { fakePayPal, makeHold, makeMilestone, NOW, testDeps } from "./test-helpers";
 
 let db: Db;

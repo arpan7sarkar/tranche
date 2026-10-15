@@ -10,6 +10,7 @@ import { asc, eq } from "drizzle-orm";
 import { vi } from "vitest";
 import type { Deps, PayPal } from "./deps";
 import { must } from "./errors";
+import type { OutboxHandler } from "./outbox";
 
 export const NOW = new Date("2026-10-10T10:00:00Z");
 
@@ -35,9 +36,11 @@ export async function makeMilestone(
   o: {
     state?: MilestoneState;
     heldMinor?: number;
+    releasedMinor?: number;
     verifiedAt?: Date | null;
     releaseAuthorizedAt?: Date | null;
     clientPolicy?: Policy | null;
+    vaultId?: string | null;
   } = {},
 ) {
   const [ws] = await db
@@ -51,7 +54,12 @@ export async function makeMilestone(
     .returning();
   const [cl] = await db
     .insert(schema.client)
-    .values({ workspaceId: must(ws).id, name: "Acme", email: "buyer@acme.test" })
+    .values({
+      workspaceId: must(ws).id,
+      name: "Acme",
+      email: "buyer@acme.test",
+      paypalVaultId: o.vaultId === undefined ? "VAULT-1" : o.vaultId,
+    })
     .returning();
   const [dl] = await db
     .insert(schema.deal)
@@ -78,6 +86,7 @@ export async function makeMilestone(
       payees: [{ kind: "agency", shareBps: 10000 }],
       state: o.state ?? "draft",
       heldMinor: o.heldMinor ?? 0,
+      releasedMinor: o.releasedMinor ?? 0,
       verifiedAt: o.verifiedAt ?? null,
       releaseAuthorizedAt: o.releaseAuthorizedAt ?? null,
     })
@@ -93,7 +102,13 @@ export async function makeMilestone(
 export async function makeHold(
   db: Db,
   milestoneId: string,
-  o: { status?: HoldStatus; mechanism?: HoldMechanism; authorizationId?: string | null } = {},
+  o: {
+    status?: HoldStatus;
+    mechanism?: HoldMechanism;
+    authorizationId?: string | null;
+    captureId?: string | null;
+    anchorAt?: Date;
+  } = {},
 ) {
   const [h] = await db
     .insert(schema.hold)
@@ -102,6 +117,8 @@ export async function makeHold(
       mechanism: o.mechanism ?? "authorization",
       paypalOrderId: "ORDER-1",
       paypalAuthorizationId: o.authorizationId ?? null,
+      paypalCaptureId: o.captureId ?? null,
+      originalAuthorizedAt: o.anchorAt ?? null,
       amountMinor: 100000,
       currency: "USD",
       status: o.status ?? "pending",
@@ -111,14 +128,26 @@ export async function makeHold(
   return must(h);
 }
 
-export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {}): PayPal {
+export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {}) {
+  const expiresAt = "2026-11-08T10:00:00.000Z";
   return {
+    createFundingOrder: vi.fn(async () => ({
+      orderId: "ORDER-2",
+      approveUrl: null,
+      status: "COMPLETED",
+    })),
     placeHold: vi.fn(async () => ({
+      status: "active",
       captureId: null,
-      authorizationId: "AUTH-1",
-      expiresAt: "2026-11-07T10:00:00Z",
-      honorExpiresAt: "2026-10-13T10:00:00Z",
-      vaultId: null,
+      authorizationId: "AUTH-2",
+      expiresAt,
+      honorExpiresAt: null,
+      vaultId: "VAULT-1",
+    })),
+    renewHold: vi.fn(async () => ({
+      authorizationId: "AUTH-2",
+      expiresAt,
+      honorExpiresAt: expiresAt,
     })),
     releaseHold: vi.fn(async () => ({ releaseRef: "CAPTURE-REL-1" })),
     voidHold: vi.fn(async () => undefined),
@@ -127,11 +156,29 @@ export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {
     getAuthorization: vi.fn(async () => ({ status: "CREATED" })),
     getCapture: vi.fn(async () => ({ status: "COMPLETED" })),
     ...overrides,
-  } as unknown as PayPal;
+  } as unknown as PayPal & {
+    createFundingOrder: ReturnType<typeof vi.fn>;
+    placeHold: ReturnType<typeof vi.fn>;
+    renewHold: ReturnType<typeof vi.fn>;
+  };
 }
 
-export function testDeps(db: Db, paypal = fakePayPal(), now: () => Date = () => NOW): Deps {
+export function testDeps(db: Db, paypal: PayPal = fakePayPal(), now: () => Date = () => NOW): Deps {
   return { db, paypal, now };
+}
+
+export async function runOutboxHandler(
+  handler: OutboxHandler,
+  deps: Deps,
+  o: { kind: string; request: Record<string, unknown>; requestId: string },
+): Promise<void> {
+  const [row] = await deps.db
+    .insert(schema.outbox)
+    .values({ ...o, nextAttemptAt: deps.now() })
+    .returning();
+  const outbox = must(row);
+  const response = await handler.call(deps, outbox);
+  await deps.db.transaction((tx) => handler.settle(tx, deps, outbox, response));
 }
 
 export async function eventTypes(db: Db, milestoneId: string): Promise<string[]> {
