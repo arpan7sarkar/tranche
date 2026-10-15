@@ -1,0 +1,2 @@
+ALTER TABLE "workspace" ADD COLUMN "paypal_missing_features" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "workspace" ADD COLUMN "paypal_checked_at" timestamp with time zone;

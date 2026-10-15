@@ -45,6 +45,9 @@ export const workspace = pgTable("workspace", {
     .$type<"not_started" | "pending" | "active">()
     .notNull()
     .default("not_started"),
+  // The last getSellerStatus result, so the missing permissions survive a reload.
+  paypalMissingFeatures: jsonb().$type<string[]>().notNull().default([]),
+  paypalCheckedAt: instant(),
   rateCard: jsonb().$type<RateCard>().notNull(),
   createdAt: createdAt(),
 });

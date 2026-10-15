@@ -9,6 +9,7 @@ import {
   evaluatePolicy,
   milestoneWindows,
   type PolicyDecision,
+  planVersion,
   schedulePlan,
   verificationGate,
 } from "@tranche/core";
@@ -417,7 +418,8 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
       const issue = await acceptIssue(tx, row.dealId, row.side, p);
       if (issue) throw new PermanentError(issue);
       await writePlan(tx, row.dealId, p.plan, now);
-      await agreeToPlanTx(tx, row.dealId, now);
+      const agreed = await agreeToPlanTx(tx, row.dealId, null, now);
+      if (agreed !== "agreed") throw new PermanentError(`the plan could not be agreed: ${agreed}`);
       return;
     }
     case "reschedule":
@@ -440,7 +442,11 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
 }
 
 export async function writePlan(tx: Tx, dealId: string, plan: PlanDraft, now: Date): Promise<void> {
-  const [deal] = await tx.select().from(schema.deal).where(eq(schema.deal.id, dealId));
+  const [deal] = await tx
+    .select()
+    .from(schema.deal)
+    .where(eq(schema.deal.id, dealId))
+    .for("update");
   if (!deal) throw new PermanentError(`deal ${dealId} not found`);
   if (deal.currency !== plan.currency) {
     throw new PermanentError(`plan currency ${plan.currency} differs from deal ${deal.currency}`);
@@ -497,33 +503,50 @@ export async function writePlan(tx: Tx, dealId: string, plan: PlanDraft, now: Da
   if (edges.length > 0) await tx.insert(schema.taskDependency).values(edges);
 }
 
-async function agreeToPlanTx(tx: Tx, dealId: string, now: Date): Promise<void> {
+export type AgreeToPlanResult = "agreed" | "already_agreed" | "not_agreeable" | "plan_changed";
+
+// Every plan writer (writePlan, applyReschedule) locks the deal row first, so the milestones read
+// here cannot change before this transaction commits.
+async function agreeToPlanTx(
+  tx: Tx,
+  dealId: string,
+  expectedPlanVersion: string | null,
+  now: Date,
+): Promise<AgreeToPlanResult> {
   const [deal] = await tx
     .select()
     .from(schema.deal)
     .where(eq(schema.deal.id, dealId))
     .for("update");
-  if (!deal) throw new PermanentError(`deal ${dealId} not found`);
-  if (deal.status !== "sent" && deal.status !== "negotiating") {
-    throw new PermanentError(
-      `deal is ${deal.status}, a plan can only be agreed when it is sent or negotiating`,
-    );
+  if (deal?.status === "agreed" || deal?.status === "active" || deal?.status === "completed") {
+    return "already_agreed";
   }
+  if (deal?.status !== "sent" && deal?.status !== "negotiating") return "not_agreeable";
   const ms = await tx
     .select()
     .from(schema.milestone)
     .where(eq(schema.milestone.dealId, dealId))
-    .orderBy(schema.milestone.position);
+    .orderBy(schema.milestone.position)
+    .for("update");
+  if (expectedPlanVersion !== null && planVersion(deal.currency, ms) !== expectedPlanVersion) {
+    return "plan_changed";
+  }
   for (const m of ms) await mustAdvance(tx, m.id, { type: "plan_agreed" }, { now });
   await tx
     .update(schema.deal)
     .set({ status: "agreed", updatedAt: now })
     .where(eq(schema.deal.id, dealId));
   await appendEvent(tx, { type: "deal.agreed", dealId, milestoneId: null, payload: {} });
+  return "agreed";
 }
 
-export async function agreeToPlan(db: Db, dealId: string, now = new Date()): Promise<void> {
-  await db.transaction((tx) => agreeToPlanTx(tx, dealId, now));
+export async function agreeToPlan(
+  db: Db,
+  dealId: string,
+  expectedPlanVersion: string,
+  now = new Date(),
+): Promise<AgreeToPlanResult> {
+  return db.transaction((tx) => agreeToPlanTx(tx, dealId, expectedPlanVersion, now));
 }
 
 // The authenticated caller, never a free string: the agency screen passes its workspace, the portal

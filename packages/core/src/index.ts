@@ -4,6 +4,7 @@ export * from "./fees";
 export * from "./holds";
 export * from "./milestone";
 export * from "./pending-order";
+export * from "./plan-version";
 export * from "./policy";
 export * from "./sandbox-policy";
 export * from "./schedule";
