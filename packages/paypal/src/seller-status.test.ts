@@ -18,6 +18,31 @@ describe("requiredSellerFeatures", () => {
   });
 });
 
+describe("createSellerReferral", () => {
+  it("requests delayed disbursement only for that hold mechanism", async () => {
+    const m = mockPayPal([
+      {
+        method: "POST",
+        path: "/v2/customer/partner-referrals",
+        status: 201,
+        body: { links: [{ rel: "action_url", href: "https://www.sandbox.paypal.com/x" }] },
+      },
+    ]);
+    await createPayPalClient(CONFIG).createSellerReferral({
+      trackingId: "ws-1",
+      returnUrl: "https://app.test/return",
+      mechanism: "authorization",
+    });
+    const body = JSON.parse(m.calls[0]?.body ?? "{}");
+    const features =
+      body.operations[0].api_integration_preference.rest_api_integration.third_party_details
+        .features;
+    expect(features).not.toContain("DELAY_FUNDS_DISBURSEMENT");
+    expect(features).toContain("PARTNER_FEE");
+    expect(m.calls[0]?.headers.get("paypal-request-id")).toBe("referral-authorization-ws-1");
+  });
+});
+
 describe("getSellerStatus", () => {
   it("reports only the features granted to our platform client", async () => {
     mockPayPal([
