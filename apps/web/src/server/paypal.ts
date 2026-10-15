@@ -11,11 +11,7 @@ function required(name: string): string {
 }
 
 export function getPayPal(): PayPal {
-  if (!client) {
-    required("PAYPAL_CLIENT_ID");
-    required("PAYPAL_CLIENT_SECRET");
-    client = createPayPalClient(payPalConfigFromEnv());
-  }
+  client ??= createPayPalClient(payPalConfigFromEnv());
   return client;
 }
 

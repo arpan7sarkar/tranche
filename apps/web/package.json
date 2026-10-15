@@ -15,6 +15,7 @@
     "@base-ui/react": "1.9.0",
     "@bryntum/gantt": "npm:@bryntum/gantt-trial@7.3.7",
     "@tranche/contracts": "workspace:*",
+    "@tranche/core": "workspace:*",
     "@tranche/db": "workspace:*",
     "@tranche/paypal": "workspace:*",
     "better-auth": "1.7.7",

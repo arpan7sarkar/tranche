@@ -1,7 +1,8 @@
 import "server-only";
 import type { HoldMechanism } from "@tranche/contracts";
+import { platformFee } from "@tranche/core";
 import { type Db, schema, type Tx } from "@tranche/db";
-import { approveUrlOf, type PayPal, platformFeeFor } from "@tranche/paypal";
+import { approveUrlOf, type PayPal } from "@tranche/paypal";
 import { and, desc, eq } from "drizzle-orm";
 
 export class FundingError extends Error {
@@ -74,7 +75,7 @@ export async function startFunding(
       requestId: `fund-${row.m.id}-${holds.length}`,
       mechanism: input.mechanism,
       amount,
-      platformFee: platformFeeFor(amount),
+      platformFee: platformFee(amount),
       payeeMerchantId: row.w.paypalMerchantId,
       milestoneId: row.m.id,
       vaultId: row.c.paypalVaultId,
