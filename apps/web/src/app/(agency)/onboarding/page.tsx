@@ -6,6 +6,7 @@ import { ConnectPayPalButton } from "@/components/connect-paypal-button";
 import { LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatInstant } from "@/lib/dates";
 import { getDb } from "@/server/db";
 import { requireMember } from "@/server/session";
 
@@ -17,22 +18,13 @@ const FEATURE_LABELS: Record<SellerFeature, string> = {
   VAULT: "save the client's payment method",
 };
 
-async function Connections({
-  searchParams,
-}: {
-  searchParams: PageProps<"/onboarding">["searchParams"];
-}) {
-  const { missing } = await searchParams;
-  const missingFeatures = SELLER_FEATURES.filter((f) =>
-    String(missing ?? "")
-      .split(",")
-      .includes(f),
-  );
+async function Connections() {
   const member = await requireMember();
   const [ws] = await getDb()
     .select()
     .from(schema.workspace)
     .where(eq(schema.workspace.id, member.workspaceId));
+  const missingFeatures = SELLER_FEATURES.filter((f) => ws?.paypalMissingFeatures.includes(f));
   const githubUrl = process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL;
 
   return (
@@ -56,6 +48,14 @@ async function Connections({
                 {missingFeatures.map((f) => FEATURE_LABELS[f]).join(", ")}. Connect again and
                 approve all of them.
               </p>
+              {ws?.paypalCheckedAt ? (
+                <p className="text-xs text-muted-foreground">
+                  Last checked{" "}
+                  <time className="tabular" dateTime={ws.paypalCheckedAt.toISOString()}>
+                    {formatInstant(ws.paypalCheckedAt)}
+                  </time>
+                </p>
+              ) : null}
               <ConnectPayPalButton />
             </div>
           ) : ws?.paypalOnboarding === "pending" ? (
@@ -90,12 +90,12 @@ async function Connections({
   );
 }
 
-export default function OnboardingPage({ searchParams }: PageProps<"/onboarding">) {
+export default function OnboardingPage() {
   return (
     <div className="flex max-w-4xl flex-col gap-6">
       <h1 className="text-4xl">Connections</h1>
       <Suspense fallback={<LoadingState rows={2} />}>
-        <Connections searchParams={searchParams} />
+        <Connections />
       </Suspense>
     </div>
   );

@@ -51,7 +51,12 @@ export async function completeOnboarding(
       : "pending";
   await db
     .update(schema.workspace)
-    .set({ paypalMerchantId: seller.merchantId, paypalOnboarding: status })
+    .set({
+      paypalMerchantId: seller.merchantId,
+      paypalOnboarding: status,
+      paypalMissingFeatures: missingFeatures,
+      paypalCheckedAt: new Date(),
+    })
     .where(eq(schema.workspace.id, input.workspaceId));
   return { status, missingFeatures };
 }

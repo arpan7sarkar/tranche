@@ -7,10 +7,9 @@ import { memberOrNull } from "@/server/session";
 export async function GET(request: Request) {
   const member = await memberOrNull(request);
   if (!member) return Response.redirect(`${appUrl()}/sign-in?next=/onboarding`, 303);
-  const { missingFeatures } = await completeOnboarding(getDb(), getPayPal(), {
+  await completeOnboarding(getDb(), getPayPal(), {
     workspaceId: member.workspaceId,
     mechanism: holdMechanism(),
   });
-  const missing = missingFeatures.length ? `?missing=${missingFeatures.join(",")}` : "";
-  return Response.redirect(`${appUrl()}/onboarding${missing}`, 303);
+  return Response.redirect(`${appUrl()}/onboarding`, 303);
 }

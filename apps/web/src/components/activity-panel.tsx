@@ -1,12 +1,6 @@
 import { describeEvent } from "@/lib/activity";
+import { formatInstant } from "@/lib/dates";
 import type { DealView } from "@/server/deals";
-
-const TIME = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
 
 export function ActivityPanel({ activity }: { activity: DealView["activity"] }) {
   if (activity.length === 0) {
@@ -26,7 +20,7 @@ export function ActivityPanel({ activity }: { activity: DealView["activity"] }) 
             dateTime={e.createdAt}
             suppressHydrationWarning
           >
-            {TIME.format(new Date(e.createdAt))}
+            {formatInstant(e.createdAt)}
           </time>
         </li>
       ))}
