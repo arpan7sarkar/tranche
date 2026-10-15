@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPayPalClient } from "./client";
+import { createPayPalClient, requiredSellerFeatures } from "./client";
 import { CONFIG, mockPayPal } from "./fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -9,6 +9,13 @@ const grant = (partner: string, scopes: string[]) => ({
   integration_type: "OAUTH_THIRD_PARTY",
   integration_method: "PAYPAL",
   oauth_third_party: [{ partner_client_id: partner, scopes }],
+});
+
+describe("requiredSellerFeatures", () => {
+  it("requires delayed disbursement only for that hold mechanism", () => {
+    expect(requiredSellerFeatures("authorization")).not.toContain("DELAY_FUNDS_DISBURSEMENT");
+    expect(requiredSellerFeatures("delayed_disbursement")).toContain("DELAY_FUNDS_DISBURSEMENT");
+  });
 });
 
 describe("getSellerStatus", () => {

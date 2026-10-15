@@ -9,7 +9,8 @@ export {
   type PayPal,
   type PendingHold,
   type PlaceHoldResult,
-  REQUIRED_SELLER_FEATURES,
+  requiredSellerFeatures,
+  SELLER_FEATURES,
   type SellerFeature,
 } from "./client";
 export { PayPalError } from "./errors";
