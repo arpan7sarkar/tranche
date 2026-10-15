@@ -1,6 +1,5 @@
 import { SandboxOnboardingContext, SandboxOperationSpec } from "@tranche/contracts";
 import { describe, expect, it } from "vitest";
-import { SandboxTransportError } from "./client";
 import {
   onboardingFailure,
   onboardingRequest,
@@ -9,6 +8,7 @@ import {
   parseReferral,
   verifyOnboarding,
 } from "./onboarding";
+import { SandboxTransportError } from "./sandbox-client";
 
 const scope = "https://uri.paypal.com/services/payments/payment/authcapture";
 const context = SandboxOnboardingContext.parse({

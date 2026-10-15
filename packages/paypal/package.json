@@ -4,15 +4,24 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./agent-tools": "./src/agent-tools.ts"
   },
   "scripts": {
     "typecheck": "tsc",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:sandbox": "RUN_PAYPAL_SANDBOX_TEST=1 node --env-file-if-exists=../../.env ../../node_modules/vitest/vitest.mjs run src/sandbox.test.ts",
+    "webhook:register": "node --env-file-if-exists=../../.env --import=tsx scripts/register-webhook.ts",
+    "fund:manual": "node --env-file-if-exists=../../.env --import=tsx scripts/fund-manually.ts"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "2.0.71",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@paypal/agent-toolkit": "1.11.0",
     "@tranche/contracts": "workspace:*",
-    "@paypal/paypal-server-sdk": "2.5.0",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
   }
 }

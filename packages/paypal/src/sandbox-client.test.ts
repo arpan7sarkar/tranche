@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { SandboxClient, type SandboxRequestAccounting } from "./client";
+import { SandboxClient, type SandboxRequestAccounting } from "./sandbox-client";
 
 const config = { environment: "sandbox", clientId: "FAKE_CLIENT", clientSecret: "FAKE_SECRET" };
 const token = () =>
