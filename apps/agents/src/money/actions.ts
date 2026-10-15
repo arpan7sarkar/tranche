@@ -20,6 +20,7 @@ import { errorMessage, ForbiddenError, must, PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { mustAdvance, StaleMilestoneError } from "./milestones";
 import { enqueueOutbox } from "./outbox";
+import { applyReschedule } from "./reschedule";
 
 export type ProposedActionRow = typeof schema.proposedAction.$inferSelect;
 
@@ -419,6 +420,9 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
       await agreeToPlanTx(tx, row.dealId, now);
       return;
     }
+    case "reschedule":
+      await applyReschedule(tx, row.dealId, p.shifts, p.reason, now);
+      return;
     case "submit_dispute_evidence":
       return enqueueOutbox(
         tx,

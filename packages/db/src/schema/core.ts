@@ -16,6 +16,7 @@ import type {
   ScheduledActionKind,
 } from "@tranche/contracts";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   date,
@@ -203,6 +204,8 @@ export const hold = pgTable(
     paypalCaptureId: text(),
     paypalAuthorizationId: text(),
     originalAuthorizedAt: instant(),
+    lastReauthorizedAt: instant(),
+    replacesHoldId: uuid().references((): AnyPgColumn => hold.id),
     amountMinor: minor().notNull(),
     currency: text().notNull(),
     status: text().$type<HoldStatus>().notNull().default("pending"),
@@ -305,7 +308,7 @@ export const outbox = pgTable(
     request: jsonb().$type<Record<string, unknown>>().notNull(),
     requestId: text().notNull().unique(),
     status: text()
-      .$type<"pending" | "sent" | "succeeded" | "failed">()
+      .$type<"pending" | "sent" | "called" | "succeeded" | "failed">()
       .notNull()
       .default("pending"),
     attempts: integer().notNull().default(0),

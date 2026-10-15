@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./money": "./src/money/index.ts"
+  },
   "scripts": {
     "dev": "render workflows dev -- tsx watch src/index.ts",
     "build": "tsdown",

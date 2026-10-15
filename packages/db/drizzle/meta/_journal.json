@@ -64,6 +64,20 @@
       "when": 1792060745399,
       "tag": "0008_inbox_retry_backoff",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792061509226,
+      "tag": "0009_hold_last_reauthorized_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792062258274,
+      "tag": "0010_hold_replaces_hold",
+      "breakpoints": true
     }
   ]
 }
