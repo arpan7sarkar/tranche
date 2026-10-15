@@ -32,7 +32,8 @@ export async function readOnlyPayPalTools(config: PayPalConfig) {
     accessToken,
     configuration: {
       actions: READ_ONLY_ACTIONS,
-      context: { sandbox: config.baseUrl.includes("sandbox") },
+      // The toolkit has no base URL override; Tranche is sandbox-only, so never let it pick live.
+      context: { sandbox: true },
     },
   });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

@@ -25,12 +25,24 @@ export type OrderRes = {
 };
 
 export type Hold = {
+  status: "active";
   captureId: string | null;
   authorizationId: string | null;
   expiresAt: string;
   honorExpiresAt: string | null;
   vaultId: string | null;
 };
+
+// Funds in review (eCheck, risk hold) are not guaranteed; the milestone stays in funding until
+// PAYMENT.CAPTURE.COMPLETED or an authorization in CREATED arrives.
+export type PendingHold = {
+  status: "pending";
+  captureId: string | null;
+  authorizationId: string | null;
+  vaultId: string | null;
+};
+
+export type PlaceHoldResult = Hold | PendingHold;
 
 const seg = encodeURIComponent;
 
@@ -67,7 +79,15 @@ function declined(kind: "capture" | "authorization", status: string): PayPalErro
 }
 
 function required(value: string | null, name: string): string {
-  if (!value) throw new Error(`${name} is required for this hold mechanism`);
+  if (!value)
+    throw new PayPalError({
+      status: 400,
+      name: "MISSING_REFERENCE",
+      message: `${name} is required for this hold mechanism`,
+      issue: `${name.toUpperCase()}_REQUIRED`,
+      debugId: null,
+      retryable: false,
+    });
   return value;
 }
 
@@ -75,14 +95,17 @@ export function approveUrlOf(order: OrderRes): string | null {
   return order.links?.find((l) => l.rel === "payer-action" || l.rel === "approve")?.href ?? null;
 }
 
-export function holdFromOrder(order: OrderRes, mechanism: HoldMechanism): Hold | null {
+export function holdFromOrder(order: OrderRes, mechanism: HoldMechanism): PlaceHoldResult | null {
   const payments = order.purchase_units?.[0]?.payments;
   const vaultId = order.payment_source?.paypal?.attributes?.vault?.id ?? null;
   if (mechanism === "delayed_disbursement") {
     const c = payments?.captures?.[0];
     if (!c) return null;
-    if (c.status !== "COMPLETED" && c.status !== "PENDING") throw declined("capture", c.status);
+    if (c.status === "PENDING")
+      return { status: "pending", captureId: c.id, authorizationId: null, vaultId };
+    if (c.status !== "COMPLETED") throw declined("capture", c.status);
     return {
+      status: "active",
       captureId: c.id,
       authorizationId: null,
       expiresAt: addDays(c.create_time, DELAYED_SAFE_DAYS),
@@ -92,8 +115,11 @@ export function holdFromOrder(order: OrderRes, mechanism: HoldMechanism): Hold |
   }
   const a = payments?.authorizations?.[0];
   if (!a) return null;
-  if (a.status !== "CREATED" && a.status !== "PENDING") throw declined("authorization", a.status);
+  if (a.status === "PENDING")
+    return { status: "pending", captureId: null, authorizationId: a.id, vaultId };
+  if (a.status !== "CREATED") throw declined("authorization", a.status);
   return {
+    status: "active",
     captureId: null,
     authorizationId: a.id,
     expiresAt: addDays(a.expiration_time, -1),
@@ -115,6 +141,7 @@ export function createPayPalClient(config: PayPalConfig) {
       const res = await t.request<{ links: Link[] }>({
         method: "POST",
         path: "/v2/customer/partner-referrals",
+        requestId: `referral-${input.trackingId}`,
         body: {
           tracking_id: input.trackingId,
           partner_config_override: { return_url: input.returnUrl },
@@ -244,7 +271,8 @@ export function createPayPalClient(config: PayPalConfig) {
               amount: amountOf(input.amount),
               payee: { merchant_id: input.payeeMerchantId },
               ...instruction({
-                ...fees(input.platformFee),
+                // The fee rides where money is captured: here for CAPTURE, on releaseHold for AUTHORIZE.
+                ...(input.mechanism === "delayed_disbursement" ? fees(input.platformFee) : {}),
                 ...(input.mechanism === "delayed_disbursement"
                   ? { disbursement_mode: "DELAYED" }
                   : {}),
@@ -261,7 +289,7 @@ export function createPayPalClient(config: PayPalConfig) {
       requestId: string;
       orderId: string;
       mechanism: HoldMechanism;
-    }): Promise<Hold> {
+    }): Promise<PlaceHoldResult> {
       const existing = await t.request<OrderRes>({
         method: "GET",
         path: `/v2/checkout/orders/${seg(input.orderId)}`,
