@@ -28,13 +28,13 @@ export async function startOnboarding(
 
 const RECHECK_AFTER_MS = 60_000;
 
-// The page re-checks a workspace that is not active yet, at most once a minute, so a lost return
-// redirect cannot leave a stale status behind.
+// The page re-checks a workspace that is mid-onboarding (pending or missing permissions), at most
+// once a minute, so a lost return redirect cannot leave a stale status behind.
 export function needsSellerRecheck(
-  ws: { paypalOnboarding: string; paypalCheckedAt: Date | null },
+  ws: { paypalOnboarding: string; paypalMissingFeatures: string[]; paypalCheckedAt: Date | null },
   now = new Date(),
 ): boolean {
-  if (ws.paypalOnboarding === "active") return false;
+  if (ws.paypalOnboarding !== "pending" && ws.paypalMissingFeatures.length === 0) return false;
   return !ws.paypalCheckedAt || now.getTime() - ws.paypalCheckedAt.getTime() >= RECHECK_AFTER_MS;
 }
 
