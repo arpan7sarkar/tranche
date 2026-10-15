@@ -1,6 +1,12 @@
-import { type HoldMechanism, type Money, toPayPalValue } from "@tranche/contracts";
+import {
+  type HoldMechanism,
+  type Money,
+  PayPalIntegrationResponse,
+  toPayPalValue,
+} from "@tranche/contracts";
 import { PayPalError } from "./errors";
 import { createTransport, type PayPalConfig } from "./http";
+import { platformGrantScopes } from "./onboarding";
 
 type Link = { href: string; rel: string };
 type Amount = { currency_code: string; value: string };
@@ -46,14 +52,25 @@ export type PlaceHoldResult = Hold | PendingHold;
 
 const seg = encodeURIComponent;
 
-const REFERRAL_FEATURES = [
+export const REQUIRED_SELLER_FEATURES = [
   "PAYMENT",
   "REFUND",
   "PARTNER_FEE",
   "DELAY_FUNDS_DISBURSEMENT",
   "VAULT",
-  "ACCESS_MERCHANT_INFORMATION",
-];
+] as const;
+export type SellerFeature = (typeof REQUIRED_SELLER_FEATURES)[number];
+
+const REFERRAL_FEATURES = [...REQUIRED_SELLER_FEATURES, "ACCESS_MERCHANT_INFORMATION"];
+
+// PayPal reports granted third-party features as OAuth scopes (seller status docs); not yet seen in our sandbox.
+const FEATURE_SCOPES: Record<SellerFeature, string> = {
+  PAYMENT: "https://uri.paypal.com/services/payments/payment/authcapture",
+  REFUND: "https://uri.paypal.com/services/payments/refund",
+  PARTNER_FEE: "https://uri.paypal.com/services/payments/partnerfee",
+  DELAY_FUNDS_DISBURSEMENT: "https://uri.paypal.com/services/payments/delay-funds-disbursement",
+  VAULT: "https://uri.paypal.com/services/vault/payment-tokens/readwrite",
+};
 
 const DAY_MS = 86_400_000;
 const DELAYED_SAFE_DAYS = 27;
@@ -89,6 +106,13 @@ function required(value: string | null, name: string): string {
       retryable: false,
     });
   return value;
+}
+
+function grantedFeatures(oauthIntegrations: unknown, platformClientId: string): SellerFeature[] {
+  const parsed = PayPalIntegrationResponse.shape.oauth_integrations.safeParse(oauthIntegrations);
+  if (!parsed.success) return [];
+  const scopes = new Set(platformGrantScopes(parsed.data, platformClientId).flat());
+  return REQUIRED_SELLER_FEATURES.filter((f) => scopes.has(FEATURE_SCOPES[f]));
 }
 
 export function approveUrlOf(order: OrderRes): string | null {
@@ -179,11 +203,17 @@ export function createPayPalClient(config: PayPalConfig) {
       merchantId: string | null;
       paymentsReceivable: boolean;
       primaryEmailConfirmed: boolean;
+      grantedFeatures: SellerFeature[];
     }> {
       const partnerId = config.partnerMerchantId;
       if (!partnerId)
         throw new Error("PAYPAL_PARTNER_MERCHANT_ID is required to read seller status");
-      const unknown = { merchantId: null, paymentsReceivable: false, primaryEmailConfirmed: false };
+      const unknown = {
+        merchantId: null,
+        paymentsReceivable: false,
+        primaryEmailConfirmed: false,
+        grantedFeatures: [],
+      };
       let found: { merchant_id?: string };
       try {
         found = await t.request({
@@ -199,6 +229,7 @@ export function createPayPalClient(config: PayPalConfig) {
       const status = await t.request<{
         payments_receivable?: boolean;
         primary_email_confirmed?: boolean;
+        oauth_integrations?: unknown;
       }>({
         method: "GET",
         path: `/v1/customer/partners/${seg(partnerId)}/merchant-integrations/${seg(found.merchant_id)}`,
@@ -207,6 +238,7 @@ export function createPayPalClient(config: PayPalConfig) {
         merchantId: found.merchant_id,
         paymentsReceivable: status.payments_receivable === true,
         primaryEmailConfirmed: status.primary_email_confirmed === true,
+        grantedFeatures: grantedFeatures(status.oauth_integrations, config.clientId),
       };
     },
 
