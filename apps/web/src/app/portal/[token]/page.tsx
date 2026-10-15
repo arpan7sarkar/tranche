@@ -16,7 +16,7 @@ import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
 import { getDb } from "@/server/db";
 import { type DealView, getDealView } from "@/server/deals";
-import { resolvePortalToken, submittedClientReleases } from "@/server/portal";
+import { planVersion, resolvePortalToken, submittedClientReleases } from "@/server/portal";
 
 type Milestone = DealView["milestones"][number];
 
@@ -43,7 +43,7 @@ function MilestoneAction({
         currency={currency}
         label={`Fund ${amount}`}
         testId={`fund-${m.key}`}
-        agreeFirst={false}
+        planVersion={null}
       />
     );
   }
@@ -223,7 +223,7 @@ async function Portal({
             currency={currency}
             label={`Approve plan and fund ${formatMoney({ currency, minor: first.priceMinor })}`}
             testId="approve-plan"
-            agreeFirst
+            planVersion={planVersion(currency, view.milestones)}
           />
         </section>
       ) : null}

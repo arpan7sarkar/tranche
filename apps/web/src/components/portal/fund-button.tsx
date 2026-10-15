@@ -1,10 +1,11 @@
 "use client";
 
 import { loadCoreSdkScript, type OneTimePaymentSession } from "@paypal/paypal-js/sdk-v6";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 type Order = { orderId: string; approveUrl: string | null };
@@ -18,6 +19,7 @@ const ORDER_POLL_MS = 1_500;
 class Expired extends Error {}
 class NotReady extends Error {}
 class Charged extends Error {}
+class PlanChanged extends Error {}
 
 async function errorText(res: Response): Promise<string | undefined> {
   const body = (await res.json().catch(() => ({}))) as { error?: unknown };
@@ -25,11 +27,19 @@ async function errorText(res: Response): Promise<string | undefined> {
 }
 
 // Funding opens once the money pipeline moves the milestone to `funding`, a few seconds after the plan is agreed.
-async function requestOrder(token: string, milestoneId: string, agreeFirst: boolean) {
-  if (agreeFirst) {
-    const res = await fetch(`/api/portal/${token}/agree`, { method: "POST" });
+async function requestOrder(token: string, milestoneId: string, planVersion: string | null) {
+  if (planVersion !== null) {
+    const res = await fetch(`/api/portal/${token}/agree`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planVersion }),
+    });
     if (res.status === 404) throw new Expired();
-    if (!res.ok) throw new Error(await errorText(res));
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { result?: unknown; error?: unknown };
+      if (body.result === "plan_changed") throw new PlanChanged();
+      throw new Error(typeof body.error === "string" ? body.error : undefined);
+    }
   }
   const deadline = Date.now() + ORDER_WAIT_MS;
   for (;;) {
@@ -59,18 +69,20 @@ export function FundButton({
   currency,
   label,
   testId,
-  agreeFirst,
+  planVersion,
 }: {
   token: string;
   milestoneId: string;
   currency: string;
   label: string;
   testId: string;
-  agreeFirst: boolean;
+  /** Set when this click also agrees to the plan the client is looking at. */
+  planVersion: string | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(FAKE_PAYPAL ? "ready" : "loading");
   const [fakeOrderId, setFakeOrderId] = useState<string | null>(null);
+  const [planChanged, setPlanChanged] = useState(false);
   const session = useRef<OneTimePaymentSession | null>(null);
   const handledOwnFailure = useRef(false);
 
@@ -120,14 +132,21 @@ export function FundButton({
   function settle(error: unknown) {
     handledOwnFailure.current = true;
     setStatus("ready");
+    if (error instanceof PlanChanged) {
+      setPlanChanged(true);
+      return;
+    }
     if (error instanceof Charged) {
       toast.success("Paid with your saved PayPal account. Funds are held until you release them.");
     } else if (error instanceof Expired) {
       toast.error("This link has expired. Ask the agency for a fresh one.");
     } else if (error instanceof NotReady) {
-      toast.info(agreeFirst ? "Plan approved." : "This milestone is not ready to fund yet.", {
-        description: error.message || "Funding opens shortly. This page updates on its own.",
-      });
+      toast.info(
+        planVersion !== null ? "Plan approved." : "This milestone is not ready to fund yet.",
+        {
+          description: error.message || "Funding opens shortly. This page updates on its own.",
+        },
+      );
     } else {
       toast.error("Could not start the payment. Try again in a moment.");
     }
@@ -137,7 +156,7 @@ export function FundButton({
   function fund() {
     handledOwnFailure.current = false;
     setStatus("busy");
-    const order = requestOrder(token, milestoneId, agreeFirst).then((o) => {
+    const order = requestOrder(token, milestoneId, planVersion).then((o) => {
       if (o.approveUrl === null) throw new Charged();
       return o;
     });
@@ -181,6 +200,22 @@ export function FundButton({
     setStatus("ready");
   }
 
+  if (planChanged) {
+    return (
+      <Alert data-testid="plan-changed">
+        <RefreshCw />
+        <AlertTitle>The agency updated this plan</AlertTitle>
+        <AlertDescription>
+          Nothing was agreed or charged. Reload to review the latest version before you approve it.
+        </AlertDescription>
+        <AlertAction>
+          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+        </AlertAction>
+      </Alert>
+    );
+  }
   if (status === "unavailable") {
     return (
       <p className="text-sm text-destructive">PayPal is unavailable right now. Try again later.</p>
