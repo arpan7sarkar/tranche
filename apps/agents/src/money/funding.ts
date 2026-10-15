@@ -1,5 +1,5 @@
 import type { HoldMechanism } from "@tranche/contracts";
-import { PENDING_ORDER_TTL_HOURS, platformFee } from "@tranche/core";
+import { PENDING_ORDER_TTL_HOURS, pendingOrderVerdict, platformFee } from "@tranche/core";
 import { type Db, schema } from "@tranche/db";
 import { desc, eq } from "drizzle-orm";
 import type { PayPal } from "./deps";
@@ -9,7 +9,6 @@ import { mustAdvance } from "./milestones";
 import { enqueueOutbox } from "./outbox";
 
 const HOUR_MS = 3_600_000;
-const AWAITING_BUYER = new Set(["CREATED", "PAYER_ACTION_REQUIRED", "APPROVED"]);
 
 export type FundingOutcome =
   | { status: "skipped" }
@@ -67,23 +66,17 @@ export async function startFunding(
     if (holds.some((h) => h.status === "active")) return { status: "skipped" };
 
     for (const pending of holds.filter((h) => h.status === "pending")) {
-      if (pending.expiresAt <= input.now) {
-        await tx
-          .update(schema.hold)
-          .set({ status: "failed" })
-          .where(eq(schema.hold.id, pending.id));
-        continue;
-      }
       let order: Awaited<ReturnType<PayPal["getOrder"]>> | null = null;
       try {
         order = await paypal.getOrder(pending.paypalOrderId);
       } catch (err) {
         if (!isNotFound(err)) throw err;
       }
-      if (order && AWAITING_BUYER.has(order.status)) {
+      const verdict = pendingOrderVerdict(order?.status ?? null, pending.expiresAt, input.now);
+      if (verdict === "reuse" && order) {
         return { status: "reused", orderId: order.id, approveUrl: approveUrlOf(order) };
       }
-      if (order?.status === "COMPLETED") {
+      if (verdict === "confirming") {
         await enqueueOutbox(
           tx,
           { kind: "place_hold", request: { holdId: pending.id }, requestId: `place:${pending.id}` },
@@ -91,10 +84,8 @@ export async function startFunding(
         );
         return { status: "confirming", holdId: pending.id };
       }
-      if (order && order.status !== "VOIDED") {
-        throw new Error(
-          `order ${order.id} is ${order.status}, cannot decide whether to replace it`,
-        );
+      if (verdict === "wait") {
+        throw new Error(`order ${pending.paypalOrderId} is ${order?.status}, not replacing it yet`);
       }
       await tx.update(schema.hold).set({ status: "failed" }).where(eq(schema.hold.id, pending.id));
     }
