@@ -1,9 +1,9 @@
 import "server-only";
-import * as money from "@tranche/agents-service/money";
 import { type Db, schema } from "@tranche/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
 import type { DealView } from "./deals";
+import * as money from "./money";
 
 export type DecideResult = "decided" | "already_decided" | "not_found";
 
@@ -31,7 +31,10 @@ export async function decideApproval(
   const [row] = await db
     .select({ decision: schema.approval.decision })
     .from(schema.approval)
-    .innerJoin(schema.proposedAction, eq(schema.proposedAction.id, schema.approval.proposedActionId))
+    .innerJoin(
+      schema.proposedAction,
+      eq(schema.proposedAction.id, schema.approval.proposedActionId),
+    )
     .innerJoin(schema.deal, eq(schema.deal.id, schema.proposedAction.dealId))
     .where(
       and(eq(schema.approval.id, input.approvalId), eq(schema.approval.side, input.side), inScope),
@@ -66,7 +69,10 @@ export async function listPendingApprovals(
       milestoneTitle: schema.milestone.title,
     })
     .from(schema.approval)
-    .innerJoin(schema.proposedAction, eq(schema.proposedAction.id, schema.approval.proposedActionId))
+    .innerJoin(
+      schema.proposedAction,
+      eq(schema.proposedAction.id, schema.approval.proposedActionId),
+    )
     .innerJoin(schema.deal, eq(schema.deal.id, schema.proposedAction.dealId))
     .leftJoin(
       schema.milestone,

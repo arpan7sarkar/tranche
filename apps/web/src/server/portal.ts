@@ -1,10 +1,10 @@
 import "server-only";
-import * as money from "@tranche/agents-service/money";
 import type { DealStatus, Policy } from "@tranche/contracts";
 import { type Db, resolveMagicLink, schema } from "@tranche/db";
 import { and, eq, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
 import { getDb } from "./db";
+import * as money from "./money";
 
 export type AutoReleaseHours = 24 | 72 | 168;
 export type ReleaseResult = "submitted" | "already_submitted" | "not_releasable";
@@ -67,7 +67,7 @@ export async function submitClientRelease(
     .where(
       and(eq(schema.milestone.id, input.milestoneId), eq(schema.milestone.dealId, input.dealId)),
     );
-  if (!m || m.state !== "release_pending") return "not_releasable";
+  if (m?.state !== "release_pending") return "not_releasable";
 
   const { created } = await money.submitHumanAction(db, {
     dealId: input.dealId,
@@ -108,9 +108,10 @@ export async function setAutoRelease(
     const [row] = await tx
       .select({
         policy: schema.deal.clientPolicy,
-        total: sql<number>`coalesce((select sum(${schema.milestone.priceMinor}) from ${schema.milestone} where ${schema.milestone.dealId} = ${schema.deal.id}), 0)::bigint`.mapWith(
-          Number,
-        ),
+        total:
+          sql<number>`coalesce((select sum(${schema.milestone.priceMinor}) from ${schema.milestone} where ${schema.milestone.dealId} = ${schema.deal.id}), 0)::bigint`.mapWith(
+            Number,
+          ),
       })
       .from(schema.deal)
       .where(eq(schema.deal.id, input.dealId))
