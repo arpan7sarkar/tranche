@@ -19,7 +19,9 @@
     "@tranche/core": "workspace:*",
     "@tranche/db": "workspace:*",
     "@tranche/paypal": "workspace:*",
-    "@tranche/verifiers": "workspace:*"
+    "@tranche/verifiers": "workspace:*",
+    "drizzle-orm": "0.45.4",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "tsdown": "0.23.0",
