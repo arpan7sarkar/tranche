@@ -7,6 +7,7 @@ import type {
 } from "@tranche/contracts";
 import { type Db, schema } from "@tranche/db";
 import { asc, eq } from "drizzle-orm";
+import { vi } from "vitest";
 import type { Deps, PayPal } from "./deps";
 import { must } from "./errors";
 
@@ -35,6 +36,7 @@ export async function makeMilestone(
     state?: MilestoneState;
     heldMinor?: number;
     verifiedAt?: Date | null;
+    releaseAuthorizedAt?: Date | null;
     clientPolicy?: Policy | null;
   } = {},
 ) {
@@ -77,6 +79,7 @@ export async function makeMilestone(
       state: o.state ?? "draft",
       heldMinor: o.heldMinor ?? 0,
       verifiedAt: o.verifiedAt ?? null,
+      releaseAuthorizedAt: o.releaseAuthorizedAt ?? null,
     })
     .returning();
   return { dealId: must(dl).id, milestoneId: must(ms).id };
@@ -103,8 +106,27 @@ export async function makeHold(
   return must(h);
 }
 
-export function testDeps(db: Db, paypal = {} as PayPal): Deps {
-  return { db, paypal, now: () => NOW };
+export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {}): PayPal {
+  return {
+    placeHold: vi.fn(async () => ({
+      captureId: null,
+      authorizationId: "AUTH-1",
+      expiresAt: "2026-11-07T10:00:00Z",
+      honorExpiresAt: "2026-10-13T10:00:00Z",
+      vaultId: null,
+    })),
+    releaseHold: vi.fn(async () => ({ releaseRef: "CAPTURE-REL-1" })),
+    voidHold: vi.fn(async () => undefined),
+    sendPayouts: vi.fn(async () => ({ batchId: "BATCH-1" })),
+    submitDisputeEvidence: vi.fn(async () => undefined),
+    getAuthorization: vi.fn(async () => ({ status: "CREATED" })),
+    getCapture: vi.fn(async () => ({ status: "COMPLETED" })),
+    ...overrides,
+  } as unknown as PayPal;
+}
+
+export function testDeps(db: Db, paypal = fakePayPal(), now: () => Date = () => NOW): Deps {
+  return { db, paypal, now };
 }
 
 export async function eventTypes(db: Db, milestoneId: string): Promise<string[]> {
