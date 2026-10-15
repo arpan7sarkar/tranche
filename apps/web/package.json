@@ -14,6 +14,8 @@
   "dependencies": {
     "@base-ui/react": "1.9.0",
     "@bryntum/gantt": "npm:@bryntum/gantt-trial@7.3.7",
+    "@paypal/paypal-js": "11.2.1",
+    "@tranche/agents-service": "workspace:*",
     "@tranche/contracts": "workspace:*",
     "@tranche/db": "workspace:*",
     "better-auth": "1.7.7",

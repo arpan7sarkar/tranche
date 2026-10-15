@@ -5,6 +5,7 @@ import { CircleCheck, CircleDashed, CircleX, Pencil } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ActivityPanel } from "@/components/activity-panel";
+import { ApprovalCard, proposalTitle } from "@/components/approval-card";
 import { DealStatusBadge } from "@/components/deal-status-badge";
 import { addDays, LOCKED_STATES } from "@/components/gantt/gantt-data";
 import { GanttLoader } from "@/components/gantt/gantt-loader";
@@ -173,6 +174,12 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     view.deal.currency,
     view.milestones.map((m) => m.priceMinor),
   );
+  const agencyApprovals = view.approvals.filter((a) => a.side === "agency");
+  const clientApprovals = view.approvals.filter((a) => a.side === "client");
+  const milestoneTitleOf = (a: DealView["approvals"][number]) => {
+    const id = "milestoneId" in a.payload ? a.payload.milestoneId : null;
+    return view.milestones.find((m) => m.id === id)?.title ?? null;
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -244,25 +251,37 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
             <h2 id="needs-you-heading" className="text-2xl">
               Needs you
             </h2>
-            {view.approvals.length === 0 ? (
+            {agencyApprovals.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nothing waiting on you.</p>
             ) : (
-              <ul className="flex flex-col gap-2">
-                {view.approvals.map((a) => (
-                  <li key={a.id} className="flex flex-col gap-1 rounded-lg border bg-card p-3">
-                    <span className="text-sm font-medium capitalize">
-                      {a.actionType.replaceAll("_", " ")}
-                    </span>
-                    <span className="line-clamp-3 text-sm text-muted-foreground">
-                      {a.reasoning}
-                    </span>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {a.agent} agent, {a.side} approval
-                    </span>
+              <ul className="flex flex-col gap-3">
+                {agencyApprovals.map((a) => (
+                  <li key={a.id}>
+                    <ApprovalCard
+                      approval={a}
+                      decideUrl={`/api/approvals/${a.id}/decide`}
+                      milestoneTitle={milestoneTitleOf(a)}
+                      onDone={refresh}
+                    />
                   </li>
                 ))}
               </ul>
             )}
+            {clientApprovals.length > 0 ? (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <p className="text-xs text-muted-foreground">Waiting on the client</p>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {clientApprovals.map((a) => (
+                    <li key={a.id} className="break-words">
+                      {proposalTitle(a.actionType)}
+                      {milestoneTitleOf(a) ? (
+                        <span className="text-muted-foreground"> for {milestoneTitleOf(a)}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
           <section aria-labelledby="activity-heading" className="flex flex-col gap-3">
             <h2 id="activity-heading" className="text-2xl">
