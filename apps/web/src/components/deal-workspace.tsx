@@ -33,7 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useDealStream } from "@/hooks/use-deal-stream";
-import { describeCheck } from "@/lib/criteria";
+import { describeCheck, needsPullRequest } from "@/lib/criteria";
 import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
 import { explainReschedule } from "@/lib/reschedule";
@@ -221,7 +221,9 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     toast.success(
       status === "already_submitted"
         ? "This delivery was already submitted. Verification starts shortly."
-        : "Delivery submitted. Verification starts shortly.",
+        : status === "resubmitted"
+          ? "Delivery resubmitted. Verification starts shortly."
+          : "Delivery submitted. Verification starts shortly.",
     );
     openDelivery(null);
     refresh();
@@ -620,7 +622,7 @@ function MilestoneCard({
         </div>
       ) : null}
 
-      {DELIVERABLE.has(m.state) && m.deliveryPending ? (
+      {!DELIVERABLE.has(m.state) ? null : m.deliveryStatus === "pending" ? (
         <p
           role="status"
           data-testid={`delivery-pending-${m.key}`}
@@ -629,7 +631,27 @@ function MilestoneCard({
           <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
           Delivery submitted. Verification starts shortly.
         </p>
-      ) : DELIVERABLE.has(m.state) ? (
+      ) : m.deliveryStatus === "failed" ? (
+        <Alert variant="destructive" data-testid={`delivery-failed-${m.key}`}>
+          <CircleAlert />
+          <AlertTitle>Verification could not start</AlertTitle>
+          <AlertDescription className="flex flex-col items-start gap-2">
+            <span>The last delivery could not be processed. Submit it again to retry.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid={`resubmit-delivery-${m.key}`}
+              onClick={() => onDeliver(m)}
+            >
+              Resubmit delivery
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : needsPullRequest(m.criteria) ? (
+        <p data-testid={`delivery-via-pr-${m.key}`} className="text-sm text-muted-foreground">
+          Delivered automatically when the pull request merges.
+        </p>
+      ) : (
         <Button
           variant="outline"
           className="self-start"
@@ -638,7 +660,7 @@ function MilestoneCard({
         >
           Submit delivery
         </Button>
-      ) : null}
+      )}
     </li>
   );
 }

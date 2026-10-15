@@ -1,7 +1,9 @@
+import { isDeepStrictEqual } from "node:util";
 import type { InboxMessage, MilestoneState } from "@tranche/contracts";
 import { schema } from "@tranche/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { needsPullRequest } from "@/lib/criteria";
 import { isUuid } from "@/lib/uuid";
 import { getDb } from "@/server/db";
 import { kickMoneyTick } from "@/server/kick";
@@ -23,6 +25,11 @@ const Body = z.object({
     .transform((v) => v || undefined),
 });
 
+const accepted = (status: "submitted" | "resubmitted" | "already_submitted") => {
+  kickMoneyTick();
+  return Response.json({ status }, { status: 202 });
+};
+
 export async function POST(
   request: Request,
   ctx: RouteContext<"/api/deals/[dealId]/milestones/[milestoneId]/deliveries">,
@@ -39,7 +46,11 @@ export async function POST(
 
   const db = getDb();
   const [milestone] = await db
-    .select({ state: schema.milestone.state, version: schema.milestone.version })
+    .select({
+      state: schema.milestone.state,
+      version: schema.milestone.version,
+      criteria: schema.milestone.criteria,
+    })
     .from(schema.milestone)
     .where(and(eq(schema.milestone.id, milestoneId), eq(schema.milestone.dealId, dealId)));
   if (!milestone) return Response.json({ error: "not_found" }, { status: 404 });
@@ -51,7 +62,11 @@ export async function POST(
       { status: 409 },
     );
   }
+  if (needsPullRequest(milestone.criteria)) {
+    return Response.json({ error: "This milestone needs a merged pull request" }, { status: 409 });
+  }
 
+  const { url, notes } = parsed.data;
   const message: InboxMessage = {
     type: "delivery.detected",
     milestoneId,
@@ -59,11 +74,15 @@ export async function POST(
     repo: null,
     sha: null,
     prNumber: null,
-    urls: [parsed.data.url],
-    notes: parsed.data.notes,
+    urls: [url],
+    ...(notes ? { notes } : {}),
   };
   // Every state change bumps the version, so a double submit collapses into one row while a
   // resubmission after changes_requested gets its own.
+  const key = and(
+    eq(schema.inbox.source, "user"),
+    eq(schema.inbox.sourceEventId, `manual:${milestoneId}:${milestone.version}`),
+  );
   const inserted = await db
     .insert(schema.inbox)
     .values({
@@ -73,9 +92,25 @@ export async function POST(
     })
     .onConflictDoNothing()
     .returning({ id: schema.inbox.id });
-  kickMoneyTick();
+  if (inserted.length > 0) return accepted("submitted");
+
+  // A row that already failed is re-armed with the new submission instead of blocking it.
+  const rearmed = await db
+    .update(schema.inbox)
+    .set({ message, attempts: 0, lastError: null, nextAttemptAt: new Date() })
+    .where(and(key, isNull(schema.inbox.processedAt), gt(schema.inbox.attempts, 0)))
+    .returning({ id: schema.inbox.id });
+  if (rearmed.length > 0) return accepted("resubmitted");
+
+  const [existing] = await db
+    .select({ message: schema.inbox.message })
+    .from(schema.inbox)
+    .where(key);
+  if (existing && isDeepStrictEqual(existing.message, message)) {
+    return accepted("already_submitted");
+  }
   return Response.json(
-    { status: inserted.length > 0 ? "submitted" : "already_submitted" },
-    { status: 202 },
+    { error: "A different delivery is already being verified" },
+    { status: 409 },
   );
 }

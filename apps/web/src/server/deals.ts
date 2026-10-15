@@ -40,7 +40,7 @@ export type DealView = {
     criteria: AcceptanceCriteria;
     hold: { status: HoldStatus; expiresAt: string; pendingReview: boolean } | null;
     fundDueAt?: string | null;
-    deliveryPending?: boolean;
+    deliveryStatus?: "pending" | "failed" | null;
     evidence: Array<{
       id: string;
       kind: EvidenceKind;
@@ -76,6 +76,13 @@ export type DealView = {
     createdAt: string;
   }>;
 };
+
+// A row that has failed once shows as failed, so the agency can resubmit instead of waiting
+// on backoff or a dead letter.
+function deliveryStatusOf(rows: Array<{ attempts: number }>): "pending" | "failed" | null {
+  if (rows.length === 0) return null;
+  return rows.some((r) => r.attempts === 0) ? "pending" : "failed";
+}
 
 export async function getDealView(
   db: Db,
@@ -167,7 +174,10 @@ export async function getDealView(
         : [],
       milestoneIds.length
         ? db
-            .select({ milestoneId: sql<string>`${schema.inbox.message}->>'milestoneId'` })
+            .select({
+              milestoneId: sql<string>`${schema.inbox.message}->>'milestoneId'`,
+              attempts: schema.inbox.attempts,
+            })
             .from(schema.inbox)
             .where(
               and(
@@ -219,7 +229,7 @@ export async function getDealView(
             }
           : null,
         fundDueAt: funding.find((f) => f.milestoneId === m.id)?.dueAt.toISOString() ?? null,
-        deliveryPending: pendingDeliveries.some((d) => d.milestoneId === m.id),
+        deliveryStatus: deliveryStatusOf(pendingDeliveries.filter((d) => d.milestoneId === m.id)),
         evidence: evidence
           .filter((e) => e.milestoneId === m.id)
           .map((e) => ({
