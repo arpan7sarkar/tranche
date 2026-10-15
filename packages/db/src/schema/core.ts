@@ -306,7 +306,7 @@ export const outbox = pgTable(
     request: jsonb().$type<Record<string, unknown>>().notNull(),
     requestId: text().notNull().unique(),
     status: text()
-      .$type<"pending" | "sent" | "succeeded" | "failed">()
+      .$type<"pending" | "sent" | "called" | "succeeded" | "failed">()
       .notNull()
       .default("pending"),
     attempts: integer().notNull().default(0),

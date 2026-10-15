@@ -16,8 +16,11 @@ export type OutboxRow = typeof schema.outbox.$inferSelect;
 export type OutboxHandler = {
   call: (deps: Deps, row: OutboxRow) => Promise<Record<string, unknown>>;
   settle: (tx: Tx, deps: Deps, row: OutboxRow, response: Record<string, unknown>) => Promise<void>;
-  // Runs when the row fails for good, in the same transaction that marks it failed.
+  // Runs when PayPal definitely refused, in the same transaction that marks the row failed.
   fail?: (tx: Tx, deps: Deps, row: OutboxRow, err: unknown) => Promise<void>;
+  // PayPal issues meaning the work is already done; `recover` reads the result back instead.
+  alreadyDone?: readonly string[];
+  recover?: (deps: Deps, row: OutboxRow) => Promise<Record<string, unknown> | null>;
 };
 
 export async function enqueueOutbox(

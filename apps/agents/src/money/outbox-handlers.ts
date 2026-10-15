@@ -1,17 +1,13 @@
-import type { Payee } from "@tranche/contracts";
 import { platformFee } from "@tranche/core";
 import { schema } from "@tranche/db";
-import type { PlaceHoldResult } from "@tranche/paypal";
-import { desc, eq, inArray } from "drizzle-orm";
+import { holdFromOrder, type PlaceHoldResult } from "@tranche/paypal";
+import { eq, inArray } from "drizzle-orm";
 import type { Deps } from "./deps";
-import { errorMessage, must } from "./errors";
+import { errorMessage } from "./errors";
 import { activateHold, confirmRelease, getHold, type HoldRow } from "./holds";
 import { advanceMilestone } from "./milestones";
-import type { OutboxHandler, OutboxKind } from "./outbox";
+import { type OutboxHandler, type OutboxKind, requestedMilestoneId } from "./outbox";
 import { timerOutboxHandlers } from "./timer-outbox-handlers";
-
-type Sub = Extract<Payee, { kind: "subcontractor" }>;
-const splitMode = () => process.env.SUBCONTRACTOR_SPLIT ?? "agency_pays";
 
 async function merchantOf(deps: Deps, milestoneId: string): Promise<string | undefined> {
   const [r] = await deps.db
@@ -34,6 +30,11 @@ const placeHold: OutboxHandler = {
       orderId: hold.paypalOrderId,
       mechanism: hold.mechanism,
     });
+  },
+  alreadyDone: ["ORDER_ALREADY_AUTHORIZED", "ORDER_ALREADY_CAPTURED"],
+  async recover(deps, row) {
+    const hold = await getHold(deps.db, String(row.request.holdId));
+    return holdFromOrder(await deps.paypal.getOrder(hold.paypalOrderId), hold.mechanism);
   },
   async settle(tx, deps, row, res) {
     if (res.skipped) return;
@@ -97,6 +98,15 @@ const release: OutboxHandler = {
       payeeMerchantId: await merchantOf(deps, hold.milestoneId),
     });
   },
+  alreadyDone: ["AUTHORIZATION_ALREADY_CAPTURED"],
+  async recover(deps, row) {
+    const hold = await getHold(deps.db, String(row.request.holdId));
+    const order = await deps.paypal.getOrder(hold.paypalOrderId);
+    const capture = order.purchase_units?.[0]?.payments?.captures?.find(
+      (c) => c.status === "COMPLETED" || c.status === "PENDING",
+    );
+    return capture ? { releaseRef: capture.id } : null;
+  },
   async settle(tx, deps, row, res) {
     const hold = await getHold(tx, String(row.request.holdId));
     const captureId =
@@ -137,6 +147,17 @@ const voidHold: OutboxHandler = {
     });
     return { voided: true };
   },
+  alreadyDone: ["AUTHORIZATION_VOIDED", "AUTHORIZATION_ALREADY_VOIDED", "CAPTURE_FULLY_REFUNDED"],
+  async recover(deps, row) {
+    const hold = await getHold(deps.db, String(row.request.holdId));
+    const authorizationId = hold.mechanism === "authorization" ? hold.paypalAuthorizationId : null;
+    const status = authorizationId
+      ? (await deps.paypal.getAuthorization(authorizationId)).status
+      : hold.paypalCaptureId
+        ? (await deps.paypal.getCapture(hold.paypalCaptureId)).status
+        : null;
+    return status === "VOIDED" || status === "REFUNDED" ? { voided: true } : null;
+  },
   async settle(tx, _deps, row, res) {
     if (res.skipped) return;
     await tx
@@ -146,57 +167,18 @@ const voidHold: OutboxHandler = {
   },
 };
 
+// Only agency_pays is supported (see docs/paypal/subcontractor-split.md): the agency receives the
+// whole release and pays its subcontractors itself, so payout only confirms the milestone.
 const payout: OutboxHandler = {
-  async call(deps, row) {
-    const milestoneId = String(row.request.milestoneId);
-    const [r] = await deps.db
-      .select({ m: schema.milestone, currency: schema.deal.currency })
-      .from(schema.milestone)
-      .innerJoin(schema.deal, eq(schema.deal.id, schema.milestone.dealId))
-      .where(eq(schema.milestone.id, milestoneId));
-    const subs = (r?.m.payees ?? []).filter((p): p is Sub => p.kind === "subcontractor");
-    if (!r || subs.length === 0 || splitMode() !== "payouts") return { batchId: null };
-    return deps.paypal.sendPayouts({
-      requestId: row.requestId,
-      items: subs.map((p) => ({
-        email: p.email,
-        amount: {
-          currency: r.currency,
-          minor: Math.floor((r.m.releasedMinor * p.shareBps) / 10000),
-        },
-        note: `Tranche milestone: ${r.m.title}`,
-      })),
-    });
+  async call() {
+    return { confirmed: true };
   },
-  async settle(tx, deps, row, res) {
-    const milestoneId = String(row.request.milestoneId);
-    if (res.batchId === null) {
-      await advanceMilestone(tx, milestoneId, { type: "payout_confirmed" }, { now: deps.now() });
-      return;
-    }
-    const [r] = await tx
-      .select({ m: schema.milestone, currency: schema.deal.currency })
-      .from(schema.milestone)
-      .innerJoin(schema.deal, eq(schema.deal.id, schema.milestone.dealId))
-      .where(eq(schema.milestone.id, milestoneId));
-    const { m, currency } = must(r);
-    const [hold] = await tx
-      .select({ id: schema.hold.id })
-      .from(schema.hold)
-      .where(eq(schema.hold.milestoneId, milestoneId))
-      .orderBy(desc(schema.hold.createdAt))
-      .limit(1);
-    const subs = m.payees.filter((p): p is Sub => p.kind === "subcontractor");
-    await tx.insert(schema.payout).values(
-      subs.map((p) => ({
-        milestoneId,
-        holdId: must(hold).id,
-        payee: p,
-        amountMinor: Math.floor((m.releasedMinor * p.shareBps) / 10000),
-        currency,
-        paypalRef: String(res.batchId),
-        status: "sent" as const,
-      })),
+  async settle(tx, deps, row) {
+    await advanceMilestone(
+      tx,
+      requestedMilestoneId(row),
+      { type: "payout_confirmed" },
+      { now: deps.now() },
     );
   },
 };
