@@ -24,7 +24,7 @@ const TIMEOUT_MS = 20_000;
 const REFRESH_MARGIN_MS = 60_000;
 
 export function authAssertion(clientId: string, merchantId: string): string {
-  const enc = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const enc = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64");
   return `${enc({ alg: "none" })}.${enc({ iss: clientId, payer_id: merchantId })}.`;
 }
 
@@ -119,9 +119,13 @@ export function payPalConfigFromEnv(
   const baseUrl = env.PAYPAL_API_BASE || "https://api-m.sandbox.paypal.com";
   if (LIVE_HOSTS.has(new URL(baseUrl).hostname))
     throw new Error("Tranche runs against the PayPal sandbox only");
+  const clientId = env.PAYPAL_CLIENT_ID;
+  const clientSecret = env.PAYPAL_CLIENT_SECRET;
+  if (!clientId || !clientSecret)
+    throw new Error("PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET must be set");
   return {
-    clientId: env.PAYPAL_CLIENT_ID ?? "",
-    clientSecret: env.PAYPAL_CLIENT_SECRET ?? "",
+    clientId,
+    clientSecret,
     baseUrl,
     partnerAttributionId: env.PAYPAL_PARTNER_ATTRIBUTION_ID || undefined,
     partnerMerchantId: env.PAYPAL_PARTNER_MERCHANT_ID || undefined,

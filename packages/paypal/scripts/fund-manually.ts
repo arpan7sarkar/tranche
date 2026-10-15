@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { HoldMechanism } from "@tranche/contracts";
-import { createPayPalClient, payPalConfigFromEnv, platformFeeFor } from "../src/index";
+import { platformFee } from "@tranche/core";
+import { createPayPalClient, payPalConfigFromEnv } from "../src/index";
 
 const seller = process.env.SANDBOX_SELLER_MERCHANT_ID;
 if (!seller) throw new Error("SANDBOX_SELLER_MERCHANT_ID is not set");
@@ -10,7 +11,7 @@ const amount = { currency: "USD", minor: 100 };
 const base = {
   mechanism,
   amount,
-  platformFee: platformFeeFor(amount),
+  platformFee: platformFee(amount),
   payeeMerchantId: seller,
   returnUrl: "https://example.com/return",
   cancelUrl: "https://example.com/cancel",
