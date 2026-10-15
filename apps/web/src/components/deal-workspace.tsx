@@ -635,17 +635,24 @@ function MilestoneCard({
         <Alert variant="destructive" data-testid={`delivery-failed-${m.key}`}>
           <CircleAlert />
           <AlertTitle>Verification could not start</AlertTitle>
-          <AlertDescription className="flex flex-col items-start gap-2">
-            <span>The last delivery could not be processed. Submit it again to retry.</span>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid={`resubmit-delivery-${m.key}`}
-              onClick={() => onDeliver(m)}
-            >
-              Resubmit delivery
-            </Button>
-          </AlertDescription>
+          {needsPullRequest(m.criteria) ? (
+            <AlertDescription data-testid={`delivery-failed-hint-${m.key}`}>
+              The last delivery could not be processed. A new push or merged pull request triggers
+              verification again.
+            </AlertDescription>
+          ) : (
+            <AlertDescription className="flex flex-col items-start gap-2">
+              <span>The last delivery could not be processed. Submit it again to retry.</span>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid={`resubmit-delivery-${m.key}`}
+                onClick={() => onDeliver(m)}
+              >
+                Resubmit delivery
+              </Button>
+            </AlertDescription>
+          )}
         </Alert>
       ) : needsPullRequest(m.criteria) ? (
         <p data-testid={`delivery-via-pr-${m.key}`} className="text-sm text-muted-foreground">

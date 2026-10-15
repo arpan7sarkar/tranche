@@ -121,6 +121,7 @@ H5 implements the `data-testid` and `data-state` attributes listed in E5 Task 8 
 - `mark-delivered-<key>`, `delivery-url-input` and `submit-delivery` are unchanged; the dialog adds `delivery-notes-input`.
 - `delivery-pending-<key>` replaces the button while the delivery row is unprocessed and has not failed yet.
 - `delivery-failed-<key>` with a `resubmit-delivery-<key>` button shows once the row has failed at least once, including a dead letter.
+  For a milestone that needs a merged pull request there is no resubmit button; `delivery-failed-hint-<key>` says a new push or merged pull request triggers verification again.
 - `delivery-via-pr-<key>` replaces the button for milestones whose criteria need a merged pull request.
 
 ### Slip and replan journey (E5 Task 8 Step 7)
