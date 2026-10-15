@@ -1,5 +1,5 @@
 import "server-only";
-import { decideApproval as decideUnscoped } from "@tranche/agents-service/money";
+import { decideApproval as recordDecision } from "@tranche/agents-service/money";
 import { type Db, schema } from "@tranche/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
@@ -13,21 +13,19 @@ export type PendingApproval = DealView["approvals"][number] & {
   milestoneTitle: string | null;
 };
 
+export type Decider = Parameters<typeof recordDecision>[1]["decider"];
+
 export async function decideApproval(
   db: Db,
-  input: {
-    approvalId: string;
-    side: "agency" | "client";
-    scope: { workspaceId: string } | { dealId: string };
-    decidedBy: string;
-    decision: "approved" | "rejected";
-  },
+  input: { approvalId: string; decision: "approved" | "rejected"; decider: Decider },
 ): Promise<DecideResult> {
+  const { decider } = input;
   if (!isUuid(input.approvalId)) return "not_found";
+  // H3 enforces the same side and scope; checking first lets us answer 404 and 409 precisely.
   const inScope =
-    "workspaceId" in input.scope
-      ? eq(schema.deal.workspaceId, input.scope.workspaceId)
-      : eq(schema.deal.id, input.scope.dealId);
+    decider.side === "agency"
+      ? eq(schema.deal.workspaceId, decider.workspaceId)
+      : eq(schema.deal.id, decider.dealId);
   const [row] = await db
     .select({ decision: schema.approval.decision })
     .from(schema.approval)
@@ -37,24 +35,22 @@ export async function decideApproval(
     )
     .innerJoin(schema.deal, eq(schema.deal.id, schema.proposedAction.dealId))
     .where(
-      and(eq(schema.approval.id, input.approvalId), eq(schema.approval.side, input.side), inScope),
+      and(
+        eq(schema.approval.id, input.approvalId),
+        eq(schema.approval.side, decider.side),
+        inScope,
+      ),
     );
   if (!row) return "not_found";
   if (row.decision) return "already_decided";
 
-  await decideUnscoped(db, {
-    approvalId: input.approvalId,
-    decision: input.decision,
-    decidedBy: input.decidedBy,
-  });
-  // A concurrent decision can win between the check above and the locked write in H3.
+  await recordDecision(db, input);
+  // A concurrent decision can win between the check above and H3's locked write.
   const [after] = await db
-    .select({ decision: schema.approval.decision, decidedBy: schema.approval.decidedBy })
+    .select({ decision: schema.approval.decision })
     .from(schema.approval)
     .where(eq(schema.approval.id, input.approvalId));
-  return after?.decision === input.decision && after.decidedBy === input.decidedBy
-    ? "decided"
-    : "already_decided";
+  return after?.decision === input.decision ? "decided" : "already_decided";
 }
 
 export async function listPendingApprovals(

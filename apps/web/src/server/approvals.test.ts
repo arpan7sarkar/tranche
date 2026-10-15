@@ -1,7 +1,7 @@
 import { createDb, type Db, migrateDb, schema } from "@tranche/db";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { decideApproval } from "./approvals";
+import { type Decider, decideApproval } from "./approvals";
 import { addApproval, createDeal } from "./test-fixtures";
 
 const url = process.env.DATABASE_URL;
@@ -20,18 +20,19 @@ describe.runIf(Boolean(url))("decideApproval", { timeout: 20_000 }, () => {
   it("lets the first decision win and writes one event", async () => {
     const { workspaceId, deal } = await createDeal(db);
     const approval = await addApproval(db, deal.id, { decision: null });
-    const input = {
-      approvalId: approval.id,
-      side: "agency" as const,
-      scope: { workspaceId },
-      decidedBy: "user-1",
-    };
+    const agency = (userId: string) => ({ side: "agency" as const, workspaceId, userId });
     const results = await Promise.all([
-      decideApproval(db, { ...input, decision: "approved" }),
-      decideApproval(db, { ...input, decidedBy: "user-2", decision: "rejected" }),
+      decideApproval(db, { approvalId: approval.id, decision: "approved", decider: agency("u1") }),
+      decideApproval(db, { approvalId: approval.id, decision: "rejected", decider: agency("u2") }),
     ]);
     expect(results.sort()).toEqual(["already_decided", "decided"]);
-    expect(await decideApproval(db, { ...input, decision: "approved" })).toBe("already_decided");
+    expect(
+      await decideApproval(db, {
+        approvalId: approval.id,
+        decision: "approved",
+        decider: agency("u1"),
+      }),
+    ).toBe("already_decided");
     const events = await db
       .select()
       .from(schema.event)
@@ -40,38 +41,24 @@ describe.runIf(Boolean(url))("decideApproval", { timeout: 20_000 }, () => {
   });
 
   it("refuses the wrong side, workspace or deal", async () => {
-    const { workspaceId, deal } = await createDeal(db);
+    const { workspaceId, clientId, deal } = await createDeal(db);
     const other = await createDeal(db);
     const approval = await addApproval(db, deal.id, { decision: null, side: "client" });
-    const base = { approvalId: approval.id, decidedBy: "x", decision: "approved" as const };
-    expect(await decideApproval(db, { ...base, side: "agency", scope: { workspaceId } })).toBe(
+    const decide = (decider: Decider, approvalId = approval.id) =>
+      decideApproval(db, { approvalId, decision: "approved", decider });
+
+    expect(await decide({ side: "agency", workspaceId, userId: "u" })).toBe("not_found");
+    expect(await decide({ side: "client", dealId: other.deal.id, clientId: other.clientId })).toBe(
       "not_found",
     );
-    expect(
-      await decideApproval(db, { ...base, side: "client", scope: { dealId: other.deal.id } }),
-    ).toBe("not_found");
-    expect(
-      await decideApproval(db, {
-        ...base,
-        side: "client",
-        scope: { workspaceId: other.workspaceId },
-      }),
-    ).toBe("not_found");
-    expect(
-      await decideApproval(db, {
-        ...base,
-        approvalId: "not-a-uuid",
-        side: "client",
-        scope: { dealId: deal.id },
-      }),
-    ).toBe("not_found");
+    expect(await decide({ side: "client", dealId: deal.id, clientId }, "not-a-uuid")).toBe(
+      "not_found",
+    );
     const [untouched] = await db
       .select()
       .from(schema.approval)
       .where(eq(schema.approval.id, approval.id));
     expect(untouched?.decision).toBeNull();
-    expect(await decideApproval(db, { ...base, side: "client", scope: { dealId: deal.id } })).toBe(
-      "decided",
-    );
+    expect(await decide({ side: "client", dealId: deal.id, clientId })).toBe("decided");
   });
 });

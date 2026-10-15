@@ -16,10 +16,8 @@ export async function POST(
   if (!parsed.success) return Response.json({ error: "invalid_body" }, { status: 400 });
   const result = await decideApproval(getDb(), {
     approvalId: id,
-    side: "client",
-    scope: { dealId: link.dealId },
-    decidedBy: `client:${link.clientId}`,
     decision: parsed.data.decision,
+    decider: { side: "client", dealId: link.dealId, clientId: link.clientId },
   });
   const status = result === "decided" ? 200 : result === "already_decided" ? 409 : 404;
   return Response.json({ result }, { status });

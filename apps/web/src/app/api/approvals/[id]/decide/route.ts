@@ -13,10 +13,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/approvals/[
   const { id } = await ctx.params;
   const result = await decideApproval(getDb(), {
     approvalId: id,
-    side: "agency",
-    scope: { workspaceId: member.workspaceId },
-    decidedBy: member.userId,
     decision: parsed.data.decision,
+    decider: { side: "agency", workspaceId: member.workspaceId, userId: member.userId },
   });
   const status = result === "decided" ? 200 : result === "already_decided" ? 409 : 404;
   return Response.json({ result }, { status });
