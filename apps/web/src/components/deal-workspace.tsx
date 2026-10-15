@@ -1,7 +1,15 @@
 "use client";
 
 import type { MilestoneState } from "@tranche/contracts";
-import { CircleAlert, CircleCheck, CircleDashed, CircleX, Pencil, X } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Pencil,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ActivityPanel } from "@/components/activity-panel";
@@ -63,7 +71,11 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
   const [editing, setEditing] = useState<Task | null>(null);
   const [delivering, setDelivering] = useState<Milestone | null>(null);
   const [pending, setPending] = useState(false);
-  const [ganttError, setGanttError] = useState<{ title: string; reason: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    kind: "error" | "warning";
+    title: string;
+    message: string;
+  } | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [since] = useState(initialView.activity[0]?.id);
   const dealId = view.deal.id;
@@ -114,14 +126,26 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
       return { ok: false };
     }
     refresh();
-    toast.success("Schedule updated.");
+    const { warning } = (await res.json().catch(() => ({}))) as { warning?: unknown };
+    if (typeof warning === "string" && warning) {
+      setNotice({
+        kind: "warning",
+        title: "Schedule updated past a hold deadline",
+        message: explainReschedule(warning, view.tasks),
+      });
+    } else {
+      setNotice(null);
+      toast.success("Schedule updated.");
+    }
     return { ok: true };
   }
 
   async function moveFromGantt(taskId: string, start: string): Promise<boolean> {
     const result = await move(taskId, start);
     const title = view.tasks.find((t) => t.id === taskId)?.title ?? "this task";
-    setGanttError(result.reason ? { title, reason: result.reason } : null);
+    if (result.reason) {
+      setNotice({ kind: "error", title: `Could not move ${title}`, message: result.reason });
+    }
     return result.ok;
   }
 
@@ -226,25 +250,33 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
         ) : null}
       </header>
 
+      {notice ? (
+        <Alert
+          variant={notice.kind === "error" ? "destructive" : "default"}
+          data-testid={notice.kind === "error" ? "reschedule-error" : "reschedule-warning"}
+        >
+          {notice.kind === "error" ? (
+            <CircleAlert />
+          ) : (
+            <TriangleAlert className="text-tone-attention" />
+          )}
+          <AlertTitle>{notice.title}</AlertTitle>
+          <AlertDescription>{notice.message}</AlertDescription>
+          <AlertAction>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Dismiss"
+              onClick={() => setNotice(null)}
+            >
+              <X />
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : null}
+
       {view.tasks.length > 0 ? (
-        <section aria-label="Schedule" className="hidden flex-col gap-3 md:flex">
-          {ganttError ? (
-            <Alert variant="destructive" data-testid="reschedule-error">
-              <CircleAlert />
-              <AlertTitle>Could not move {ganttError.title}</AlertTitle>
-              <AlertDescription>{ganttError.reason}</AlertDescription>
-              <AlertAction>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Dismiss"
-                  onClick={() => setGanttError(null)}
-                >
-                  <X />
-                </Button>
-              </AlertAction>
-            </Alert>
-          ) : null}
+        <section aria-label="Schedule" className="hidden md:block">
           <GanttLoader view={view} onMove={moveFromGantt} />
         </section>
       ) : null}
