@@ -5,6 +5,7 @@ import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { advanceMilestone } from "./milestones";
 import { enqueueOutbox } from "./outbox";
+import { completeReplacement } from "./replacement";
 import { planRenewal } from "./timers";
 
 export type HoldRow = typeof schema.hold.$inferSelect;
@@ -62,6 +63,11 @@ export async function activateHold(
       expiresAt: facts.expiresAt,
     })
     .where(eq(schema.hold.id, hold.id));
+  if (hold.replacesHoldId) {
+    const [fresh] = await tx.select().from(schema.hold).where(eq(schema.hold.id, hold.id));
+    if (fresh) await completeReplacement(tx, fresh, now);
+    return;
+  }
   const r = await advanceMilestone(
     tx,
     hold.milestoneId,

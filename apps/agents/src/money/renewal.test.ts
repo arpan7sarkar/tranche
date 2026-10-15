@@ -1,7 +1,7 @@
 import { type Db, schema } from "@tranche/db";
 import { createTestDb, truncateAll } from "@tranche/db/testing";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PermanentError } from "./errors";
 import { activateHold } from "./holds";
 import { renewHandler } from "./holds-renew";
@@ -280,5 +280,68 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("hold renewal", () => {
       expect(await pendingRenewals(milestoneId)).toHaveLength(0);
       expect((await voidRows()).map((r) => r.requestId)).toContain(`void:${orphan.id}`);
     });
+  });
+
+  it("records a pending replacement authorization and activates it on the webhook", async () => {
+    const { milestoneId } = await makeMilestone(db, { state: "in_progress", heldMinor: 100000 });
+    const old = await makeHold(db, milestoneId, {
+      status: "active",
+      authorizationId: "AUTH-1",
+      anchorAt: NOW,
+    });
+    const paypal = fakePayPal({
+      placeHold: vi.fn(async () => ({
+        status: "pending",
+        captureId: null,
+        authorizationId: "AUTH-2",
+        vaultId: "VAULT-1",
+      })),
+    });
+    await renew(paypal, milestoneId, 27);
+    const [fresh] = (await db.select().from(schema.hold)).filter((h) => h.id !== old.id);
+    expect(fresh).toMatchObject({
+      status: "pending",
+      replacesHoldId: old.id,
+      paypalAuthorizationId: "AUTH-2",
+      originalAuthorizedAt: null,
+    });
+    expect(
+      await db.select().from(schema.outbox).where(eq(schema.outbox.kind, "void_hold")),
+    ).toHaveLength(0);
+    expect(await pendingRenewals(milestoneId)).toHaveLength(0);
+
+    const at = daysAfter(27)();
+    await db.transaction((tx) =>
+      handlePayPalEvent(
+        tx,
+        testDeps(db, fakePayPal(), daysAfter(27)),
+        "PAYMENT.AUTHORIZATION.CREATED",
+        {
+          id: "AUTH-2",
+          amount: { currency_code: "USD", value: "1000.00" },
+          create_time: at.toISOString(),
+          expiration_time: new Date(at.getTime() + 29 * DAY).toISOString(),
+          supplementary_data: { related_ids: { order_id: "ORDER-2" } },
+        },
+      ),
+    );
+    const [activated] = await db
+      .select()
+      .from(schema.hold)
+      .where(eq(schema.hold.id, fresh?.id ?? ""));
+    expect(activated).toMatchObject({ status: "active" });
+    expect(activated?.originalAuthorizedAt?.toISOString()).toBe(at.toISOString());
+    const [voidRow] = await db
+      .select()
+      .from(schema.outbox)
+      .where(eq(schema.outbox.kind, "void_hold"));
+    expect(voidRow?.requestId).toBe(`void:${old.id}`);
+    const [t] = await pendingRenewals(milestoneId);
+    expect(t?.dueAt.toISOString()).toBe(new Date(at.getTime() + 27 * DAY).toISOString());
+    const [m] = await db.select().from(schema.milestone);
+    expect(m?.state).toBe("in_progress");
+    expect(
+      await db.select().from(schema.event).where(eq(schema.event.type, "alert.raised")),
+    ).toHaveLength(0);
   });
 });
