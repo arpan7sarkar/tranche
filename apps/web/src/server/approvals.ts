@@ -76,7 +76,10 @@ export async function listPendingApprovals(
     .innerJoin(schema.deal, eq(schema.deal.id, schema.proposedAction.dealId))
     .leftJoin(
       schema.milestone,
-      sql`${schema.milestone.id}::text = ${schema.proposedAction.payload}->>'milestoneId'`,
+      and(
+        eq(schema.milestone.dealId, schema.deal.id),
+        sql`${schema.milestone.id}::text = ${schema.proposedAction.payload}->>'milestoneId'`,
+      ),
     )
     .where(
       and(
