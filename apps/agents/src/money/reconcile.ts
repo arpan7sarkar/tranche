@@ -1,11 +1,13 @@
-import type { HoldMechanism, HoldStatus } from "@tranche/contracts";
+import { type HoldMechanism, type HoldStatus, toPayPalValue } from "@tranche/contracts";
 import { schema } from "@tranche/db";
-import { PayPalError } from "@tranche/paypal";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { holdFromOrder, type OrderRes, PayPalError, type PlaceHoldResult } from "@tranche/paypal";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import type { Tx } from "./db";
 import type { Deps, PayPal } from "./deps";
 import { errorMessage } from "./errors";
 import { appendEvent } from "./events";
-import type { HoldRow } from "./holds";
+import { failPendingHold, type HoldRow } from "./holds";
+import { handlePayPalEvent } from "./paypal-events";
 
 const EXPECTED: Record<HoldMechanism, Partial<Record<HoldStatus, string[]>>> = {
   authorization: { active: ["CREATED", "PENDING"], released: ["COMPLETED", "PENDING"] },
@@ -14,6 +16,8 @@ const EXPECTED: Record<HoldMechanism, Partial<Record<HoldStatus, string[]>>> = {
 const REFUNDED = ["REFUNDED", "PARTIALLY_REFUNDED"];
 // PayPal's buyer-protection window; after it a released capture no longer changes.
 const SETTLED_AFTER_MS = 180 * 86_400_000;
+// A pending hold this old has most likely lost its webhook, or PayPal sent it before we listened.
+const PENDING_GRACE_MS = 15 * 60_000;
 
 async function remoteStatus(paypal: PayPal, h: HoldRow): Promise<string | null> {
   if (h.mechanism === "authorization" && h.status === "active") {
@@ -28,7 +32,9 @@ async function remoteStatus(paypal: PayPal, h: HoldRow): Promise<string | null> 
 const unreachable = (err: unknown) =>
   !(err instanceof PayPalError) || err.retryable || err.status === 401;
 
-export async function reconcile(deps: Deps): Promise<{ checked: number; mismatches: number }> {
+export async function reconcile(
+  deps: Deps,
+): Promise<{ checked: number; mismatches: number; recovered: number }> {
   const now = deps.now();
   const rows = await deps.db
     .select({
@@ -81,6 +87,43 @@ export async function reconcile(deps: Deps): Promise<{ checked: number; mismatch
       }),
     );
   }
+  const pending = await deps.db
+    .select()
+    .from(schema.hold)
+    .where(
+      and(
+        eq(schema.hold.status, "pending"),
+        lt(schema.hold.createdAt, new Date(now.getTime() - PENDING_GRACE_MS)),
+      ),
+    );
+  let recovered = 0;
+  for (const hold of pending) {
+    if (busy.has(hold.id) || busy.has(hold.milestoneId)) continue;
+    checked++;
+    let order: OrderRes;
+    try {
+      order = await deps.paypal.getOrder(hold.paypalOrderId);
+    } catch (err) {
+      if (unreachable(err)) {
+        unreachableHolds.push(hold.id);
+        lastError = errorMessage(err);
+        continue;
+      }
+      const theirs = `ERROR: ${errorMessage(err)}`;
+      mismatches++;
+      if (await alreadyAlerted(deps, hold.id, theirs)) continue;
+      await deps.db.transaction((tx) =>
+        appendEvent(tx, {
+          type: "alert.raised",
+          dealId: null,
+          milestoneId: hold.milestoneId,
+          payload: { kind: "reconciliation", holdId: hold.id, ours: hold.status, theirs },
+        }),
+      );
+      continue;
+    }
+    if (await deps.db.transaction((tx) => replayPending(tx, deps, hold, order))) recovered++;
+  }
   if (unreachableHolds.length > 0) {
     await deps.db.transaction((tx) =>
       appendEvent(tx, {
@@ -95,7 +138,51 @@ export async function reconcile(deps: Deps): Promise<{ checked: number; mismatch
       }),
     );
   }
-  return { checked, mismatches };
+  return { checked, mismatches, recovered };
+}
+
+// Replays what PayPal reports for a pending hold through the webhook path, so a lost
+// authorization or capture event, a renewal replacement included, still activates or fails it.
+async function replayPending(tx: Tx, deps: Deps, hold: HoldRow, order: OrderRes): Promise<boolean> {
+  let placed: PlaceHoldResult | null;
+  try {
+    placed = holdFromOrder(order, hold.mechanism);
+  } catch (err) {
+    await failPendingHold(tx, hold, errorMessage(err), deps.now());
+    return true;
+  }
+  if (!placed) {
+    if (order.status !== "APPROVED") return false;
+    await handlePayPalEvent(tx, deps, "CHECKOUT.ORDER.APPROVED", { id: order.id });
+    return true;
+  }
+  if (placed.status === "pending") {
+    await tx
+      .update(schema.hold)
+      .set({
+        paypalCaptureId: placed.captureId ?? hold.paypalCaptureId,
+        paypalAuthorizationId: placed.authorizationId ?? hold.paypalAuthorizationId,
+      })
+      .where(eq(schema.hold.id, hold.id));
+    return false;
+  }
+  const payments = order.purchase_units?.[0]?.payments;
+  const payment =
+    hold.mechanism === "authorization" ? payments?.authorizations?.[0] : payments?.captures?.[0];
+  if (!payment) return false;
+  const amount = payment.amount ?? {
+    currency_code: hold.currency,
+    value: toPayPalValue({ currency: hold.currency, minor: hold.amountMinor }),
+  };
+  await handlePayPalEvent(
+    tx,
+    deps,
+    hold.mechanism === "authorization"
+      ? "PAYMENT.AUTHORIZATION.CREATED"
+      : "PAYMENT.CAPTURE.COMPLETED",
+    { ...payment, amount, supplementary_data: { related_ids: { order_id: order.id } } },
+  );
+  return true;
 }
 
 // One alert per hold and PayPal status; a refund the webhook already reported counts too.

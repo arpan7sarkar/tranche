@@ -51,7 +51,7 @@ export async function gate(
     .where(
       and(
         inArray(schema.outbox.kind, ["release", "void_hold"]),
-        inArray(schema.outbox.status, ["pending", "sent"]),
+        inArray(schema.outbox.status, ["pending", "sent", "called"]),
         sql`${schema.outbox.request}->>'holdId' = ${holdId}`,
       ),
     )
