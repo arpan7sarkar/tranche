@@ -2,8 +2,10 @@ import { DomainEventType, MilestoneState } from "@tranche/contracts";
 import { describe, expect, it } from "vitest";
 import { describeEvent } from "./activity";
 import { describeCheck } from "./criteria";
+import { trustedImageUrl } from "./evidence-image";
 import { milestoneTone } from "./milestone-tone";
 import { formatMoney, totalOf } from "./money";
+import { explainReschedule } from "./reschedule";
 
 const TONES = ["neutral", "progress", "held", "verifying", "attention", "released", "danger"];
 
@@ -78,5 +80,29 @@ describe("describeEvent", () => {
 
   it("covers alert.raised", () => {
     expect(describeEvent("alert.raised", { kind: "paypal_down" }).trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe("explainReschedule", () => {
+  it("names the blocking task by title with a readable date", () => {
+    const tasks = [
+      { key: "visual", title: "Visual design" },
+      { key: "wire", title: "Wireframes" },
+    ];
+    expect(
+      explainReschedule('task "visual" cannot start before "wire" ends on 2026-10-17', tasks),
+    ).toBe('"Visual design" cannot start before "Wireframes" ends on Oct 17.');
+  });
+});
+
+describe("trustedImageUrl", () => {
+  const origin = "https://evidence.tranche.app";
+  it("accepts https images from the evidence origin only", () => {
+    expect(trustedImageUrl(`${origin}/s/1.png`, origin)).toBe(`${origin}/s/1.png`);
+    expect(trustedImageUrl("http://evidence.tranche.app/s/1.png", origin)).toBeNull();
+    expect(trustedImageUrl("https://evil.example/s/1.png", origin)).toBeNull();
+    expect(trustedImageUrl("https://evidence.tranche.app.evil.example/1.png", origin)).toBeNull();
+    expect(trustedImageUrl(`${origin}/s/1.png`, undefined)).toBeNull();
+    expect(trustedImageUrl(42, origin)).toBeNull();
   });
 });

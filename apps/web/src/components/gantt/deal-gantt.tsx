@@ -8,7 +8,7 @@ import type { DealView } from "@/server/deals";
 import { addDays, type GanttTask, toGanttData, toIsoDate } from "./gantt-data";
 import "./gantt.css";
 
-type Props = { view: DealView; onMove: (taskId: string, start: string) => void };
+type Props = { view: DealView; onMove: (taskId: string, start: string) => Promise<boolean> };
 
 const BRYNTUM_URL = "/bryntum/gantt.module.js";
 
@@ -39,7 +39,10 @@ export default function DealGantt({ view, onMove }: Props) {
   const tones = useMemo(
     () =>
       new Map<string, Tone>(
-        view.milestones.map((m) => [`pay:${m.id}`, milestoneTone(m.state).tone]),
+        view.milestones.map((m) => [
+          `pay:${m.id}`,
+          milestoneTone(m.state, { pendingReview: m.hold?.pendingReview }).tone,
+        ]),
       ),
     [view.milestones],
   );
@@ -98,7 +101,12 @@ export default function DealGantt({ view, onMove }: Props) {
             taskDrop: ({ taskRecords }) => {
               for (const record of taskRecords) {
                 if (record.getData("kind") === "task" && record.startDate instanceof Date) {
-                  latest.current.onMove(String(record.id), toIsoDate(record.startDate));
+                  void latest.current
+                    .onMove(String(record.id), toIsoDate(record.startDate))
+                    .then((ok) => {
+                      // A refused move puts the bar back where the server still has it.
+                      if (!ok && gantt.current) void load(gantt.current, latest.current.data);
+                    });
                 }
               }
             },

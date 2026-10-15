@@ -23,6 +23,7 @@ export type DealView = {
     title: string;
     status: DealStatus;
     currency: string;
+    agencyName: string;
     clientName: string;
     clientEmail: string;
     clientPolicy: Policy | null;
@@ -37,7 +38,7 @@ export type DealView = {
     startDate: string | null;
     endDate: string | null;
     criteria: AcceptanceCriteria;
-    hold: { status: HoldStatus; expiresAt: string } | null;
+    hold: { status: HoldStatus; expiresAt: string; pendingReview: boolean } | null;
     fundDueAt?: string | null;
     evidence: Array<{
       id: string;
@@ -87,9 +88,15 @@ export async function getDealView(
       ? eq(schema.deal.workspaceId, scope.workspaceId)
       : eq(schema.deal.clientId, scope.clientId);
   const [row] = await db
-    .select({ deal: schema.deal, clientName: schema.client.name, clientEmail: schema.client.email })
+    .select({
+      deal: schema.deal,
+      agencyName: schema.workspace.name,
+      clientName: schema.client.name,
+      clientEmail: schema.client.email,
+    })
     .from(schema.deal)
     .innerJoin(schema.client, eq(schema.client.id, schema.deal.clientId))
+    .innerJoin(schema.workspace, eq(schema.workspace.id, schema.deal.workspaceId))
     .where(and(eq(schema.deal.id, dealId), scopeFilter));
   if (!row) return null;
 
@@ -171,6 +178,7 @@ export async function getDealView(
       title: row.deal.title,
       status: row.deal.status,
       currency: row.deal.currency,
+      agencyName: row.agencyName,
       clientName: row.clientName,
       clientEmail: row.clientEmail,
       clientPolicy: row.deal.clientPolicy,
@@ -187,7 +195,15 @@ export async function getDealView(
         startDate: m.startDate,
         endDate: m.endDate,
         criteria: m.criteria,
-        hold: hold ? { status: hold.status, expiresAt: hold.expiresAt.toISOString() } : null,
+        hold: hold
+          ? {
+              status: hold.status,
+              expiresAt: hold.expiresAt.toISOString(),
+              pendingReview:
+                hold.status === "pending" &&
+                Boolean(hold.paypalCaptureId ?? hold.paypalAuthorizationId),
+            }
+          : null,
         fundDueAt: funding.find((f) => f.milestoneId === m.id)?.dueAt.toISOString() ?? null,
         evidence: evidence
           .filter((e) => e.milestoneId === m.id)

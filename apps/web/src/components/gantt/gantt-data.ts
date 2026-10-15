@@ -53,7 +53,7 @@ export function toGanttData(view: DealView): {
 
   const tasks = view.milestones.map((m): GanttTask => {
     const locked = LOCKED_STATES.has(m.state);
-    const { label } = milestoneTone(m.state);
+    const { label } = milestoneTone(m.state, { pendingReview: m.hold?.pendingReview });
     const children: GanttTask[] = view.tasks
       .filter((t) => t.milestoneId === m.id)
       .map((t) => ({

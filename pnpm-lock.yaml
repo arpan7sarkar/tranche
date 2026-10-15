@@ -227,6 +227,9 @@ importers:
       '@bryntum/gantt':
         specifier: npm:@bryntum/gantt-trial@7.3.7
         version: '@bryntum/gantt-trial@7.3.7'
+      '@paypal/paypal-js':
+        specifier: 11.2.1
+        version: 11.2.1
       '@renderinc/sdk':
         specifier: 1.2.0
         version: 1.2.0(@opentelemetry/api@1.9.0)
@@ -1710,6 +1713,9 @@ packages:
 
   '@paypal/agent-toolkit@1.11.0':
     resolution: {integrity: sha512-wfjOaF67uuBRtyc3wapD+0xbfMbo0Zje/HzmYsqOkonULh1aXs4b8N1UD+6Iy2AIQ/yPs7DtKU1Upc9F87KmOg==}
+
+  '@paypal/paypal-js@11.2.1':
+    resolution: {integrity: sha512-Oi9JAxXOZrTpPWvJtlf98r76AvjIsn5kud7ZgqaqCL0JUOS3rqNzCbPmmWt9eg9Gw0qMf3KpVX+sEusQGe09pw==}
 
   '@paypal/paypal-server-sdk@1.1.0':
     resolution: {integrity: sha512-MaJQmSVpQb5nEeZWZDTtGRxeaHj6O51G9Olmm3zQ5E4XNgR4emAI08CKC2ZPhBldVoxAoBVjLyvKjGV5lC1n2Q==}
@@ -3852,6 +3858,9 @@ packages:
     resolution: {integrity: sha512-HzMy3Geq23nVALD/M2LliU+F+M+gVNsvkQWWqeBZ8HDiCgzo6YPJ/Omrmtq24EFrIsk0a3EkQGEd7bDOo+IhGA==}
     engines: {node: '>=18'}
 
+  promise-polyfill@8.3.0:
+    resolution: {integrity: sha512-H5oELycFml5yto/atYqmjyigJoAo3+OXwolYiH7OfQuYlAqhxNvTfiNMbV9hsC6Yp83yE5r2KTVmtrG6R9i6Pg==}
+
   prompts@2.4.2:
     resolution: {integrity: sha512-NxNv/kLguCA7p3jE8oL2aEBsrJWgAakBpgmgK6lpPWV+WuOmY6r2/zbAVnP+T8bQlA0nzHXSJSJW0Hq7ylaD2Q==}
     engines: {node: '>= 6'}
@@ -5665,6 +5674,10 @@ snapshots:
       - supports-color
       - ws
 
+  '@paypal/paypal-js@11.2.1':
+    dependencies:
+      promise-polyfill: 8.3.0
+
   '@paypal/paypal-server-sdk@1.1.0(debug@4.4.3)':
     dependencies:
       '@apimatic/authentication-adapters': 0.5.14
@@ -7372,6 +7385,8 @@ snapshots:
   pretty-ms@9.3.1:
     dependencies:
       parse-ms: 4.0.0
+
+  promise-polyfill@8.3.0: {}
 
   prompts@2.4.2:
     dependencies:

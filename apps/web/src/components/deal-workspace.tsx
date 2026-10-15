@@ -1,14 +1,24 @@
 "use client";
 
 import type { MilestoneState } from "@tranche/contracts";
-import { CircleCheck, CircleDashed, CircleX, Pencil } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Pencil,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ActivityPanel } from "@/components/activity-panel";
+import { ApprovalCard, proposalTitle } from "@/components/approval-card";
 import { DealStatusBadge } from "@/components/deal-status-badge";
 import { addDays, LOCKED_STATES } from "@/components/gantt/gantt-data";
 import { GanttLoader } from "@/components/gantt/gantt-loader";
 import { MilestoneBadge } from "@/components/milestone-badge";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,7 +32,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDealStream } from "@/hooks/use-deal-stream";
 import { describeCheck } from "@/lib/criteria";
+import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
+import { explainReschedule } from "@/lib/reschedule";
 import type { DealView } from "@/server/deals";
 
 type Milestone = DealView["milestones"][number];
@@ -33,12 +45,6 @@ const DELIVERABLE: ReadonlySet<MilestoneState> = new Set([
   "in_progress",
   "changes_requested",
 ]);
-
-const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-
-function formatDay(iso: string): string {
-  return DAY.format(new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso));
-}
 
 async function errorOf(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => ({}))) as { error?: unknown };
@@ -65,6 +71,12 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
   const [editing, setEditing] = useState<Task | null>(null);
   const [delivering, setDelivering] = useState<Milestone | null>(null);
   const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<{
+    kind: "error" | "warning";
+    title: string;
+    message: string;
+  } | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [since] = useState(initialView.activity[0]?.id);
   const dealId = view.deal.id;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,20 +114,44 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     }
   }
 
-  async function move(taskId: string, start: string): Promise<boolean> {
+  async function move(taskId: string, start: string): Promise<{ ok: boolean; reason?: string }> {
     const res = await post("/tasks/reschedule", { taskId, start });
-    refresh();
-    if (!res) return false;
-    if (res.status === 404) {
-      toast.error("Rescheduling is not available yet.");
-      return false;
+    if (!res) return { ok: false };
+    if (res.status === 422) {
+      const reason = await errorOf(res, "That move is not allowed.");
+      return { ok: false, reason: explainReschedule(reason, view.tasks) };
     }
     if (!res.ok) {
-      toast.error(await errorOf(res, "That move is not allowed."));
-      return false;
+      toast.error("Could not update the schedule. Try again.");
+      return { ok: false };
     }
-    toast.success("Schedule updated.");
-    return true;
+    refresh();
+    const { warning } = (await res.json().catch(() => ({}))) as { warning?: unknown };
+    if (typeof warning === "string" && warning) {
+      setNotice({
+        kind: "warning",
+        title: "Schedule updated past a hold deadline",
+        message: explainReschedule(warning, view.tasks),
+      });
+    } else {
+      setNotice(null);
+      toast.success("Schedule updated.");
+    }
+    return { ok: true };
+  }
+
+  async function moveFromGantt(taskId: string, start: string): Promise<boolean> {
+    const result = await move(taskId, start);
+    const title = view.tasks.find((t) => t.id === taskId)?.title ?? "this task";
+    if (result.reason) {
+      setNotice({ kind: "error", title: `Could not move ${title}`, message: result.reason });
+    }
+    return result.ok;
+  }
+
+  function editTask(task: Task | null) {
+    setEditError(null);
+    setEditing(task);
   }
 
   async function send() {
@@ -158,8 +194,10 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     e.preventDefault();
     if (!editing) return;
     const start = String(new FormData(e.currentTarget).get("start") ?? "");
-    if (start === editing.startDate) return setEditing(null);
-    if (await move(editing.id, start)) setEditing(null);
+    if (start === editing.startDate) return editTask(null);
+    const result = await move(editing.id, start);
+    if (result.ok) editTask(null);
+    else setEditError(result.reason ?? null);
   }
 
   async function submitDelivery(e: FormEvent<HTMLFormElement>) {
@@ -173,6 +211,12 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     view.deal.currency,
     view.milestones.map((m) => m.priceMinor),
   );
+  const agencyApprovals = view.approvals.filter((a) => a.side === "agency");
+  const clientApprovals = view.approvals.filter((a) => a.side === "client");
+  const milestoneTitleOf = (a: DealView["approvals"][number]) => {
+    const id = "milestoneId" in a.payload ? a.payload.milestoneId : null;
+    return view.milestones.find((m) => m.id === id)?.title ?? null;
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -206,9 +250,34 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
         ) : null}
       </header>
 
+      {notice ? (
+        <Alert
+          variant={notice.kind === "error" ? "destructive" : "default"}
+          data-testid={notice.kind === "error" ? "reschedule-error" : "reschedule-warning"}
+        >
+          {notice.kind === "error" ? (
+            <CircleAlert />
+          ) : (
+            <TriangleAlert className="text-tone-attention" />
+          )}
+          <AlertTitle>{notice.title}</AlertTitle>
+          <AlertDescription>{notice.message}</AlertDescription>
+          <AlertAction>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Dismiss"
+              onClick={() => setNotice(null)}
+            >
+              <X />
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : null}
+
       {view.tasks.length > 0 ? (
         <section aria-label="Schedule" className="hidden md:block">
-          <GanttLoader view={view} onMove={(id, start) => void move(id, start)} />
+          <GanttLoader view={view} onMove={moveFromGantt} />
         </section>
       ) : null}
 
@@ -230,7 +299,7 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
                     milestone={m}
                     currency={view.deal.currency}
                     tasks={view.tasks.filter((t) => t.milestoneId === m.id)}
-                    onEditTask={setEditing}
+                    onEditTask={editTask}
                     onDeliver={setDelivering}
                   />
                 ))}
@@ -244,25 +313,37 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
             <h2 id="needs-you-heading" className="text-2xl">
               Needs you
             </h2>
-            {view.approvals.length === 0 ? (
+            {agencyApprovals.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nothing waiting on you.</p>
             ) : (
-              <ul className="flex flex-col gap-2">
-                {view.approvals.map((a) => (
-                  <li key={a.id} className="flex flex-col gap-1 rounded-lg border bg-card p-3">
-                    <span className="text-sm font-medium capitalize">
-                      {a.actionType.replaceAll("_", " ")}
-                    </span>
-                    <span className="line-clamp-3 text-sm text-muted-foreground">
-                      {a.reasoning}
-                    </span>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {a.agent} agent, {a.side} approval
-                    </span>
+              <ul className="flex flex-col gap-3">
+                {agencyApprovals.map((a) => (
+                  <li key={a.id}>
+                    <ApprovalCard
+                      approval={a}
+                      decideUrl={`/api/approvals/${a.id}/decide`}
+                      milestoneTitle={milestoneTitleOf(a)}
+                      onDone={refresh}
+                    />
                   </li>
                 ))}
               </ul>
             )}
+            {clientApprovals.length > 0 ? (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <p className="text-xs text-muted-foreground">Waiting on the client</p>
+                <ul className="flex flex-col gap-1 text-sm">
+                  {clientApprovals.map((a) => (
+                    <li key={a.id} className="break-words">
+                      {proposalTitle(a.actionType)}
+                      {milestoneTitleOf(a) ? (
+                        <span className="text-muted-foreground"> for {milestoneTitleOf(a)}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
           <section aria-labelledby="activity-heading" className="flex flex-col gap-3">
             <h2 id="activity-heading" className="text-2xl">
@@ -273,7 +354,7 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
         </aside>
       </div>
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && editTask(null)}>
         <DialogContent>
           <form onSubmit={saveTask} className="flex flex-col gap-4">
             <DialogHeader>
@@ -292,10 +373,18 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
                 defaultValue={editing?.startDate}
                 data-testid="task-start-input"
                 className="tabular"
+                aria-invalid={editError ? true : undefined}
+                aria-describedby={editError ? "task-start-error" : undefined}
+                onChange={() => setEditError(null)}
               />
+              {editError ? (
+                <p id="task-start-error" role="alert" className="text-sm text-destructive">
+                  {editError}
+                </p>
+              ) : null}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outline" onClick={() => editTask(null)}>
                 Cancel
               </Button>
               <Button type="submit" data-testid="save-task" disabled={pending}>
@@ -374,7 +463,11 @@ function MilestoneCard({
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
           <h3 className="font-medium break-words">{m.title}</h3>
-          <MilestoneBadge state={m.state} className="self-start" />
+          <MilestoneBadge
+            state={m.state}
+            pendingReview={m.hold?.pendingReview}
+            className="self-start"
+          />
         </div>
         <span className="tabular text-lg">{formatMoney({ currency, minor: m.priceMinor })}</span>
       </div>
@@ -389,16 +482,26 @@ function MilestoneCard({
         <div className="flex flex-col gap-0.5">
           <dt className="text-xs text-muted-foreground">Funding</dt>
           <dd className="tabular" data-testid={`scheduled-fund-${m.key}`}>
-            {m.fundDueAt ? `Due ${formatDay(m.fundDueAt)}` : "Not scheduled"}
+            {m.hold?.pendingReview
+              ? "In PayPal review"
+              : m.fundDueAt
+                ? `Due ${formatDay(m.fundDueAt)}`
+                : "Not scheduled"}
           </dd>
         </div>
-        {m.hold ? (
+        {m.hold?.status === "active" ? (
           <div className="flex flex-col gap-0.5">
             <dt className="text-xs text-muted-foreground">Hold expires</dt>
             <dd className="tabular">{formatDay(m.hold.expiresAt)}</dd>
           </div>
         ) : null}
       </dl>
+
+      {m.hold?.pendingReview ? (
+        <p className="text-sm text-muted-foreground" data-testid={`pending-review-${m.key}`}>
+          PayPal is reviewing the client's payment. Work can start once it clears.
+        </p>
+      ) : null}
 
       {tasks.length > 0 ? (
         <ul className="flex flex-col divide-y rounded-md border" aria-label={`Tasks in ${m.title}`}>

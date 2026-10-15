@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   transpilePackages: [
+    "@tranche/agents",
     "@tranche/agents-service",
     "@tranche/contracts",
     "@tranche/core",
