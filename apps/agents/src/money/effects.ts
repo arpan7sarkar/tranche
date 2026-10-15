@@ -29,7 +29,7 @@ export async function applyEffects(tx: Tx, ctx: EffectContext, effects: Effect[]
           type: effect.event,
           dealId,
           milestoneId,
-          payload: effect.event === "alert.raised" ? { kind: ctx.cause, ...base } : base,
+          payload: effect.event === "alert.raised" ? { ...base, kind: ctx.cause } : base,
         });
         break;
       }

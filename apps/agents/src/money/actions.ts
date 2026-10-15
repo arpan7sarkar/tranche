@@ -13,10 +13,10 @@ import {
   verificationGate,
 } from "@tranche/core";
 import { type Db, schema } from "@tranche/db";
-import { and, eq, inArray, max, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, max, notInArray, or, sql } from "drizzle-orm";
 import type { Tx } from "./db";
 import type { Deps } from "./deps";
-import { errorMessage, must, PermanentError } from "./errors";
+import { errorMessage, ForbiddenError, must, PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { mustAdvance, StaleMilestoneError } from "./milestones";
 import { enqueueOutbox } from "./outbox";
@@ -64,7 +64,8 @@ export async function processActions(deps: Deps, limit = 20): Promise<number> {
       });
     } catch (err) {
       // A concurrent milestone write rolled this action back untouched; the next pass retries it.
-      if (!(err instanceof StaleMilestoneError)) throw err;
+      // Anything else fails just this action, so one bad row never stalls the queue.
+      if (claim.id && !(err instanceof StaleMilestoneError)) await failAction(deps, claim.id, err);
     }
     if (!claim.id) break;
     seen.push(claim.id);
@@ -109,6 +110,23 @@ async function handleAction(tx: Tx, deps: Deps, row: ProposedActionRow): Promise
   await execute(tx, deps, row);
 }
 
+async function failAction(deps: Deps, id: string, err: unknown): Promise<void> {
+  await deps.db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(pa)
+      .set({ status: "failed", decisionReason: errorMessage(err), decidedAt: deps.now() })
+      .where(eq(pa.id, id))
+      .returning();
+    if (!row) return;
+    await appendEvent(tx, {
+      type: "action.failed",
+      dealId: row.dealId,
+      milestoneId: milestoneIdOf(row),
+      payload: { proposedActionId: row.id, type: row.type, error: errorMessage(err) },
+    });
+  });
+}
+
 function approverSide(row: ProposedActionRow): "agency" | "client" {
   if (row.type === "release") return "client";
   return row.side === "client" ? "client" : "agency";
@@ -144,6 +162,12 @@ async function decide(
 
   const [deal] = await tx.select().from(schema.deal).where(eq(schema.deal.id, row.dealId));
   if (!deal) return { decision: "reject", reason: "deal not found", side };
+  const foreign = await ownershipIssue(tx, action);
+  if (foreign) return { decision: "reject", reason: foreign, side };
+  if (action.payload.type === "accept_plan") {
+    const issue = await acceptIssue(tx, action.dealId, action.side, action.payload);
+    if (issue) return { decision: "reject", reason: issue, side };
+  }
   const configured = side === "client" ? deal.clientPolicy : deal.agencyPolicy;
   if (!configured && action.agent !== "human") {
     return { decision: "needs_approval", reason: `no ${side} policy configured`, side };
@@ -197,6 +221,102 @@ async function decide(
     }
   }
   return { ...d, side };
+}
+
+// Every id an action names must belong to the action's own deal, whoever proposed it.
+async function ownershipIssue(tx: Tx, a: ProposedActionInput): Promise<string | null> {
+  const p = a.payload;
+  const milestoneId = "milestoneId" in p ? p.milestoneId : null;
+  if (milestoneId) {
+    const [m] = await tx
+      .select({ id: schema.milestone.id })
+      .from(schema.milestone)
+      .where(and(eq(schema.milestone.id, milestoneId), eq(schema.milestone.dealId, a.dealId)));
+    if (!m) return "milestone does not belong to this deal";
+  }
+  const evidenceIds = [
+    ...new Set([...a.evidenceIds, ...("evidenceIds" in p ? p.evidenceIds : [])]),
+  ];
+  if (evidenceIds.length > 0) {
+    const found = await tx
+      .select({ milestoneId: schema.evidence.milestoneId })
+      .from(schema.evidence)
+      .innerJoin(schema.milestone, eq(schema.milestone.id, schema.evidence.milestoneId))
+      .where(and(inArray(schema.evidence.id, evidenceIds), eq(schema.milestone.dealId, a.dealId)));
+    if (found.length !== evidenceIds.length) return "evidence does not belong to this deal";
+    if (milestoneId && found.some((e) => e.milestoneId !== milestoneId)) {
+      return "evidence belongs to another milestone";
+    }
+  }
+  if (p.type === "reschedule") {
+    const taskIds = [...new Set(p.shifts.map((s) => s.taskId))];
+    const found = await tx
+      .select({ id: schema.task.id })
+      .from(schema.task)
+      .where(and(inArray(schema.task.id, taskIds), eq(schema.task.dealId, a.dealId)));
+    if (found.length !== taskIds.length) return "task does not belong to this deal";
+  }
+  const negotiationId = "negotiationId" in p ? p.negotiationId : null;
+  if (negotiationId) {
+    const [n] = await tx
+      .select({ id: schema.negotiation.id })
+      .from(schema.negotiation)
+      .where(
+        and(eq(schema.negotiation.id, negotiationId), eq(schema.negotiation.dealId, a.dealId)),
+      );
+    if (!n) return "negotiation does not belong to this deal";
+  }
+  if (p.type === "submit_dispute_evidence") {
+    const [d] = await tx
+      .select({ id: schema.event.id })
+      .from(schema.event)
+      .where(
+        and(
+          eq(schema.event.dealId, a.dealId),
+          eq(schema.event.type, "milestone.disputed"),
+          sql`${schema.event.payload}->>'disputeId' = ${p.disputeId}`,
+        ),
+      )
+      .limit(1);
+    if (!d) return "dispute does not belong to this deal";
+  }
+  return null;
+}
+
+const canonical = (v: unknown) =>
+  JSON.stringify(v, (_k, x: unknown) =>
+    x && typeof x === "object" && !Array.isArray(x)
+      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : x,
+  );
+
+// A side may only accept the other side's latest offer, exactly as offered.
+async function acceptIssue(
+  tx: Tx,
+  dealId: string,
+  side: ProposedActionRow["side"],
+  p: Extract<ProposedActionRow["payload"], { type: "accept_plan" }>,
+): Promise<string | null> {
+  const t = schema.negotiationTurn;
+  const [latest] = await tx
+    .select({ side: t.side, offer: t.offer })
+    .from(t)
+    .innerJoin(schema.negotiation, eq(schema.negotiation.id, t.negotiationId))
+    .where(
+      and(
+        eq(t.negotiationId, p.negotiationId),
+        eq(schema.negotiation.dealId, dealId),
+        eq(t.kind, "offer"),
+      ),
+    )
+    .orderBy(desc(t.round), desc(t.createdAt))
+    .limit(1);
+  if (!latest?.offer) return "there is no offer to accept";
+  if (latest.side === side || side === "system")
+    return "only the other side's offer can be accepted";
+  if (canonical(latest.offer.plan) !== canonical(p.plan))
+    return "plan differs from the latest offer";
+  return null;
 }
 
 async function gateFor(tx: Tx, milestoneId: string) {
@@ -292,10 +412,14 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
       });
       return;
     }
-    case "accept_plan":
+    case "accept_plan": {
+      // Re-checked here: the other side may have countered while this waited for approval.
+      const issue = await acceptIssue(tx, row.dealId, row.side, p);
+      if (issue) throw new PermanentError(issue);
       await writePlan(tx, row.dealId, p.plan, now);
       await agreeToPlanTx(tx, row.dealId, now);
       return;
+    }
     case "reschedule":
       await applyReschedule(tx, row.dealId, p.shifts, p.reason, now);
       return;
@@ -402,29 +526,47 @@ export async function agreeToPlan(db: Db, dealId: string, now = new Date()): Pro
   await db.transaction((tx) => agreeToPlanTx(tx, dealId, now));
 }
 
+// The authenticated caller, never a free string: the agency screen passes its workspace, the portal
+// passes the deal its magic link grants.
+export type Decider =
+  | { side: "agency"; workspaceId: string; userId: string }
+  | { side: "client"; dealId: string; clientId: string };
+
 export async function decideApproval(
   db: Db,
-  input: { approvalId: string; decision: "approved" | "rejected"; decidedBy: string },
+  input: { approvalId: string; decision: "approved" | "rejected"; decider: Decider },
   now = new Date(),
 ): Promise<void> {
+  const { decider } = input;
   await db.transaction(async (tx) => {
-    const [a] = await tx
-      .select()
+    const [row] = await tx
+      .select({ a: schema.approval, dealId: schema.deal.id, workspaceId: schema.deal.workspaceId })
       .from(schema.approval)
+      .innerJoin(pa, eq(pa.id, schema.approval.proposedActionId))
+      .innerJoin(schema.deal, eq(schema.deal.id, pa.dealId))
       .where(eq(schema.approval.id, input.approvalId))
-      .for("update");
-    if (!a) throw new Error(`approval ${input.approvalId} not found`);
+      .for("update", { of: schema.approval });
+    const inScope =
+      decider.side === "agency"
+        ? row?.workspaceId === decider.workspaceId
+        : row?.dealId === decider.dealId;
+    if (!row || !inScope) throw new ForbiddenError(`approval ${input.approvalId} not found`);
+    const { a } = row;
+    if (a.side !== decider.side) {
+      throw new ForbiddenError(`this approval is for the ${a.side}, not the ${decider.side}`);
+    }
     if (a.decision) return;
+    const decidedBy = decider.side === "agency" ? decider.userId : `client:${decider.clientId}`;
     await tx
       .update(schema.approval)
-      .set({ decision: input.decision, decidedBy: input.decidedBy, decidedAt: now })
+      .set({ decision: input.decision, decidedBy, decidedAt: now })
       .where(eq(schema.approval.id, a.id));
     const [action] = await tx
       .update(pa)
       .set({
         status: input.decision,
         decidedAt: now,
-        decisionReason: `${input.decision} by ${input.decidedBy}`,
+        decisionReason: `${input.decision} by ${decidedBy}`,
       })
       .where(and(eq(pa.id, a.proposedActionId), eq(pa.status, "needs_approval")))
       .returning();

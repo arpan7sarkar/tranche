@@ -291,6 +291,7 @@ export const inbox = pgTable(
     processedAt: instant(),
     attempts: integer().notNull().default(0),
     lastError: text(),
+    nextAttemptAt: instant().notNull().defaultNow(),
   },
   (t) => [uniqueIndex().on(t.source, t.sourceEventId), index().on(t.processedAt)],
 );

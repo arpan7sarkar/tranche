@@ -10,15 +10,29 @@ import { activateHold, confirmRelease, holdWhere } from "./holds";
 import { advanceMilestone } from "./milestones";
 import { enqueueOutbox } from "./outbox";
 
-const DELAYED_HOLD_DAYS = 27;
+// The same deadlines @tranche/paypal's holdFromOrder computes, so the webhook path and the
+// synchronous placeHold path always store one expiry for the same hold.
 const DAY_MS = 86_400_000;
+const DELAYED_SAFE_DAYS = 27;
+const authorizationExpiresAt = (expirationTime: string) =>
+  new Date(Date.parse(expirationTime) - DAY_MS);
+const delayedExpiresAt = (capturedAt: Date) =>
+  new Date(capturedAt.getTime() + DELAYED_SAFE_DAYS * DAY_MS);
+
+const BUYER_WINS = new Set(["RESOLVED_BUYER_FAVOUR", "ACCEPTED"]);
+const SELLER_WINS = new Set(["RESOLVED_SELLER_FAVOUR", "CANCELED_BY_BUYER", "DENIED"]);
 
 const Amount = z.object({ currency_code: z.string(), value: z.string() });
 const OrderRef = z.object({
   supplementary_data: z.object({ related_ids: z.object({ order_id: z.string() }) }),
 });
 const Payment = z
-  .object({ id: z.string(), amount: Amount, create_time: z.string().optional() })
+  .object({
+    id: z.string(),
+    status: z.string().optional(),
+    amount: Amount,
+    create_time: z.string().optional(),
+  })
   .and(OrderRef);
 const Authorization = Payment.and(z.object({ expiration_time: z.string() }));
 const Dispute = z.object({
@@ -53,6 +67,8 @@ export async function handlePayPalEvent(
     }
     case "PAYMENT.AUTHORIZATION.CREATED": {
       const r = Authorization.parse(resource);
+      // A PENDING authorization guarantees nothing yet; the milestone stays in funding.
+      if (r.status !== undefined && r.status !== "CREATED") return;
       const hold = await holdWhere(tx, "paypalOrderId", r.supplementary_data.related_ids.order_id);
       if (!hold) return;
       await activateHold(
@@ -61,7 +77,7 @@ export async function handlePayPalEvent(
         {
           authorizationId: r.id,
           anchorAt: new Date(r.create_time ?? now.toISOString()),
-          expiresAt: new Date(r.expiration_time),
+          expiresAt: authorizationExpiresAt(r.expiration_time),
           amountMinor: minor(r.amount),
         },
         now,
@@ -70,6 +86,7 @@ export async function handlePayPalEvent(
     }
     case "PAYMENT.CAPTURE.COMPLETED": {
       const r = Payment.parse(resource);
+      if (r.status !== undefined && r.status !== "COMPLETED") return;
       const hold = await holdWhere(tx, "paypalOrderId", r.supplementary_data.related_ids.order_id);
       if (!hold) return;
       if (hold.mechanism === "delayed_disbursement" && hold.status === "pending") {
@@ -80,7 +97,7 @@ export async function handlePayPalEvent(
           {
             captureId: r.id,
             anchorAt,
-            expiresAt: new Date(anchorAt.getTime() + DELAYED_HOLD_DAYS * DAY_MS),
+            expiresAt: delayedExpiresAt(anchorAt),
             amountMinor: minor(r.amount),
           },
           now,
@@ -142,14 +159,28 @@ export async function handlePayPalEvent(
       if (eventType === "CUSTOMER.DISPUTE.CREATED") {
         await advanceMilestone(tx, hold.milestoneId, { type: "dispute_opened" }, { now, payload });
       } else {
-        const outcome =
-          r.dispute_outcome?.outcome_code === "RESOLVED_BUYER_FAVOUR" ? "buyer" : "merchant";
-        await advanceMilestone(
-          tx,
-          hold.milestoneId,
-          { type: "dispute_resolved", outcome },
-          { now, payload },
-        );
+        const code = r.dispute_outcome?.outcome_code ?? "";
+        const outcome = BUYER_WINS.has(code) ? "buyer" : SELLER_WINS.has(code) ? "merchant" : null;
+        if (outcome) {
+          await advanceMilestone(
+            tx,
+            hold.milestoneId,
+            { type: "dispute_resolved", outcome },
+            { now, payload },
+          );
+          return;
+        }
+        // An outcome we cannot map (RESOLVED_WITH_PAYOUT, anything new) changes no money state.
+        const [m] = await tx
+          .select({ dealId: schema.milestone.dealId })
+          .from(schema.milestone)
+          .where(eq(schema.milestone.id, hold.milestoneId));
+        await appendEvent(tx, {
+          type: "alert.raised",
+          dealId: m?.dealId ?? null,
+          milestoneId: hold.milestoneId,
+          payload: { kind: "dispute_outcome_unknown", disputeId: r.dispute_id, outcome: code },
+        });
       }
       return;
     }

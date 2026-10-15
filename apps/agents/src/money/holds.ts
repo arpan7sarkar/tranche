@@ -95,13 +95,14 @@ export async function activateHold(
       ),
     )
     .limit(1);
-  // A confirmed order the milestone no longer wants holds the client's money: give it back.
+  // Funds that land after a cancellation, or a second confirmed order, go straight back.
   if (kept || m?.state === "cancelled") {
     await enqueueOutbox(
       tx,
       { kind: "void_hold", request: { holdId: hold.id }, requestId: `void:${hold.id}` },
       now,
     );
+    if (!kept) return;
   }
   await appendEvent(tx, {
     type: "alert.raised",
@@ -124,6 +125,19 @@ export async function confirmRelease(
   facts: { captureId: string | null; amountMinor: number },
   now: Date,
 ): Promise<void> {
+  if (hold.status === "pending") {
+    const [m] = await tx
+      .select({ dealId: schema.milestone.dealId })
+      .from(schema.milestone)
+      .where(eq(schema.milestone.id, hold.milestoneId));
+    await appendEvent(tx, {
+      type: "alert.raised",
+      dealId: m?.dealId ?? null,
+      milestoneId: hold.milestoneId,
+      payload: { kind: "release_before_hold", holdId: hold.id, captureId: facts.captureId },
+    });
+    return;
+  }
   if (hold.status !== "released") {
     await tx
       .update(schema.hold)
