@@ -1,5 +1,5 @@
 {
-  "id": "16f47b51-580c-4635-a35b-887705cfb936",
+  "id": "e5233dba-cfe4-4c22-baeb-33a994c117bd",
   "prevId": "0c3e2c22-fbad-4be1-800c-40e767f882a5",
   "version": "7",
   "dialect": "postgresql",
@@ -2154,12 +2154,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "last_reauthorized_at": {
-          "name": "last_reauthorized_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "amount_minor": {
           "name": "amount_minor",
           "type": "bigint",
@@ -2306,6 +2300,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {

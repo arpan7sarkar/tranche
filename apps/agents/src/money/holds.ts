@@ -1,5 +1,5 @@
 import { type Db, schema } from "@tranche/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { Tx } from "./db";
 import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
@@ -62,36 +62,59 @@ export async function activateHold(
       expiresAt: facts.expiresAt,
     })
     .where(eq(schema.hold.id, hold.id));
-  await planRenewal(tx, {
-    milestoneId: hold.milestoneId,
-    mechanism: hold.mechanism,
-    originalAuthorizedAt: facts.anchorAt,
-  });
   const r = await advanceMilestone(
     tx,
     hold.milestoneId,
     { type: "hold_confirmed", amountMinor: facts.amountMinor },
     { now },
   );
-  if (r.applied) return;
+  if (r.applied) {
+    await planRenewal(tx, {
+      milestoneId: hold.milestoneId,
+      mechanism: hold.mechanism,
+      originalAuthorizedAt: facts.anchorAt,
+    });
+    return;
+  }
   const [m] = await tx
-    .select({ dealId: schema.milestone.dealId, state: schema.milestone.state })
+    .select({
+      dealId: schema.milestone.dealId,
+      title: schema.milestone.title,
+      state: schema.milestone.state,
+    })
     .from(schema.milestone)
     .where(eq(schema.milestone.id, hold.milestoneId));
-  // Funds that land after a cancellation go straight back; nothing may stay locked or pay out.
-  if (m?.state === "cancelled") {
+  const [kept] = await tx
+    .select({ id: schema.hold.id })
+    .from(schema.hold)
+    .where(
+      and(
+        eq(schema.hold.milestoneId, hold.milestoneId),
+        eq(schema.hold.status, "active"),
+        ne(schema.hold.id, hold.id),
+      ),
+    )
+    .limit(1);
+  // Funds that land after a cancellation, or a second confirmed order, go straight back.
+  if (kept || m?.state === "cancelled") {
     await enqueueOutbox(
       tx,
       { kind: "void_hold", request: { holdId: hold.id }, requestId: `void:${hold.id}` },
       now,
     );
-    return;
+    if (!kept) return;
   }
   await appendEvent(tx, {
     type: "alert.raised",
     dealId: m?.dealId ?? null,
     milestoneId: hold.milestoneId,
-    payload: { kind: "hold_mismatch", holdId: hold.id, reason: r.reason },
+    payload: {
+      kind: kept ? "duplicate_funding" : "hold_mismatch",
+      holdId: hold.id,
+      ...(kept ? { keptHoldId: kept.id } : {}),
+      reason: r.reason,
+      title: m?.title,
+    },
   });
 }
 

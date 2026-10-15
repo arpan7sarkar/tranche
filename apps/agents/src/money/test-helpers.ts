@@ -131,6 +131,11 @@ export async function makeHold(
 export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {}) {
   const expiresAt = "2026-11-08T10:00:00.000Z";
   return {
+    getOrder: vi.fn(async () => ({
+      id: "ORDER-1",
+      status: "CREATED",
+      links: [{ rel: "payer-action", href: "https://sandbox.paypal.test/approve" }],
+    })),
     createFundingOrder: vi.fn(async () => ({
       orderId: "ORDER-2",
       approveUrl: null,

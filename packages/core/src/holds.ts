@@ -3,7 +3,7 @@ import type { HoldMechanism } from "@tranche/contracts";
 export const HONOR_DAYS = 3;
 export const AUTH_VALID_DAYS = 29;
 export const RENEW_AT_DAY = 27;
-export const DELAYED_AUTO_DISBURSE_DAY = 27;
+export const DELAYED_HOLD_DEADLINE_DAY = 27;
 export const DELAYED_ALERT_DAY = 25;
 
 const DAY_MS = 86_400_000;
@@ -31,13 +31,14 @@ export function renewalAction(
     return elapsedDays >= DELAYED_ALERT_DAY
       ? {
           kind: "alert",
-          daysLeft: Math.max(0, DELAYED_AUTO_DISBURSE_DAY - Math.floor(elapsedDays)),
+          daysLeft: Math.max(0, DELAYED_HOLD_DEADLINE_DAY - Math.floor(elapsedDays)),
         }
       : { kind: "none" };
   }
   if (elapsedDays >= RENEW_AT_DAY) return { kind: "new_authorization" };
   if (elapsedDays < HONOR_DAYS + 1) return { kind: "none" };
   if (lastReauthorizedAt) {
+    // Validates the timestamp; an unparseable value must throw, not allow a second reauthorization.
     daysSince(lastReauthorizedAt, now);
     return { kind: "none" };
   }
