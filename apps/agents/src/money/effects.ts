@@ -1,6 +1,6 @@
 import type { Effect, MilestoneSnapshot } from "@tranche/core";
 import { schema } from "@tranche/db";
-import { eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import type { Tx } from "./db";
 import { appendEvent } from "./events";
 import { activeHold } from "./holds";
@@ -66,12 +66,24 @@ export async function applyEffects(tx: Tx, ctx: EffectContext, effects: Effect[]
       case "release_funds": {
         const hold = await activeHold(tx, milestoneId);
         if (!hold) throw new Error(`milestone ${milestoneId} has no active hold to release`);
+        // Core allows a new release only after the last one failed for good, so each earlier row
+        // is terminal; a fresh request id keeps the new attempt from colliding with it.
+        const [prior] = await tx
+          .select({ n: count() })
+          .from(schema.outbox)
+          .where(
+            and(
+              eq(schema.outbox.kind, "release"),
+              sql`${schema.outbox.request}->>'holdId' = ${hold.id}`,
+            ),
+          );
+        const n = prior?.n ?? 0;
         await enqueueOutbox(
           tx,
           {
             kind: "release",
             request: { holdId: hold.id, amountMinor: effect.amountMinor },
-            requestId: `release:${hold.id}`,
+            requestId: n === 0 ? `release:${hold.id}` : `release:${hold.id}:${n}`,
           },
           now,
         );

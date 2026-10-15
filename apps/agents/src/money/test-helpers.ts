@@ -10,7 +10,7 @@ import { asc, eq } from "drizzle-orm";
 import { vi } from "vitest";
 import type { Deps, PayPal } from "./deps";
 import { must } from "./errors";
-import type { OutboxHandler } from "./outbox-types";
+import type { OutboxHandler } from "./outbox";
 
 export const NOW = new Date("2026-10-10T10:00:00Z");
 
@@ -38,6 +38,7 @@ export async function makeMilestone(
     heldMinor?: number;
     releasedMinor?: number;
     verifiedAt?: Date | null;
+    releaseAuthorizedAt?: Date | null;
     clientPolicy?: Policy | null;
     vaultId?: string | null;
   } = {},
@@ -87,13 +88,14 @@ export async function makeMilestone(
       heldMinor: o.heldMinor ?? 0,
       releasedMinor: o.releasedMinor ?? 0,
       verifiedAt: o.verifiedAt ?? null,
+      releaseAuthorizedAt: o.releaseAuthorizedAt ?? null,
     })
     .returning();
   return {
+    workspaceId: must(ws).id,
+    clientId: must(cl).id,
     dealId: must(dl).id,
     milestoneId: must(ms).id,
-    clientId: must(cl).id,
-    workspaceId: must(ws).id,
   };
 }
 
@@ -126,10 +128,6 @@ export async function makeHold(
   return must(h);
 }
 
-export function testDeps(db: Db, paypal = {} as PayPal, now: () => Date = () => NOW): Deps {
-  return { db, paypal, now };
-}
-
 export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {}) {
   const expiresAt = "2026-11-08T10:00:00.000Z";
   return {
@@ -144,6 +142,7 @@ export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {
       status: "COMPLETED",
     })),
     placeHold: vi.fn(async () => ({
+      status: "active",
       captureId: null,
       authorizationId: "AUTH-2",
       expiresAt,
@@ -155,12 +154,22 @@ export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {
       expiresAt,
       honorExpiresAt: expiresAt,
     })),
+    releaseHold: vi.fn(async () => ({ releaseRef: "CAPTURE-REL-1" })),
+    voidHold: vi.fn(async () => undefined),
+    sendPayouts: vi.fn(async () => ({ batchId: "BATCH-1" })),
+    submitDisputeEvidence: vi.fn(async () => undefined),
+    getAuthorization: vi.fn(async () => ({ status: "CREATED" })),
+    getCapture: vi.fn(async () => ({ status: "COMPLETED" })),
     ...overrides,
   } as unknown as PayPal & {
     createFundingOrder: ReturnType<typeof vi.fn>;
     placeHold: ReturnType<typeof vi.fn>;
     renewHold: ReturnType<typeof vi.fn>;
   };
+}
+
+export function testDeps(db: Db, paypal: PayPal = fakePayPal(), now: () => Date = () => NOW): Deps {
+  return { db, paypal, now };
 }
 
 export async function runOutboxHandler(

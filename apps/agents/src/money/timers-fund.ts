@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import type { Tx } from "./db";
 import { PermanentError } from "./errors";
 import { startFunding } from "./funding";
-import { type OutboxHandler, requestedMilestoneId } from "./outbox-types";
+import { type OutboxHandler, requestedMilestoneId } from "./outbox";
 
 export function holdMechanism(): HoldMechanism {
   return HoldMechanism.parse(process.env.HOLD_MECHANISM ?? "authorization");

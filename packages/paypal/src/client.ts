@@ -52,16 +52,20 @@ export type PlaceHoldResult = Hold | PendingHold;
 
 const seg = encodeURIComponent;
 
-export const REQUIRED_SELLER_FEATURES = [
+export const SELLER_FEATURES = [
   "PAYMENT",
   "REFUND",
   "PARTNER_FEE",
   "DELAY_FUNDS_DISBURSEMENT",
   "VAULT",
 ] as const;
-export type SellerFeature = (typeof REQUIRED_SELLER_FEATURES)[number];
+export type SellerFeature = (typeof SELLER_FEATURES)[number];
 
-const REFERRAL_FEATURES = [...REQUIRED_SELLER_FEATURES, "ACCESS_MERCHANT_INFORMATION"];
+export function requiredSellerFeatures(mechanism: HoldMechanism): SellerFeature[] {
+  return SELLER_FEATURES.filter(
+    (f) => mechanism === "delayed_disbursement" || f !== "DELAY_FUNDS_DISBURSEMENT",
+  );
+}
 
 // PayPal reports granted third-party features as OAuth scopes (seller status docs); not yet seen in our sandbox.
 const FEATURE_SCOPES: Record<SellerFeature, string> = {
@@ -112,7 +116,7 @@ function grantedFeatures(oauthIntegrations: unknown, platformClientId: string): 
   const parsed = PayPalIntegrationResponse.shape.oauth_integrations.safeParse(oauthIntegrations);
   if (!parsed.success) return [];
   const scopes = new Set(platformGrantScopes(parsed.data, platformClientId).flat());
-  return REQUIRED_SELLER_FEATURES.filter((f) => scopes.has(FEATURE_SCOPES[f]));
+  return SELLER_FEATURES.filter((f) => scopes.has(FEATURE_SCOPES[f]));
 }
 
 export function approveUrlOf(order: OrderRes): string | null {
@@ -161,11 +165,12 @@ export function createPayPalClient(config: PayPalConfig) {
     async createSellerReferral(input: {
       trackingId: string;
       returnUrl: string;
+      mechanism: HoldMechanism;
     }): Promise<{ actionUrl: string }> {
       const res = await t.request<{ links: Link[] }>({
         method: "POST",
         path: "/v2/customer/partner-referrals",
-        requestId: `referral-${input.trackingId}`,
+        requestId: `referral-${input.mechanism}-${input.trackingId}`,
         body: {
           tracking_id: input.trackingId,
           partner_config_override: { return_url: input.returnUrl },
@@ -176,7 +181,12 @@ export function createPayPalClient(config: PayPalConfig) {
                 rest_api_integration: {
                   integration_method: "PAYPAL",
                   integration_type: "THIRD_PARTY",
-                  third_party_details: { features: REFERRAL_FEATURES },
+                  third_party_details: {
+                    features: [
+                      ...requiredSellerFeatures(input.mechanism),
+                      "ACCESS_MERCHANT_INFORMATION",
+                    ],
+                  },
                 },
               },
             },

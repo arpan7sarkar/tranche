@@ -1,5 +1,6 @@
-import { fromPayPalValue } from "@tranche/contracts";
+import { fromPayPalValue, type HoldMechanism } from "@tranche/contracts";
 import { schema } from "@tranche/db";
+import { holdFromOrder } from "@tranche/paypal";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import type { Tx } from "./db";
@@ -10,14 +11,19 @@ import { activateHold, confirmRelease, holdWhere } from "./holds";
 import { advanceMilestone } from "./milestones";
 import { enqueueOutbox } from "./outbox";
 
-// The same deadlines @tranche/paypal's holdFromOrder computes, so the webhook path and the
-// synchronous placeHold path always store one expiry for the same hold.
-const DAY_MS = 86_400_000;
-const DELAYED_SAFE_DAYS = 27;
-const authorizationExpiresAt = (expirationTime: string) =>
-  new Date(Date.parse(expirationTime) - DAY_MS);
-const delayedExpiresAt = (capturedAt: Date) =>
-  new Date(capturedAt.getTime() + DELAYED_SAFE_DAYS * DAY_MS);
+// One expiry rule for both paths: the webhook resource goes through the same holdFromOrder that
+// the synchronous placeHold uses. Null means PayPal has not guaranteed the funds yet.
+function heldUntil(
+  mechanism: HoldMechanism,
+  payment: { id: string; status: string; create_time: string; expiration_time?: string },
+): Date | null {
+  const payments =
+    mechanism === "authorization"
+      ? { authorizations: [{ ...payment, expiration_time: payment.expiration_time ?? "" }] }
+      : { captures: [payment] };
+  const h = holdFromOrder({ id: "", status: "", purchase_units: [{ payments }] }, mechanism);
+  return h?.status === "active" ? new Date(h.expiresAt) : null;
+}
 
 const BUYER_WINS = new Set(["RESOLVED_BUYER_FAVOUR", "ACCEPTED"]);
 const SELLER_WINS = new Set(["RESOLVED_SELLER_FAVOUR", "CANCELED_BY_BUYER", "DENIED"]);
@@ -35,6 +41,12 @@ const Payment = z
   })
   .and(OrderRef);
 const Authorization = Payment.and(z.object({ expiration_time: z.string() }));
+const Refund = z.object({
+  id: z.string(),
+  amount: Amount,
+  links: z.array(z.object({ rel: z.string(), href: z.string() })),
+  seller_payable_breakdown: z.object({ total_refunded_amount: Amount.optional() }).optional(),
+});
 const Dispute = z.object({
   dispute_id: z.string(),
   disputed_transactions: z.array(z.object({ seller_transaction_id: z.string() })).min(1),
@@ -68,16 +80,23 @@ export async function handlePayPalEvent(
     case "PAYMENT.AUTHORIZATION.CREATED": {
       const r = Authorization.parse(resource);
       // A PENDING authorization guarantees nothing yet; the milestone stays in funding.
-      if (r.status !== undefined && r.status !== "CREATED") return;
       const hold = await holdWhere(tx, "paypalOrderId", r.supplementary_data.related_ids.order_id);
       if (!hold) return;
+      const createdAt = r.create_time ?? now.toISOString();
+      const expiresAt = heldUntil("authorization", {
+        ...r,
+        status: r.status ?? "CREATED",
+        create_time: createdAt,
+      });
+      // A PENDING authorization guarantees nothing yet; the milestone stays in funding.
+      if (!expiresAt) return;
       await activateHold(
         tx,
         hold,
         {
           authorizationId: r.id,
-          anchorAt: new Date(r.create_time ?? now.toISOString()),
-          expiresAt: authorizationExpiresAt(r.expiration_time),
+          anchorAt: new Date(createdAt),
+          expiresAt,
           amountMinor: minor(r.amount),
         },
         now,
@@ -90,14 +109,20 @@ export async function handlePayPalEvent(
       const hold = await holdWhere(tx, "paypalOrderId", r.supplementary_data.related_ids.order_id);
       if (!hold) return;
       if (hold.mechanism === "delayed_disbursement" && hold.status === "pending") {
-        const anchorAt = new Date(r.create_time ?? now.toISOString());
+        const capturedAt = r.create_time ?? now.toISOString();
+        const expiresAt = heldUntil("delayed_disbursement", {
+          ...r,
+          status: r.status ?? "COMPLETED",
+          create_time: capturedAt,
+        });
+        if (!expiresAt) return;
         await activateHold(
           tx,
           hold,
           {
             captureId: r.id,
-            anchorAt,
-            expiresAt: delayedExpiresAt(anchorAt),
+            anchorAt: new Date(capturedAt),
+            expiresAt,
             amountMinor: minor(r.amount),
           },
           now,
@@ -105,6 +130,49 @@ export async function handlePayPalEvent(
       } else if (hold.mechanism === "authorization") {
         await confirmRelease(tx, hold, { captureId: r.id, amountMinor: minor(r.amount) }, now);
       }
+      return;
+    }
+    case "PAYMENT.CAPTURE.REFUNDED": {
+      const r = Refund.parse(resource);
+      const captureId = r.links.find((l) => l.rel === "up")?.href.match(/captures\/([^/?]+)/)?.[1];
+      const hold = captureId ? await holdWhere(tx, "paypalCaptureId", captureId) : undefined;
+      if (!hold) return;
+      const [m] = await tx
+        .select()
+        .from(schema.milestone)
+        .where(eq(schema.milestone.id, hold.milestoneId));
+      // Our own cancellation refunds a delayed hold; that refund needs no further handling.
+      if (!m || m.state === "cancelled" || m.state === "refunded") return;
+      // The capture's running total, so partial refunds that add up to the whole amount count.
+      const refundedMinor = minor(r.seller_payable_breakdown?.total_refunded_amount ?? r.amount);
+      const full = refundedMinor >= hold.amountMinor;
+      const applied =
+        full &&
+        (
+          await advanceMilestone(
+            tx,
+            m.id,
+            { type: "refund_confirmed" },
+            { now, payload: { refundId: r.id } },
+          )
+        ).applied;
+      if (applied) {
+        await tx.update(schema.hold).set({ status: "voided" }).where(eq(schema.hold.id, hold.id));
+        return;
+      }
+      await appendEvent(tx, {
+        type: "alert.raised",
+        dealId: m.dealId,
+        milestoneId: m.id,
+        payload: {
+          kind: "refund_received",
+          refundId: r.id,
+          holdId: hold.id,
+          refundedMinor,
+          state: m.state,
+          title: m.title,
+        },
+      });
       return;
     }
     case "PAYMENT.REFERENCED-PAYOUT-ITEM.COMPLETED": {
@@ -181,28 +249,6 @@ export async function handlePayPalEvent(
           milestoneId: hold.milestoneId,
           payload: { kind: "dispute_outcome_unknown", disputeId: r.dispute_id, outcome: code },
         });
-      }
-      return;
-    }
-    case "PAYMENT.PAYOUTSBATCH.SUCCESS": {
-      const batchId = z
-        .object({ batch_header: z.object({ payout_batch_id: z.string() }) })
-        .parse(resource).batch_header.payout_batch_id;
-      const done = await tx
-        .update(schema.payout)
-        .set({ status: "completed" })
-        .where(eq(schema.payout.paypalRef, batchId))
-        .returning({ milestoneId: schema.payout.milestoneId });
-      for (const milestoneId of new Set(done.map((d) => d.milestoneId))) {
-        const open = await tx
-          .select({ id: schema.payout.id })
-          .from(schema.payout)
-          .where(
-            and(eq(schema.payout.milestoneId, milestoneId), ne(schema.payout.status, "completed")),
-          );
-        if (open.length === 0) {
-          await advanceMilestone(tx, milestoneId, { type: "payout_confirmed" }, { now });
-        }
       }
       return;
     }

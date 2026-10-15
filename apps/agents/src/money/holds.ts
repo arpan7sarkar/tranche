@@ -5,6 +5,7 @@ import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { advanceMilestone } from "./milestones";
 import { enqueueOutbox } from "./outbox";
+import { completeReplacement } from "./replacement";
 import { planRenewal } from "./timers";
 
 export type HoldRow = typeof schema.hold.$inferSelect;
@@ -62,6 +63,11 @@ export async function activateHold(
       expiresAt: facts.expiresAt,
     })
     .where(eq(schema.hold.id, hold.id));
+  if (hold.replacesHoldId) {
+    const [fresh] = await tx.select().from(schema.hold).where(eq(schema.hold.id, hold.id));
+    if (fresh) await completeReplacement(tx, fresh, now);
+    return;
+  }
   const r = await advanceMilestone(
     tx,
     hold.milestoneId,
@@ -150,4 +156,35 @@ export async function confirmRelease(
     { type: "release_confirmed", amountMinor: facts.amountMinor },
     { now },
   );
+}
+
+// PayPal declined a hold that never became active. A first funding goes back to agreed and is
+// rescheduled; a failed renewal leaves the old hold in place and alerts.
+export async function failPendingHold(
+  tx: Tx,
+  hold: HoldRow,
+  reason: string,
+  now: Date,
+): Promise<void> {
+  if (hold.status !== "pending") return;
+  await tx.update(schema.hold).set({ status: "failed" }).where(eq(schema.hold.id, hold.id));
+  if (!hold.replacesHoldId) {
+    await advanceMilestone(tx, hold.milestoneId, { type: "funding_failed", reason }, { now });
+    return;
+  }
+  const [m] = await tx
+    .select({ dealId: schema.milestone.dealId })
+    .from(schema.milestone)
+    .where(eq(schema.milestone.id, hold.milestoneId));
+  await appendEvent(tx, {
+    type: "alert.raised",
+    dealId: m?.dealId ?? null,
+    milestoneId: hold.milestoneId,
+    payload: {
+      kind: "renewal_failed",
+      holdId: hold.id,
+      replacesHoldId: hold.replacesHoldId,
+      reason,
+    },
+  });
 }
