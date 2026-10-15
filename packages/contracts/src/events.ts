@@ -64,6 +64,7 @@ export const InboxMessage = z.discriminatedUnion("type", [
     sha: z.string().nullable(),
     prNumber: z.number().int().positive().nullable(),
     urls: z.array(z.url()).max(10),
+    notes: z.string().max(2000).optional(),
   }),
   z.object({ type: z.literal("timer.due"), scheduledActionId: Id }),
 ]);

@@ -40,6 +40,7 @@ export type DealView = {
     criteria: AcceptanceCriteria;
     hold: { status: HoldStatus; expiresAt: string; pendingReview: boolean } | null;
     fundDueAt?: string | null;
+    deliveryPending?: boolean;
     evidence: Array<{
       id: string;
       kind: EvidenceKind;
@@ -106,64 +107,77 @@ export async function getDealView(
     .where(eq(schema.milestone.dealId, dealId))
     .orderBy(asc(schema.milestone.position));
   const milestoneIds = milestones.map((m) => m.id);
-  const [tasks, holds, evidence, activity, approvals, funding] = await Promise.all([
-    db
-      .select()
-      .from(schema.task)
-      .where(eq(schema.task.dealId, dealId))
-      .orderBy(asc(schema.task.position)),
-    milestoneIds.length
-      ? db
-          .select()
-          .from(schema.hold)
-          .where(inArray(schema.hold.milestoneId, milestoneIds))
-          .orderBy(desc(schema.hold.createdAt))
-      : [],
-    milestoneIds.length
-      ? db
-          .select()
-          .from(schema.evidence)
-          .where(inArray(schema.evidence.milestoneId, milestoneIds))
-          .orderBy(desc(schema.evidence.createdAt))
-      : [],
-    db
-      .select()
-      .from(schema.event)
-      .where(eq(schema.event.dealId, dealId))
-      .orderBy(desc(schema.event.id))
-      .limit(50),
-    db
-      .select({ approval: schema.approval, action: schema.proposedAction })
-      .from(schema.approval)
-      .innerJoin(
-        schema.proposedAction,
-        eq(schema.proposedAction.id, schema.approval.proposedActionId),
-      )
-      .where(
-        and(
-          eq(schema.proposedAction.dealId, dealId),
-          isNull(schema.approval.decision),
-          "clientId" in scope ? eq(schema.approval.side, "client") : undefined,
-        ),
-      )
-      .orderBy(asc(schema.approval.createdAt)),
-    milestoneIds.length
-      ? db
-          .select({
-            milestoneId: schema.scheduledAction.milestoneId,
-            dueAt: schema.scheduledAction.dueAt,
-          })
-          .from(schema.scheduledAction)
-          .where(
-            and(
-              inArray(schema.scheduledAction.milestoneId, milestoneIds),
-              eq(schema.scheduledAction.kind, "fund"),
-              eq(schema.scheduledAction.status, "pending"),
-            ),
-          )
-          .orderBy(asc(schema.scheduledAction.dueAt))
-      : [],
-  ]);
+  const [tasks, holds, evidence, activity, approvals, funding, pendingDeliveries] =
+    await Promise.all([
+      db
+        .select()
+        .from(schema.task)
+        .where(eq(schema.task.dealId, dealId))
+        .orderBy(asc(schema.task.position)),
+      milestoneIds.length
+        ? db
+            .select()
+            .from(schema.hold)
+            .where(inArray(schema.hold.milestoneId, milestoneIds))
+            .orderBy(desc(schema.hold.createdAt))
+        : [],
+      milestoneIds.length
+        ? db
+            .select()
+            .from(schema.evidence)
+            .where(inArray(schema.evidence.milestoneId, milestoneIds))
+            .orderBy(desc(schema.evidence.createdAt))
+        : [],
+      db
+        .select()
+        .from(schema.event)
+        .where(eq(schema.event.dealId, dealId))
+        .orderBy(desc(schema.event.id))
+        .limit(50),
+      db
+        .select({ approval: schema.approval, action: schema.proposedAction })
+        .from(schema.approval)
+        .innerJoin(
+          schema.proposedAction,
+          eq(schema.proposedAction.id, schema.approval.proposedActionId),
+        )
+        .where(
+          and(
+            eq(schema.proposedAction.dealId, dealId),
+            isNull(schema.approval.decision),
+            "clientId" in scope ? eq(schema.approval.side, "client") : undefined,
+          ),
+        )
+        .orderBy(asc(schema.approval.createdAt)),
+      milestoneIds.length
+        ? db
+            .select({
+              milestoneId: schema.scheduledAction.milestoneId,
+              dueAt: schema.scheduledAction.dueAt,
+            })
+            .from(schema.scheduledAction)
+            .where(
+              and(
+                inArray(schema.scheduledAction.milestoneId, milestoneIds),
+                eq(schema.scheduledAction.kind, "fund"),
+                eq(schema.scheduledAction.status, "pending"),
+              ),
+            )
+            .orderBy(asc(schema.scheduledAction.dueAt))
+        : [],
+      milestoneIds.length
+        ? db
+            .select({ milestoneId: sql<string>`${schema.inbox.message}->>'milestoneId'` })
+            .from(schema.inbox)
+            .where(
+              and(
+                isNull(schema.inbox.processedAt),
+                sql`${schema.inbox.message}->>'type' = 'delivery.detected'`,
+                inArray(sql`${schema.inbox.message}->>'milestoneId'`, milestoneIds),
+              ),
+            )
+        : [],
+    ]);
   const taskIds = tasks.map((t) => t.id);
   const dependencies = taskIds.length
     ? await db
@@ -205,6 +219,7 @@ export async function getDealView(
             }
           : null,
         fundDueAt: funding.find((f) => f.milestoneId === m.id)?.dueAt.toISOString() ?? null,
+        deliveryPending: pendingDeliveries.some((d) => d.milestoneId === m.id),
         evidence: evidence
           .filter((e) => e.milestoneId === m.id)
           .map((e) => ({

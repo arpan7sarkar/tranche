@@ -96,6 +96,7 @@ async function handleDelivery(
     sha: m.sha,
     prNumber: m.prNumber,
     urls: m.urls,
+    notes: m.notes ?? null,
   };
   if (milestone.state === "held") {
     await mustAdvance(tx, m.milestoneId, { type: "work_started" }, { now });
