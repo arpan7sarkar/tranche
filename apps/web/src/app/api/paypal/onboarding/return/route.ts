@@ -1,6 +1,6 @@
 import { getDb } from "@/server/db";
 import { completeOnboarding } from "@/server/onboarding";
-import { appUrl, getPayPal } from "@/server/paypal";
+import { appUrl, getPayPal, holdMechanism } from "@/server/paypal";
 import { memberOrNull } from "@/server/session";
 
 // PayPal's query parameters are forgeable, so the status always comes from getSellerStatus.
@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   if (!member) return Response.redirect(`${appUrl()}/sign-in?next=/onboarding`, 303);
   const { missingFeatures } = await completeOnboarding(getDb(), getPayPal(), {
     workspaceId: member.workspaceId,
+    mechanism: holdMechanism(),
   });
   const missing = missingFeatures.length ? `?missing=${missingFeatures.join(",")}` : "";
   return Response.redirect(`${appUrl()}/onboarding${missing}`, 303);

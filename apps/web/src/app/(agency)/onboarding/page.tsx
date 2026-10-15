@@ -1,5 +1,5 @@
 import { schema } from "@tranche/db";
-import { REQUIRED_SELLER_FEATURES, type SellerFeature } from "@tranche/paypal";
+import { SELLER_FEATURES, type SellerFeature } from "@tranche/paypal";
 import { eq } from "drizzle-orm";
 import { Suspense } from "react";
 import { ConnectPayPalButton } from "@/components/connect-paypal-button";
@@ -23,7 +23,7 @@ async function Connections({
   searchParams: PageProps<"/onboarding">["searchParams"];
 }) {
   const { missing } = await searchParams;
-  const missingFeatures = REQUIRED_SELLER_FEATURES.filter((f) =>
+  const missingFeatures = SELLER_FEATURES.filter((f) =>
     String(missing ?? "")
       .split(",")
       .includes(f),
