@@ -57,6 +57,13 @@
       "when": 1791893822296,
       "tag": "0007_event_notify",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792060373220,
+      "tag": "0008_nostalgic_black_queen",
+      "breakpoints": true
     }
   ]
 }

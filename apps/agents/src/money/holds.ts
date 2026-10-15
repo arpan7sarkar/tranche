@@ -4,6 +4,7 @@ import type { Tx } from "./db";
 import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { advanceMilestone } from "./milestones";
+import { planRenewal } from "./timers";
 
 export type HoldRow = typeof schema.hold.$inferSelect;
 
@@ -60,6 +61,11 @@ export async function activateHold(
       expiresAt: facts.expiresAt,
     })
     .where(eq(schema.hold.id, hold.id));
+  await planRenewal(tx, {
+    milestoneId: hold.milestoneId,
+    mechanism: hold.mechanism,
+    originalAuthorizedAt: facts.anchorAt,
+  });
   const r = await advanceMilestone(
     tx,
     hold.milestoneId,

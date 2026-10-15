@@ -103,6 +103,18 @@ export async function handlePayPalEvent(
       const hold = await holdWhere(tx, "paypalAuthorizationId", id);
       if (!hold || hold.status === "voided") return;
       await tx.update(schema.hold).set({ status: "voided" }).where(eq(schema.hold.id, hold.id));
+      const [replacement] = await tx
+        .select({ id: schema.hold.id })
+        .from(schema.hold)
+        .where(
+          and(
+            eq(schema.hold.milestoneId, hold.milestoneId),
+            eq(schema.hold.status, "active"),
+            ne(schema.hold.id, hold.id),
+          ),
+        )
+        .limit(1);
+      if (replacement) return;
       const [m] = await tx
         .select()
         .from(schema.milestone)

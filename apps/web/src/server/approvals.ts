@@ -1,9 +1,9 @@
 import "server-only";
+import { decideApproval as decideUnscoped } from "@tranche/agents-service/money";
 import { type Db, schema } from "@tranche/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
 import type { DealView } from "./deals";
-import * as money from "./money";
 
 export type DecideResult = "decided" | "already_decided" | "not_found";
 
@@ -42,7 +42,7 @@ export async function decideApproval(
   if (!row) return "not_found";
   if (row.decision) return "already_decided";
 
-  await money.decideApproval(db, {
+  await decideUnscoped(db, {
     approvalId: input.approvalId,
     decision: input.decision,
     decidedBy: input.decidedBy,
