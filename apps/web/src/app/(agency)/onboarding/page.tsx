@@ -3,11 +3,13 @@ import { SELLER_FEATURES, type SellerFeature } from "@tranche/paypal";
 import { eq } from "drizzle-orm";
 import { Suspense } from "react";
 import { ConnectPayPalButton } from "@/components/connect-paypal-button";
+import { LocalTime } from "@/components/local-time";
 import { LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatInstant } from "@/lib/dates";
 import { getDb } from "@/server/db";
+import { completeOnboarding, needsSellerRecheck } from "@/server/onboarding";
+import { getPayPal, holdMechanism } from "@/server/paypal";
 import { requireMember } from "@/server/session";
 
 const FEATURE_LABELS: Record<SellerFeature, string> = {
@@ -18,12 +20,40 @@ const FEATURE_LABELS: Record<SellerFeature, string> = {
   VAULT: "save the client's payment method",
 };
 
-async function Connections() {
-  const member = await requireMember();
+async function loadWorkspace(workspaceId: string) {
   const [ws] = await getDb()
     .select()
     .from(schema.workspace)
-    .where(eq(schema.workspace.id, member.workspaceId));
+    .where(eq(schema.workspace.id, workspaceId));
+  return ws;
+}
+
+function CheckAgainButton() {
+  return (
+    <Button
+      variant="outline"
+      nativeButton={false}
+      render={<a href="/api/paypal/onboarding/return" />}
+    >
+      Check again
+    </Button>
+  );
+}
+
+async function Connections() {
+  const member = await requireMember();
+  let ws = await loadWorkspace(member.workspaceId);
+  if (ws && needsSellerRecheck(ws)) {
+    try {
+      await completeOnboarding(getDb(), getPayPal(), {
+        workspaceId: member.workspaceId,
+        mechanism: holdMechanism(),
+      });
+      ws = await loadWorkspace(member.workspaceId);
+    } catch (err) {
+      console.error("PayPal seller status check failed", err);
+    }
+  }
   const missingFeatures = SELLER_FEATURES.filter((f) => ws?.paypalMissingFeatures.includes(f));
   const githubUrl = process.env.NEXT_PUBLIC_GITHUB_APP_INSTALL_URL;
 
@@ -50,18 +80,21 @@ async function Connections() {
               </p>
               {ws?.paypalCheckedAt ? (
                 <p className="text-xs text-muted-foreground">
-                  Last checked{" "}
-                  <time className="tabular" dateTime={ws.paypalCheckedAt.toISOString()}>
-                    {formatInstant(ws.paypalCheckedAt)}
-                  </time>
+                  Last checked <LocalTime at={ws.paypalCheckedAt.toISOString()} />
                 </p>
               ) : null}
-              <ConnectPayPalButton />
+              <div className="flex flex-wrap gap-2">
+                <ConnectPayPalButton />
+                <CheckAgainButton />
+              </div>
             </div>
           ) : ws?.paypalOnboarding === "pending" ? (
-            <p className="text-sm text-muted-foreground">
-              Waiting for PayPal to confirm your account.
-            </p>
+            <div className="flex flex-col items-start gap-3">
+              <p className="text-sm text-muted-foreground">
+                Waiting for PayPal to confirm your account.
+              </p>
+              <CheckAgainButton />
+            </div>
           ) : (
             <ConnectPayPalButton />
           )}

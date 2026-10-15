@@ -4,9 +4,14 @@ import { appUrl, getPayPal, holdMechanism } from "@/server/paypal";
 import { memberOrNull } from "@/server/session";
 
 // PayPal's query parameters are forgeable, so the status always comes from getSellerStatus.
+// The onboarding page's "Check again" button lands here too.
 export async function GET(request: Request) {
   const member = await memberOrNull(request);
-  if (!member) return Response.redirect(`${appUrl()}/sign-in?next=/onboarding`, 303);
+  if (!member) {
+    const { pathname, search } = new URL(request.url);
+    const next = encodeURIComponent(`${pathname}${search}`);
+    return Response.redirect(`${appUrl()}/sign-in?next=${next}`, 303);
+  }
   await completeOnboarding(getDb(), getPayPal(), {
     workspaceId: member.workspaceId,
     mechanism: holdMechanism(),
