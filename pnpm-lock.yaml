@@ -236,6 +236,9 @@ importers:
       '@tranche/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@tranche/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@tranche/db':
         specifier: workspace:*
         version: link:../../packages/db

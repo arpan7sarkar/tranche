@@ -1,9 +1,24 @@
 import "server-only";
+import { HoldMechanism } from "@tranche/contracts";
 import { createPayPalClient, type PayPal, payPalConfigFromEnv } from "@tranche/paypal";
 
-let paypal: PayPal | undefined;
+let client: PayPal | undefined;
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
 
 export function getPayPal(): PayPal {
-  paypal ??= createPayPalClient(payPalConfigFromEnv());
-  return paypal;
+  client ??= createPayPalClient(payPalConfigFromEnv());
+  return client;
+}
+
+export function holdMechanism(): HoldMechanism {
+  return HoldMechanism.parse(process.env.HOLD_MECHANISM || "authorization");
+}
+
+export function appUrl(): string {
+  return required("APP_URL").replace(/\/$/, "");
 }
