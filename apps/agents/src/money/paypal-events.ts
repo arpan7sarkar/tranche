@@ -21,6 +21,11 @@ const Payment = z
   .object({ id: z.string(), amount: Amount, create_time: z.string().optional() })
   .and(OrderRef);
 const Authorization = Payment.and(z.object({ expiration_time: z.string() }));
+const Refund = z.object({
+  id: z.string(),
+  amount: Amount,
+  links: z.array(z.object({ rel: z.string(), href: z.string() })),
+});
 const Dispute = z.object({
   dispute_id: z.string(),
   disputed_transactions: z.array(z.object({ seller_transaction_id: z.string() })).min(1),
@@ -88,6 +93,48 @@ export async function handlePayPalEvent(
       } else if (hold.mechanism === "authorization") {
         await confirmRelease(tx, hold, { captureId: r.id, amountMinor: minor(r.amount) }, now);
       }
+      return;
+    }
+    case "PAYMENT.CAPTURE.REFUNDED": {
+      const r = Refund.parse(resource);
+      const captureId = r.links.find((l) => l.rel === "up")?.href.match(/captures\/([^/?]+)/)?.[1];
+      const hold = captureId ? await holdWhere(tx, "paypalCaptureId", captureId) : undefined;
+      if (!hold) return;
+      const [m] = await tx
+        .select()
+        .from(schema.milestone)
+        .where(eq(schema.milestone.id, hold.milestoneId));
+      // Our own cancellation refunds a delayed hold; that refund needs no further handling.
+      if (!m || m.state === "cancelled" || m.state === "refunded") return;
+      const refundedMinor = minor(r.amount);
+      const full = refundedMinor === hold.amountMinor;
+      const applied =
+        full &&
+        (
+          await advanceMilestone(
+            tx,
+            m.id,
+            { type: "refund_confirmed" },
+            { now, payload: { refundId: r.id } },
+          )
+        ).applied;
+      if (applied) {
+        await tx.update(schema.hold).set({ status: "voided" }).where(eq(schema.hold.id, hold.id));
+        return;
+      }
+      await appendEvent(tx, {
+        type: "alert.raised",
+        dealId: m.dealId,
+        milestoneId: m.id,
+        payload: {
+          kind: "refund_received",
+          refundId: r.id,
+          holdId: hold.id,
+          refundedMinor,
+          state: m.state,
+          title: m.title,
+        },
+      });
       return;
     }
     case "PAYMENT.REFERENCED-PAYOUT-ITEM.COMPLETED": {
