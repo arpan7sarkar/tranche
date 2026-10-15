@@ -4,12 +4,20 @@ import type { Db } from "@tranche/db";
 // Local stand-in for `PayPal` from @tranche/paypal (H2 Tasks 2-4). Replace with
 // `import type { PayPal } from "@tranche/paypal"` once H2 merges.
 type Hold = {
+  status: "active";
   captureId: string | null;
   authorizationId: string | null;
   expiresAt: string;
   honorExpiresAt: string | null;
   vaultId: string | null;
 };
+type PendingHold = {
+  status: "pending";
+  captureId: string | null;
+  authorizationId: string | null;
+  vaultId: string | null;
+};
+type PlacedHold = Hold | PendingHold;
 export type PayPal = {
   getOrder(orderId: string): Promise<{
     id: string;
@@ -27,7 +35,11 @@ export type PayPal = {
     returnUrl: string;
     cancelUrl: string;
   }): Promise<{ orderId: string; approveUrl: string | null; status: string }>;
-  placeHold(input: { requestId: string; orderId: string; mechanism: HoldMechanism }): Promise<Hold>;
+  placeHold(input: {
+    requestId: string;
+    orderId: string;
+    mechanism: HoldMechanism;
+  }): Promise<PlacedHold>;
   renewHold(input: {
     requestId: string;
     authorizationId: string;

@@ -1,0 +1,2 @@
+ALTER TABLE "hold" ADD COLUMN "replaces_hold_id" uuid;--> statement-breakpoint
+ALTER TABLE "hold" ADD CONSTRAINT "hold_replaces_hold_id_hold_id_fk" FOREIGN KEY ("replaces_hold_id") REFERENCES "public"."hold"("id") ON DELETE no action ON UPDATE no action;

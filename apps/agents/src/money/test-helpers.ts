@@ -144,6 +144,7 @@ export function fakePayPal(overrides: Partial<Record<keyof PayPal, unknown>> = {
       status: "COMPLETED",
     })),
     placeHold: vi.fn(async () => ({
+      status: "active",
       captureId: null,
       authorizationId: "AUTH-2",
       expiresAt,

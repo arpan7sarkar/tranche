@@ -1,67 +1,26 @@
-import type { MilestoneState } from "@tranche/contracts";
 import { platformFee, renewalAction } from "@tranche/core";
-import { type Db, schema } from "@tranche/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import type { Tx } from "./db";
+import { schema } from "@tranche/db";
+import { and, eq } from "drizzle-orm";
 import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { activeHold, getHold } from "./holds";
-import { enqueueOutbox } from "./outbox";
 import { type OutboxHandler, requestedMilestoneId } from "./outbox-types";
+import { completeReplacement, enqueueVoid, gate } from "./replacement";
 import { planRenewal, scheduleTimer } from "./timers";
 import { fundingContext } from "./timers-fund";
 
-const RENEWABLE: MilestoneState[] = [
-  "held",
-  "in_progress",
-  "delivered",
-  "verifying",
-  "changes_requested",
-  "release_pending",
-];
 const RETRY_IN_FLIGHT_MS = 3_600_000;
-
-type Gate = "ok" | "cancelled" | "inactive" | "in_flight";
-
-// A renewal must not outlive its milestone, nor race a release or void already on its way to PayPal.
-async function gate(
-  exec: Db | Tx,
-  milestoneId: string,
-  holdId: string,
-  lock: boolean,
-): Promise<{ gate: Gate; dealId: string; title: string; state: MilestoneState }> {
-  const query = exec
-    .select({
-      state: schema.milestone.state,
-      dealId: schema.milestone.dealId,
-      title: schema.milestone.title,
-    })
-    .from(schema.milestone)
-    .where(eq(schema.milestone.id, milestoneId));
-  const [m] = await (lock ? query.for("update") : query);
-  if (!m) throw new PermanentError(`milestone ${milestoneId} not found`);
-  const ref = { dealId: m.dealId, title: m.title, state: m.state };
-  if (m.state === "cancelled") return { gate: "cancelled", ...ref };
-  if (!RENEWABLE.includes(m.state)) return { gate: "inactive", ...ref };
-  const inFlight = await exec
-    .select({ id: schema.outbox.id })
-    .from(schema.outbox)
-    .where(
-      and(
-        inArray(schema.outbox.kind, ["release", "void_hold"]),
-        inArray(schema.outbox.status, ["pending", "sent"]),
-        sql`${schema.outbox.request}->>'holdId' = ${holdId}`,
-      ),
-    )
-    .limit(1);
-  return { gate: inFlight.length > 0 ? "in_flight" : "ok", ...ref };
-}
 
 export const renewHandler: OutboxHandler = {
   async call(deps, row) {
     const milestoneId = requestedMilestoneId(row);
     const hold = await deps.db.transaction((tx) => activeHold(tx, milestoneId));
     if (!hold?.originalAuthorizedAt) return { skipped: true };
+    const [replacement] = await deps.db
+      .select({ id: schema.hold.id })
+      .from(schema.hold)
+      .where(and(eq(schema.hold.replacesHoldId, hold.id), eq(schema.hold.status, "pending")));
+    if (replacement) return { skipped: true };
     const g = await gate(deps.db, milestoneId, hold.id, false);
     if (g.gate !== "ok") return { holdId: hold.id, blocked: g.gate };
     const action = renewalAction(
@@ -118,28 +77,20 @@ export const renewHandler: OutboxHandler = {
     const old = await getHold(tx, String(res.holdId));
     const g = await gate(tx, old.milestoneId, old.id, true);
     const live = old.status === "active";
-    const open = g.gate === "ok" && live;
     const action = res.action as { kind: string; daysLeft?: number } | undefined;
-    const emit = (
-      type: "milestone.held" | "milestone.hold_expiring" | "alert.raised",
-      payload: object,
-    ) =>
-      appendEvent(tx, {
-        type,
-        dealId: g.dealId,
-        milestoneId: old.milestoneId,
-        payload: { title: g.title, state: g.state, ...payload },
-      });
-    const voidHold = (holdId: string) =>
-      enqueueOutbox(
-        tx,
-        { kind: "void_hold", request: { holdId }, requestId: `void:${holdId}` },
-        now,
-      );
 
-    if (g.gate === "cancelled" && live) await voidHold(old.id);
+    if (g.gate === "cancelled" && live) await enqueueVoid(tx, old.id, now);
 
     if (action?.kind === "new_authorization") {
+      const pending = res.status === "pending";
+      const expiresAt = pending ? old.expiresAt : new Date(String(res.expiresAt));
+      if (Number.isNaN(expiresAt.getTime())) {
+        throw new Error(
+          `PayPal returned no usable expiry for authorization ${res.authorizationId}`,
+        );
+      }
+      // A pending authorization has no expiry yet; it borrows the old hold's deadline until the
+      // PAYMENT.AUTHORIZATION.CREATED webhook activates it.
       const [fresh] = await tx
         .insert(schema.hold)
         .values({
@@ -147,21 +98,16 @@ export const renewHandler: OutboxHandler = {
           mechanism: "authorization",
           paypalOrderId: String(res.orderId),
           paypalAuthorizationId: String(res.authorizationId),
-          originalAuthorizedAt: now,
+          originalAuthorizedAt: pending ? null : now,
+          replacesHoldId: old.id,
           amountMinor: old.amountMinor,
           currency: old.currency,
-          status: "active",
-          expiresAt: new Date(String(res.expiresAt)),
+          status: pending ? "pending" : "active",
+          expiresAt,
         })
         .returning();
       if (!fresh) throw new Error("hold insert returned no row");
-      if (!open) {
-        await voidHold(fresh.id);
-        return;
-      }
-      await voidHold(old.id);
-      await planRenewal(tx, fresh);
-      await emit("milestone.held", { renewed: true, holdId: fresh.id, replacedHoldId: old.id });
+      if (!pending) await completeReplacement(tx, fresh, now);
       return;
     }
 
@@ -184,14 +130,21 @@ export const renewHandler: OutboxHandler = {
       });
       return;
     }
-    if (!open) return;
+    if (g.gate !== "ok" || !live) return;
 
     if (action?.kind === "alert") {
-      await emit("milestone.hold_expiring", { holdId: old.id, daysLeft: action.daysLeft });
-      await emit("alert.raised", {
-        kind: "delayed_disbursement_expiring",
-        holdId: old.id,
-        daysLeft: action.daysLeft,
+      const payload = { title: g.title, state: g.state, holdId: old.id, daysLeft: action.daysLeft };
+      await appendEvent(tx, {
+        type: "milestone.hold_expiring",
+        dealId: g.dealId,
+        milestoneId: old.milestoneId,
+        payload,
+      });
+      await appendEvent(tx, {
+        type: "alert.raised",
+        dealId: g.dealId,
+        milestoneId: old.milestoneId,
+        payload: { kind: "delayed_disbursement_expiring", ...payload },
       });
       return;
     }

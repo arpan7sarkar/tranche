@@ -16,6 +16,7 @@ import type {
   ScheduledActionKind,
 } from "@tranche/contracts";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   date,
@@ -204,6 +205,7 @@ export const hold = pgTable(
     paypalAuthorizationId: text(),
     originalAuthorizedAt: instant(),
     lastReauthorizedAt: instant(),
+    replacesHoldId: uuid().references((): AnyPgColumn => hold.id),
     amountMinor: minor().notNull(),
     currency: text().notNull(),
     status: text().$type<HoldStatus>().notNull().default("pending"),
