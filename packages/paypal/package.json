@@ -4,15 +4,18 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./agent-tools": "./src/agent-tools.ts"
   },
   "scripts": {
     "typecheck": "tsc",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "2.0.71",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@paypal/agent-toolkit": "1.11.0",
     "@tranche/contracts": "workspace:*",
-    "@paypal/paypal-server-sdk": "2.5.0",
     "zod": "4.6.5"
   }
 }

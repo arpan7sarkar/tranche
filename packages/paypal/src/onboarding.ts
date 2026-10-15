@@ -9,7 +9,7 @@ import {
   SandboxOperationSpec,
   type SandboxOutcome,
 } from "@tranche/contracts";
-import { type SandboxRequest, SandboxTransportError } from "./client";
+import { type SandboxRequest, SandboxTransportError } from "./sandbox-client";
 
 export function onboardingRequest(context: SandboxOnboardingContext): SandboxRequest {
   const c = SandboxOnboardingContext.parse(context);
