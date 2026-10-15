@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   onboardingApprovalSummary,
-  paymentApproval,
   SandboxApprovalSummary,
   SandboxOperationSpec,
   SandboxReferralRecoveryInput,
 } from "@tranche/contracts";
+import { paymentApproval } from "@tranche/core";
 import { createSandboxStore, type SandboxStore } from "@tranche/db";
 import { onboardingSpec, paymentSpec } from "@tranche/paypal";
 import { onboardingAdapter } from "./adapters";

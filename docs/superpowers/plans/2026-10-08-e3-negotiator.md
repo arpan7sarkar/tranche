@@ -715,7 +715,7 @@ describe.runIf(Boolean(db))("startNegotiation", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/start.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/start.test.ts`
 Expected: FAIL with "Failed to resolve import ./base-plan".
 
 - [ ] **Step 3: Add the one-open-negotiation-per-deal index**
@@ -867,7 +867,7 @@ With postgres.js the unique violation surfaces as `code: "23505"`; if Drizzle wr
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/start.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/start.test.ts`
 Expected: PASS, 3 tests.
 
 - [ ] **Step 6: Commit**
@@ -1042,7 +1042,7 @@ describe.runIf(Boolean(db))("negotiation runner", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/run.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/run.test.ts`
 Expected: FAIL with "Failed to resolve import ./run".
 
 - [ ] **Step 3: Write the prompt builder**
@@ -1287,7 +1287,7 @@ Leave `export * from "./view";` out until Task 6 creates `view.ts`, then add it.
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator`
 Expected: PASS, all negotiator tests (protocol 10, start 3, run 6).
 
 - [ ] **Step 6: Commit**
@@ -2047,7 +2047,7 @@ describe.runIf(Boolean(db))("evalNegotiationCase", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/eval-cases.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/eval-cases.test.ts`
 Expected: FAIL with "Failed to resolve import ./eval-cases".
 
 - [ ] **Step 3: Write the cases**
@@ -2165,7 +2165,7 @@ export async function evalNegotiationCase(db: Db, c: NegotiationEvalCase, model:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/eval-cases.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/negotiator/eval-cases.test.ts`
 Expected: PASS, 2 tests.
 
 - [ ] **Step 5: Commit**

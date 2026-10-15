@@ -2,9 +2,6 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   onboardingApprovalSummary,
   PayPalReferralId,
-  paymentApproval,
-  paymentStageCalls,
-  paymentTotalCalls,
   SandboxAllocation,
   SandboxBuyerChangeSummary,
   SandboxInspection,
@@ -18,6 +15,9 @@ import {
 } from "@tranche/contracts";
 import {
   needsSandboxApproval,
+  paymentApproval,
+  paymentStageCalls,
+  paymentTotalCalls,
   sandboxApprovalMatches,
   sandboxBuyerChangeSpec,
   sandboxEligibility,

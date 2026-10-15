@@ -513,7 +513,7 @@ describe.runIf(Boolean(db))("proposeAction", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `pnpm db:up && DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/propose.test.ts`
+Run: `pnpm db:up && DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/propose.test.ts`
 Expected: FAIL with "Failed to resolve import ./evidence".
 
 - [ ] **Step 4: Implement**
@@ -584,7 +584,7 @@ export async function recordEvidence(db: Db, input: EvidenceInput): Promise<{ id
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/propose.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/propose.test.ts`
 Expected: PASS, 3 tests.
 
 - [ ] **Step 6: Commit**
@@ -702,7 +702,7 @@ describe.runIf(Boolean(db))("consumeEvents", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/dispatcher.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/dispatcher.test.ts`
 Expected: FAIL with "Failed to resolve import ./dispatcher".
 
 - [ ] **Step 3: Implement**
@@ -764,7 +764,7 @@ export async function consumeEvents(
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/dispatcher.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/runtime/dispatcher.test.ts`
 Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Commit**
@@ -1276,7 +1276,7 @@ The fixture rate card is 50000 per day with a 100000 minimum; the 6 task days gi
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/planner/plan-deal.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/planner/plan-deal.test.ts`
 Expected: FAIL with "Failed to resolve import ./plan-deal".
 
 - [ ] **Step 3: Implement**
@@ -1431,7 +1431,7 @@ Move the new import to the top of the file with the others.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/planner/plan-deal.test.ts && pnpm typecheck`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/planner/plan-deal.test.ts && pnpm typecheck`
 Expected: PASS, 5 tests; typecheck clean.
 
 - [ ] **Step 5: Smoke-test against real Gemini (manual, costs a few cents)**
@@ -1440,7 +1440,7 @@ Run (with `GOOGLE_GENERATIVE_AI_API_KEY` in `.env` and the seed applied):
 
 ```bash
 pnpm --filter @tranche/db db:seed
-DEAL=$(psql postgres://tranche:tranche@localhost:5432/tranche -Atc "select id from deal where title='Acme storefront rebuild'")
+DEAL=$(psql postgres://tranche:tranche@localhost:5433/tranche -Atc "select id from deal where title='Acme storefront rebuild'")
 pnpm tsx --env-file=.env -e "import('@tranche/agents').then(async (a) => { const { createDb } = await import('@tranche/db'); const db = createDb(); console.log(await a.planDeal(db, { dealId: '$DEAL', repo: 'northwind/acme-storefront', stagingUrl: 'https://acme-staging.example.com', startDate: new Date().toISOString().slice(0,10) })); await db.\$client.end(); })"
 ```
 
@@ -1558,7 +1558,7 @@ describe.runIf(Boolean(db))("createDraftDeal", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/app/api/plans/draft-deal.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/app/api/plans/draft-deal.test.ts`
 Expected: FAIL with "Failed to resolve import ./draft-deal".
 
 - [ ] **Step 4: Implement**
@@ -1690,7 +1690,7 @@ DEV_WORKSPACE_ID=
 
 - [ ] **Step 5: Run tests and an HTTP smoke test**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/app/api/plans/draft-deal.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/app/api/plans/draft-deal.test.ts`
 Expected: PASS, 4 tests.
 
 Then set `DEV_WORKSPACE_ID` in `.env` to the seeded workspace id (`psql ... -Atc "select id from workspace where name='Northwind Studio'"`), run `pnpm dev`, and:

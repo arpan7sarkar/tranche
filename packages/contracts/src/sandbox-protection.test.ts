@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  paymentStageCalls,
-  paymentTotalCalls,
   SandboxBuyerChangeInput,
   SandboxCheckout,
   SandboxPaymentContext,
@@ -104,17 +102,5 @@ describe("P4 private payment context", () => {
         },
       }).success,
     ).toBe(false);
-  });
-  it("covers all stage allowances without multiplying principal", () => {
-    for (let n = 2; n <= 4; n++) {
-      const c = { ...paymentFixture(), recoveryCalls: n };
-      expect(paymentTotalCalls(c)).toBe(
-        ["create_order", "authorize_order", "capture_order"].reduce(
-          (sum, s) => sum + paymentStageCalls(s as "create_order", n),
-          0,
-        ),
-      );
-      expect(paymentTotalCalls(c)).toBeLessThanOrEqual(50);
-    }
   });
 });

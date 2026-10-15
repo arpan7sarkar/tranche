@@ -44,6 +44,24 @@ pnpm dev
 ```
 
 Running the agents service locally needs the [Render CLI](https://render.com/docs/cli): `pnpm dev:agents`.
+Compose exposes the application database at `localhost:5433`; container-internal connections use port 5432.
+For existing local `.env` files, update only the application database port if it still points to this Compose service on 5432.
+
+### Disposable F0 integration database
+
+The F0 runner suite requires a separate disposable database and rejects the application database.
+Start the optional test service, migrate it, and explicitly set its URL before running tests.
+
+```powershell
+docker compose --profile test up -d --wait postgres-test
+$env:TEST_DATABASE_URL = 'postgres://tranche:tranche@localhost:55432/tranche_p2_test'
+pnpm --filter @tranche/db db:migrate:test
+pnpm test
+```
+
+The test service uses temporary storage that is lost when the container stops.
+The guarded migration command never falls back to `DATABASE_URL`.
+Turbo forwards both database variables and executes tests without cached results.
 
 ## Commands
 

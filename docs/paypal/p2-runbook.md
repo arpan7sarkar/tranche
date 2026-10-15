@@ -91,6 +91,8 @@ After browser actions, adapters must confirm approval or consent through authori
 The database suite requires TEST_DATABASE_URL pointing only to localhost or 127.0.0.1, port 55432, database tranche_p2_test.
 Its setup truncates sandbox tables in that disposable database before each case; it rejects other destinations and never falls back to DATABASE_URL.
 Apply the generated migrations to that test database first and set TEST_DATABASE_URL privately in the test process.
+For the repository's disposable Docker fixture and guarded migration command, follow the [root setup instructions](../../README.md#disposable-f0-integration-database).
+The application Compose service uses host port 5433, while this isolated F0 test service uses host port 55432.
 Without TEST_DATABASE_URL, the database scenarios are explicitly skipped rather than evidence of a passing persistence check.
 
 ```powershell
