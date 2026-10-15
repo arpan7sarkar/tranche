@@ -7,9 +7,10 @@ export {
   holdFromOrder,
   type OrderRes,
   type PayPal,
+  type PendingHold,
+  type PlaceHoldResult,
 } from "./client";
 export { PayPalError } from "./errors";
-export { PLATFORM_FEE_BPS, platformFeeFor } from "./fees";
 export {
   authAssertion,
   createTransport,

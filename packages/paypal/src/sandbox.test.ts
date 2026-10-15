@@ -1,8 +1,8 @@
 import { HoldMechanism, type Money, toPayPalValue } from "@tranche/contracts";
-import { describe, expect, it } from "vitest";
+import { platformFee } from "@tranche/core";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createPayPalClient, type PayPal } from "./client";
 import { PayPalError } from "./errors";
-import { platformFeeFor } from "./fees";
 import { payPalConfigFromEnv } from "./http";
 
 const env = process.env;
@@ -11,7 +11,7 @@ const live =
 const mechanism = HoldMechanism.parse(env.HOLD_MECHANISM ?? "authorization");
 const seller = env.SANDBOX_SELLER_MERCHANT_ID;
 const amount: Money = { currency: "USD", minor: 100 };
-const fee = platformFeeFor(amount);
+const fee = platformFee(amount);
 const value = (m: Money) => ({ currency_code: m.currency, value: toPayPalValue(m) });
 
 function cardOrder(paypal: PayPal, intent: "AUTHORIZE" | "CAPTURE", payee?: string) {
@@ -50,7 +50,10 @@ function cardOrder(paypal: PayPal, intent: "AUTHORIZE" | "CAPTURE", payee?: stri
 }
 
 describe.runIf(live)("PayPal sandbox", () => {
-  const paypal = createPayPalClient(payPalConfigFromEnv());
+  let paypal: PayPal;
+  beforeAll(() => {
+    paypal = createPayPalClient(payPalConfigFromEnv());
+  });
 
   it("authorizes, reads the hold, and voids it", async () => {
     const order = await cardOrder(paypal, "AUTHORIZE");
@@ -59,6 +62,7 @@ describe.runIf(live)("PayPal sandbox", () => {
       orderId: order.id,
       mechanism: "authorization",
     });
+    if (hold.status !== "active") throw new Error("sandbox card authorization is pending");
     expect(Date.parse(hold.expiresAt)).toBeGreaterThan(Date.now() + 20 * 86_400_000);
     await paypal.voidHold({
       requestId: crypto.randomUUID(),
