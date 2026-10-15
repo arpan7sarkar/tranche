@@ -79,7 +79,12 @@ export async function makeMilestone(
       verifiedAt: o.verifiedAt ?? null,
     })
     .returning();
-  return { dealId: must(dl).id, milestoneId: must(ms).id };
+  return {
+    workspaceId: must(ws).id,
+    clientId: must(cl).id,
+    dealId: must(dl).id,
+    milestoneId: must(ms).id,
+  };
 }
 
 export async function makeHold(
