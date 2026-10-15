@@ -38,7 +38,7 @@ export type DealView = {
     startDate: string | null;
     endDate: string | null;
     criteria: AcceptanceCriteria;
-    hold: { status: HoldStatus; expiresAt: string } | null;
+    hold: { status: HoldStatus; expiresAt: string; pendingReview: boolean } | null;
     fundDueAt?: string | null;
     evidence: Array<{
       id: string;
@@ -195,7 +195,15 @@ export async function getDealView(
         startDate: m.startDate,
         endDate: m.endDate,
         criteria: m.criteria,
-        hold: hold ? { status: hold.status, expiresAt: hold.expiresAt.toISOString() } : null,
+        hold: hold
+          ? {
+              status: hold.status,
+              expiresAt: hold.expiresAt.toISOString(),
+              pendingReview:
+                hold.status === "pending" &&
+                Boolean(hold.paypalCaptureId ?? hold.paypalAuthorizationId),
+            }
+          : null,
         fundDueAt: funding.find((f) => f.milestoneId === m.id)?.dueAt.toISOString() ?? null,
         evidence: evidence
           .filter((e) => e.milestoneId === m.id)

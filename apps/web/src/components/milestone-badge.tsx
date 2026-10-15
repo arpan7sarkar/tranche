@@ -14,12 +14,14 @@ export const TONE_CLASS: Record<Tone, string> = {
 
 export function MilestoneBadge({
   state,
+  pendingReview,
   className,
 }: {
   state: MilestoneState;
+  pendingReview?: boolean;
   className?: string;
 }) {
-  const { label, tone } = milestoneTone(state);
+  const { label, tone } = milestoneTone(state, { pendingReview });
   return (
     <span
       className={cn(

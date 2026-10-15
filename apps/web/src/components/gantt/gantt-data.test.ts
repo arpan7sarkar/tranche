@@ -19,7 +19,7 @@ function milestone(overrides: Partial<Milestone> = {}): Milestone {
     startDate: "2026-10-12",
     endDate: "2026-10-20",
     criteria: { checks: [{ kind: "url_live", url: "https://x.dev" }], prose: [] },
-    hold: { status: "active", expiresAt: "2026-11-01T00:00:00Z" },
+    hold: { status: "active", expiresAt: "2026-11-01T00:00:00Z", pendingReview: false },
     evidence: [],
     ...overrides,
   };

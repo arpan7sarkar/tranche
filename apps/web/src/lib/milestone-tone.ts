@@ -26,6 +26,13 @@ const TONES: Record<MilestoneState, { label: string; tone: Tone }> = {
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
-export function milestoneTone(state: MilestoneState): { label: string; tone: Tone } {
+// A pending hold that already has a PayPal capture or authorization is in PayPal's review.
+export function milestoneTone(
+  state: MilestoneState,
+  opts: { pendingReview?: boolean } = {},
+): { label: string; tone: Tone } {
+  if (state === "funding" && opts.pendingReview) {
+    return { label: "Payment pending review", tone: "attention" };
+  }
   return TONES[state];
 }

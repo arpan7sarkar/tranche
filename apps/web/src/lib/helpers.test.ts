@@ -4,6 +4,7 @@ import { describeEvent } from "./activity";
 import { describeCheck } from "./criteria";
 import { milestoneTone } from "./milestone-tone";
 import { formatMoney, totalOf } from "./money";
+import { explainReschedule } from "./reschedule";
 
 const TONES = ["neutral", "progress", "held", "verifying", "attention", "released", "danger"];
 
@@ -78,5 +79,17 @@ describe("describeEvent", () => {
 
   it("covers alert.raised", () => {
     expect(describeEvent("alert.raised", { kind: "paypal_down" }).trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe("explainReschedule", () => {
+  it("names the blocking task by title with a readable date", () => {
+    const tasks = [
+      { key: "visual", title: "Visual design" },
+      { key: "wire", title: "Wireframes" },
+    ];
+    expect(
+      explainReschedule('task "visual" cannot start before "wire" ends on 2026-10-17', tasks),
+    ).toBe('"Visual design" cannot start before "Wireframes" ends on Oct 17.');
   });
 });

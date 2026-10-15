@@ -6,6 +6,7 @@ import { ApprovalsList } from "@/components/approvals-list";
 import { MilestoneBadge } from "@/components/milestone-badge";
 import { AutoReleaseForm } from "@/components/portal/auto-release-form";
 import { FundButton } from "@/components/portal/fund-button";
+import { PendingReviewNote } from "@/components/portal/pending-review-note";
 import { PortalLive } from "@/components/portal/portal-live";
 import { ReleaseButton } from "@/components/portal/release-button";
 import { EmptyState, LoadingState } from "@/components/states";
@@ -31,6 +32,9 @@ function MilestoneAction({
   releaseSubmitted: boolean;
 }) {
   const amount = formatMoney({ currency, minor: m.priceMinor });
+  if (m.state === "funding" && m.hold?.pendingReview) {
+    return <PendingReviewNote milestoneKey={m.key} />;
+  }
   if (m.state === "funding") {
     return (
       <FundButton
@@ -98,7 +102,7 @@ function MilestoneItem({
             </Link>
           </h3>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <MilestoneBadge state={m.state} />
+            <MilestoneBadge state={m.state} pendingReview={m.hold?.pendingReview} />
             {m.startDate && m.endDate ? (
               <span className="tabular text-xs text-muted-foreground">
                 {formatDay(m.startDate)} - {formatDay(m.endDate)}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MilestoneBadge } from "@/components/milestone-badge";
+import { PendingReviewNote } from "@/components/portal/pending-review-note";
 import { PortalLive } from "@/components/portal/portal-live";
 import { ReleaseButton } from "@/components/portal/release-button";
 import { LoadingState } from "@/components/states";
@@ -77,7 +78,14 @@ async function Evidence({ params }: { params: Promise<{ token: string; milestone
           <h1 className="min-w-0 text-4xl break-words">{m.title}</h1>
           <span className="tabular text-lg">{amount}</span>
         </div>
-        <MilestoneBadge state={m.state} className="self-start" />
+        <MilestoneBadge
+          state={m.state}
+          pendingReview={m.hold?.pendingReview}
+          className="self-start"
+        />
+        {m.state === "funding" && m.hold?.pendingReview ? (
+          <PendingReviewNote milestoneKey={m.key} />
+        ) : null}
       </header>
 
       {m.state === "release_pending" ? (

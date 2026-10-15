@@ -1,7 +1,7 @@
 "use client";
 
 import type { MilestoneState } from "@tranche/contracts";
-import { CircleCheck, CircleDashed, CircleX, Pencil } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleDashed, CircleX, Pencil, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ActivityPanel } from "@/components/activity-panel";
@@ -10,6 +10,7 @@ import { DealStatusBadge } from "@/components/deal-status-badge";
 import { addDays, LOCKED_STATES } from "@/components/gantt/gantt-data";
 import { GanttLoader } from "@/components/gantt/gantt-loader";
 import { MilestoneBadge } from "@/components/milestone-badge";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import { useDealStream } from "@/hooks/use-deal-stream";
 import { describeCheck } from "@/lib/criteria";
 import { formatDay } from "@/lib/dates";
 import { formatMoney, totalOf } from "@/lib/money";
+import { explainReschedule } from "@/lib/reschedule";
 import type { DealView } from "@/server/deals";
 
 type Milestone = DealView["milestones"][number];
@@ -61,6 +63,8 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
   const [editing, setEditing] = useState<Task | null>(null);
   const [delivering, setDelivering] = useState<Milestone | null>(null);
   const [pending, setPending] = useState(false);
+  const [ganttError, setGanttError] = useState<{ title: string; reason: string } | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [since] = useState(initialView.activity[0]?.id);
   const dealId = view.deal.id;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,20 +102,32 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     }
   }
 
-  async function move(taskId: string, start: string): Promise<boolean> {
+  async function move(taskId: string, start: string): Promise<{ ok: boolean; reason?: string }> {
     const res = await post("/tasks/reschedule", { taskId, start });
-    refresh();
-    if (!res) return false;
-    if (res.status === 404) {
-      toast.error("Rescheduling is not available yet.");
-      return false;
+    if (!res) return { ok: false };
+    if (res.status === 422) {
+      const reason = await errorOf(res, "That move is not allowed.");
+      return { ok: false, reason: explainReschedule(reason, view.tasks) };
     }
     if (!res.ok) {
-      toast.error(await errorOf(res, "That move is not allowed."));
-      return false;
+      toast.error("Could not update the schedule. Try again.");
+      return { ok: false };
     }
+    refresh();
     toast.success("Schedule updated.");
-    return true;
+    return { ok: true };
+  }
+
+  async function moveFromGantt(taskId: string, start: string): Promise<boolean> {
+    const result = await move(taskId, start);
+    const title = view.tasks.find((t) => t.id === taskId)?.title ?? "this task";
+    setGanttError(result.reason ? { title, reason: result.reason } : null);
+    return result.ok;
+  }
+
+  function editTask(task: Task | null) {
+    setEditError(null);
+    setEditing(task);
   }
 
   async function send() {
@@ -154,8 +170,10 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     e.preventDefault();
     if (!editing) return;
     const start = String(new FormData(e.currentTarget).get("start") ?? "");
-    if (start === editing.startDate) return setEditing(null);
-    if (await move(editing.id, start)) setEditing(null);
+    if (start === editing.startDate) return editTask(null);
+    const result = await move(editing.id, start);
+    if (result.ok) editTask(null);
+    else setEditError(result.reason ?? null);
   }
 
   async function submitDelivery(e: FormEvent<HTMLFormElement>) {
@@ -209,8 +227,25 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
       </header>
 
       {view.tasks.length > 0 ? (
-        <section aria-label="Schedule" className="hidden md:block">
-          <GanttLoader view={view} onMove={(id, start) => void move(id, start)} />
+        <section aria-label="Schedule" className="hidden flex-col gap-3 md:flex">
+          {ganttError ? (
+            <Alert variant="destructive" data-testid="reschedule-error">
+              <CircleAlert />
+              <AlertTitle>Could not move {ganttError.title}</AlertTitle>
+              <AlertDescription>{ganttError.reason}</AlertDescription>
+              <AlertAction>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Dismiss"
+                  onClick={() => setGanttError(null)}
+                >
+                  <X />
+                </Button>
+              </AlertAction>
+            </Alert>
+          ) : null}
+          <GanttLoader view={view} onMove={moveFromGantt} />
         </section>
       ) : null}
 
@@ -232,7 +267,7 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
                     milestone={m}
                     currency={view.deal.currency}
                     tasks={view.tasks.filter((t) => t.milestoneId === m.id)}
-                    onEditTask={setEditing}
+                    onEditTask={editTask}
                     onDeliver={setDelivering}
                   />
                 ))}
@@ -287,7 +322,7 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
         </aside>
       </div>
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && editTask(null)}>
         <DialogContent>
           <form onSubmit={saveTask} className="flex flex-col gap-4">
             <DialogHeader>
@@ -306,10 +341,18 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
                 defaultValue={editing?.startDate}
                 data-testid="task-start-input"
                 className="tabular"
+                aria-invalid={editError ? true : undefined}
+                aria-describedby={editError ? "task-start-error" : undefined}
+                onChange={() => setEditError(null)}
               />
+              {editError ? (
+                <p id="task-start-error" role="alert" className="text-sm text-destructive">
+                  {editError}
+                </p>
+              ) : null}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outline" onClick={() => editTask(null)}>
                 Cancel
               </Button>
               <Button type="submit" data-testid="save-task" disabled={pending}>
@@ -388,7 +431,11 @@ function MilestoneCard({
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
           <h3 className="font-medium break-words">{m.title}</h3>
-          <MilestoneBadge state={m.state} className="self-start" />
+          <MilestoneBadge
+            state={m.state}
+            pendingReview={m.hold?.pendingReview}
+            className="self-start"
+          />
         </div>
         <span className="tabular text-lg">{formatMoney({ currency, minor: m.priceMinor })}</span>
       </div>
@@ -403,16 +450,26 @@ function MilestoneCard({
         <div className="flex flex-col gap-0.5">
           <dt className="text-xs text-muted-foreground">Funding</dt>
           <dd className="tabular" data-testid={`scheduled-fund-${m.key}`}>
-            {m.fundDueAt ? `Due ${formatDay(m.fundDueAt)}` : "Not scheduled"}
+            {m.hold?.pendingReview
+              ? "In PayPal review"
+              : m.fundDueAt
+                ? `Due ${formatDay(m.fundDueAt)}`
+                : "Not scheduled"}
           </dd>
         </div>
-        {m.hold ? (
+        {m.hold?.status === "active" ? (
           <div className="flex flex-col gap-0.5">
             <dt className="text-xs text-muted-foreground">Hold expires</dt>
             <dd className="tabular">{formatDay(m.hold.expiresAt)}</dd>
           </div>
         ) : null}
       </dl>
+
+      {m.hold?.pendingReview ? (
+        <p className="text-sm text-muted-foreground" data-testid={`pending-review-${m.key}`}>
+          PayPal is reviewing the client's payment. Work can start once it clears.
+        </p>
+      ) : null}
 
       {tasks.length > 0 ? (
         <ul className="flex flex-col divide-y rounded-md border" aria-label={`Tasks in ${m.title}`}>
