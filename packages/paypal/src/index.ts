@@ -10,7 +10,13 @@ export {
 } from "./client";
 export { PayPalError } from "./errors";
 export { PLATFORM_FEE_BPS, platformFeeFor } from "./fees";
-export { authAssertion, createTransport, type PayPalConfig, type Transport } from "./http";
+export {
+  authAssertion,
+  createTransport,
+  type PayPalConfig,
+  payPalConfigFromEnv,
+  type Transport,
+} from "./http";
 export * from "./onboarding";
 export { PAYPAL_OUTBOX_KINDS, type PayPalOutboxKind, runPayPalOutbox } from "./outbox";
 export * from "./protection";

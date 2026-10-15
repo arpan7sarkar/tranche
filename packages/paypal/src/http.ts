@@ -110,3 +110,20 @@ export function createTransport(config: PayPalConfig) {
 }
 
 export type Transport = ReturnType<typeof createTransport>;
+
+const LIVE_HOSTS = new Set(["api-m.paypal.com", "api.paypal.com"]);
+
+export function payPalConfigFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): PayPalConfig {
+  const baseUrl = env.PAYPAL_API_BASE || "https://api-m.sandbox.paypal.com";
+  if (LIVE_HOSTS.has(new URL(baseUrl).hostname))
+    throw new Error("Tranche runs against the PayPal sandbox only");
+  return {
+    clientId: env.PAYPAL_CLIENT_ID ?? "",
+    clientSecret: env.PAYPAL_CLIENT_SECRET ?? "",
+    baseUrl,
+    partnerAttributionId: env.PAYPAL_PARTNER_ATTRIBUTION_ID || undefined,
+    partnerMerchantId: env.PAYPAL_PARTNER_MERCHANT_ID || undefined,
+  };
+}
