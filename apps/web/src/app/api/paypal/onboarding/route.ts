@@ -1,6 +1,6 @@
 import { getDb } from "@/server/db";
 import { startOnboarding } from "@/server/onboarding";
-import { appUrl, getPayPal } from "@/server/paypal";
+import { appUrl, getPayPal, holdMechanism } from "@/server/paypal";
 import { memberOrNull } from "@/server/session";
 
 export async function POST(request: Request) {
@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     await startOnboarding(getDb(), getPayPal(), {
       workspaceId: member.workspaceId,
       appUrl: appUrl(),
+      mechanism: holdMechanism(),
     }),
   );
 }

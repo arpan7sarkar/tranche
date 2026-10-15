@@ -7,11 +7,12 @@ import { and, eq, ne } from "drizzle-orm";
 export async function startOnboarding(
   db: Db,
   paypal: Pick<PayPal, "createSellerReferral">,
-  input: { workspaceId: string; appUrl: string },
+  input: { workspaceId: string; appUrl: string; mechanism: HoldMechanism },
 ): Promise<{ actionUrl: string }> {
   const { actionUrl } = await paypal.createSellerReferral({
     trackingId: input.workspaceId,
     returnUrl: `${input.appUrl}/api/paypal/onboarding/return`,
+    mechanism: input.mechanism,
   });
   await db
     .update(schema.workspace)
