@@ -1,0 +1,1 @@
+ALTER TABLE "hold" ADD COLUMN "last_reauthorized_at" timestamp with time zone;

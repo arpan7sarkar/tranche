@@ -203,6 +203,7 @@ export const hold = pgTable(
     paypalCaptureId: text(),
     paypalAuthorizationId: text(),
     originalAuthorizedAt: instant(),
+    lastReauthorizedAt: instant(),
     amountMinor: minor().notNull(),
     currency: text().notNull(),
     status: text().$type<HoldStatus>().notNull().default("pending"),
