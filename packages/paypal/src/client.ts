@@ -51,7 +51,9 @@ const amountOf = (m: Money): Amount => ({ currency_code: m.currency, value: toPa
 const addDays = (iso: string, days: number) =>
   new Date(Date.parse(iso) + days * DAY_MS).toISOString();
 const fees = (fee: Money | undefined) =>
-  fee ? { platform_fees: [{ amount: amountOf(fee) }] } : {};
+  fee && fee.minor > 0 ? { platform_fees: [{ amount: amountOf(fee) }] } : {};
+const instruction = (i: Record<string, unknown>) =>
+  Object.keys(i).length > 0 ? { payment_instruction: i } : {};
 
 function declined(kind: "capture" | "authorization", status: string): PayPalError {
   return new PayPalError({
@@ -241,12 +243,12 @@ export function createPayPalClient(config: PayPalConfig) {
               custom_id: input.milestoneId,
               amount: amountOf(input.amount),
               payee: { merchant_id: input.payeeMerchantId },
-              payment_instruction: {
+              ...instruction({
                 ...fees(input.platformFee),
                 ...(input.mechanism === "delayed_disbursement"
                   ? { disbursement_mode: "DELAYED" }
                   : {}),
-              },
+              }),
             },
           ],
           payment_source: { paypal: paypalSource },
@@ -379,7 +381,7 @@ export function createPayPalClient(config: PayPalConfig) {
         requestId: input.requestId,
         prefer: "return=minimal",
         authAssertionFor: input.payeeMerchantId,
-        body: input.platformFee ? { payment_instruction: fees(input.platformFee) } : {},
+        body: instruction(fees(input.platformFee)),
       });
     },
 

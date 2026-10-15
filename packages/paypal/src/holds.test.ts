@@ -35,3 +35,24 @@ describe("placeHold", () => {
     expect(m.calls).toHaveLength(1);
   });
 });
+
+describe("createFundingOrder", () => {
+  it("omits platform fees when the fee is zero", async () => {
+    const m = mockPayPal([
+      { method: "POST", path: "/v2/checkout/orders", status: 201, body: ORDER_APPROVED },
+    ]);
+    await createPayPalClient(CONFIG).createFundingOrder({
+      requestId: "fund-m1-0",
+      mechanism: "authorization",
+      amount: { currency: "USD", minor: 100 },
+      platformFee: { currency: "USD", minor: 0 },
+      payeeMerchantId: "SELLER1",
+      milestoneId: "m1",
+      vaultId: null,
+      returnUrl: "https://app.test/portal/tok?funded=m1",
+      cancelUrl: "https://app.test/portal/tok",
+    });
+    const unit = JSON.parse(m.calls[0]?.body ?? "{}").purchase_units[0];
+    expect(unit.payment_instruction).toBeUndefined();
+  });
+});
