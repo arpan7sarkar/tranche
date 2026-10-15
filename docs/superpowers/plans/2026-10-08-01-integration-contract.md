@@ -54,6 +54,7 @@ The verifier stores screenshot locations in `evidence.data.imageUrl` (E2 Task 6)
 - Approvals, human actions, plan agreement and rescheduling have one implementation each, in `@tranche/agents-service/money` (H3 Task 9 and H4 Task 5): `decideApproval`, `submitHumanAction`, `agreeToPlan`, `applyReschedule`.
   H5's approvals screen and client portal call these; they do not reimplement them.
   `agreeToPlan(db, dealId, expectedPlanVersion)` takes the `planVersion` (from `@tranche/core`) of the plan the client reviewed, checks it under the deal lock in the same transaction, and returns `"plan_changed"` instead of agreeing when it differs.
+  It returns `"already_agreed"` or `"not_agreeable"` from the same locked read of the deal status, so it never throws for a deal that moved on.
 - `hold.expiresAt` is the hard deadline (authorization: original authorization plus 29 days; delayed disbursement: capture plus 27 days).
   `placeHold` and `renewHold` also return `honorExpiresAt` (H2 Task 3).
 - PayPal rejects reauthorization inside the honor period, so H4 reauthorizes only when at least 4 full days have passed since the original authorization (`elapsedDays >= HONOR_DAYS + 1`); it creates a fresh authorization from the vault at day 27.

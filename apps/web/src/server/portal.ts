@@ -1,5 +1,5 @@
 import "server-only";
-import type { ActionStatus, DealStatus, Policy } from "@tranche/contracts";
+import type { ActionStatus, Policy } from "@tranche/contracts";
 import { type Db, resolveMagicLink, schema } from "@tranche/db";
 import { and, count, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
@@ -8,12 +8,9 @@ import * as money from "./money";
 
 export type AutoReleaseHours = 24 | 72 | 168;
 export type ReleaseResult = "submitted" | "already_submitted" | "not_releasable";
-export type AgreeResult = "agreed" | "already_agreed" | "not_agreeable" | "plan_changed";
+export type AgreeResult = money.AgreeToPlanResult;
 
 const UNSUCCESSFUL: ActionStatus[] = ["failed", "rejected"];
-
-const AGREEABLE: ReadonlySet<DealStatus> = new Set(["sent", "negotiating"]);
-const AGREED: ReadonlySet<DealStatus> = new Set(["agreed", "active", "completed"]);
 
 export function resolvePortalToken(token: string) {
   return resolveMagicLink(getDb(), token);
@@ -31,29 +28,11 @@ export function defaultClientPolicy(): Policy {
   };
 }
 
-async function dealStatus(db: Db, dealId: string): Promise<DealStatus | undefined> {
-  const [row] = await db
-    .select({ status: schema.deal.status })
-    .from(schema.deal)
-    .where(eq(schema.deal.id, dealId));
-  return row?.status;
-}
-
-export async function agreeFromPortal(
+export function agreeFromPortal(
   db: Db,
   input: { dealId: string; planVersion: string },
 ): Promise<AgreeResult> {
-  const { dealId } = input;
-  const status = await dealStatus(db, dealId);
-  if (status && AGREED.has(status)) return "already_agreed";
-  if (!status || !AGREEABLE.has(status)) return "not_agreeable";
-  try {
-    return await money.agreeToPlan(db, dealId, input.planVersion);
-  } catch (error) {
-    const now = await dealStatus(db, dealId);
-    if (now && AGREED.has(now)) return "already_agreed";
-    throw error;
-  }
+  return money.agreeToPlan(db, input.dealId, input.planVersion);
 }
 
 export async function submitClientRelease(

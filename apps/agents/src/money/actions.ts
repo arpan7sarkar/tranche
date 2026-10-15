@@ -418,7 +418,8 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
       const issue = await acceptIssue(tx, row.dealId, row.side, p);
       if (issue) throw new PermanentError(issue);
       await writePlan(tx, row.dealId, p.plan, now);
-      await agreeToPlanTx(tx, row.dealId, null, now);
+      const agreed = await agreeToPlanTx(tx, row.dealId, null, now);
+      if (agreed !== "agreed") throw new PermanentError(`the plan could not be agreed: ${agreed}`);
       return;
     }
     case "reschedule":
@@ -502,7 +503,7 @@ export async function writePlan(tx: Tx, dealId: string, plan: PlanDraft, now: Da
   if (edges.length > 0) await tx.insert(schema.taskDependency).values(edges);
 }
 
-export type AgreeToPlanResult = "agreed" | "plan_changed";
+export type AgreeToPlanResult = "agreed" | "already_agreed" | "not_agreeable" | "plan_changed";
 
 // Every plan writer (writePlan, applyReschedule) locks the deal row first, so the milestones read
 // here cannot change before this transaction commits.
@@ -517,12 +518,10 @@ async function agreeToPlanTx(
     .from(schema.deal)
     .where(eq(schema.deal.id, dealId))
     .for("update");
-  if (!deal) throw new PermanentError(`deal ${dealId} not found`);
-  if (deal.status !== "sent" && deal.status !== "negotiating") {
-    throw new PermanentError(
-      `deal is ${deal.status}, a plan can only be agreed when it is sent or negotiating`,
-    );
+  if (deal?.status === "agreed" || deal?.status === "active" || deal?.status === "completed") {
+    return "already_agreed";
   }
+  if (deal?.status !== "sent" && deal?.status !== "negotiating") return "not_agreeable";
   const ms = await tx
     .select()
     .from(schema.milestone)
