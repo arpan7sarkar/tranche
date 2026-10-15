@@ -6,7 +6,7 @@ import {
   SandboxPaymentSpec,
 } from "@tranche/contracts";
 import { z } from "zod";
-import type { SandboxRequest } from "./client";
+import type { SandboxRequest } from "./sandbox-client";
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,127}$/);
 const money = z.object({

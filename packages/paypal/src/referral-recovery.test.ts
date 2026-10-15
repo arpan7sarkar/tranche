@@ -1,7 +1,7 @@
 import { SandboxOnboardingResult } from "@tranche/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { SandboxClient, type SandboxRequestAccounting } from "./client";
 import { onboardingEvidence, parseReferral } from "./onboarding";
+import { SandboxClient, type SandboxRequestAccounting } from "./sandbox-client";
 
 describe("referral response through persisted recovery transport", () => {
   it.each([`${"A".repeat(128)}==`, "Ab+c/d=="])(
