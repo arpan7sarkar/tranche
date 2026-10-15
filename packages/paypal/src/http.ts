@@ -24,7 +24,7 @@ const TIMEOUT_MS = 20_000;
 const REFRESH_MARGIN_MS = 60_000;
 
 export function authAssertion(clientId: string, merchantId: string): string {
-  const enc = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const enc = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64");
   return `${enc({ alg: "none" })}.${enc({ iss: clientId, payer_id: merchantId })}.`;
 }
 
