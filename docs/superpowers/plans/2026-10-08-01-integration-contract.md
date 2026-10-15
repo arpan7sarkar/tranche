@@ -38,7 +38,7 @@ Each lane plan carries a short "Integration overrides" block near its top that l
 |---|---|
 | `deal.plan_sent` | `{ clientId: string }`. Person E's notifier (E4) emails the client a link from `createMagicLink`. |
 | `approval.requested` | `{ approvalId: string; proposedActionId: string; side: "agency" \| "client" }` |
-| `milestone.verification_requested` | `{ source, repo, sha, prNumber, urls, state }` as H3 Task 2 defines |
+| `milestone.verification_requested` | `{ source, repo, sha, prNumber, urls, notes, state }` as H3 Task 2 defines; `notes` is the agency's free text from a manual delivery or `null`, and is untrusted input for the verifier |
 | `milestone.funding_requested` | `{ orderId: string; approveUrl: string \| null }` |
 | `alert.raised` | `{ kind: string; ... }` (contract already in the foundation) |
 | any `milestone.*` | also includes `title: string` |
@@ -87,3 +87,27 @@ H5 implements the `data-testid` and `data-state` attributes listed in E5 Task 8 
 - The default agency policy lists `reschedule` in `alwaysAsk`, because Monitor reschedules are suggestions.
 - `defaultClientPolicy(totalMinor)` lives in `apps/web/src/server/portal.ts` (H5 Task 11) and is the only default client policy.
 - `schema.user` from Better Auth is exported through `packages/db/src/schema/index.ts` (H5 Task 3) so E4 can look up the agency owner's email.
+
+## 9. Manual delivery and the slip journey (owner: Person H; Person E updates E5 Task 8)
+
+### Manual delivery
+
+- Agencies submit a delivery by hand with `POST /api/deals/<dealId>/milestones/<milestoneId>/deliveries` and body `{ url, notes? }`, where `url` is http or https and `notes` is at most 2000 characters.
+- The route writes the same `delivery.detected` inbox message as the GitHub path, with `source: "manual"`, `repo`, `sha` and `prNumber` all `null`, `urls: [url]` and an optional `notes`.
+- Its inbox row has `source: "user"` and `sourceEventId: "manual:<milestoneId>:<milestone.version>"`, so a double submit is one row and a resubmission after `changes_requested` is a new one.
+- The verifier must treat `repo === null` as "no PR checks to run from this delivery" and judge the URL checks only, as E2's `prText` already does.
+- The UI hooks `mark-delivered-<key>`, `delivery-url-input` and `submit-delivery` are unchanged; the dialog adds `delivery-notes-input`, and `delivery-pending-<key>` replaces the button while the inbox row is unprocessed.
+
+### Slip and replan journey (E5 Task 8 Step 7)
+
+- The seed leaves the `slip` deal in `draft`, so its milestone has no funding timer and `scheduled-fund-work` reads "Not scheduled" both before and after the move.
+- The journey's `await expect(fund).not.toHaveText(fundBefore)` therefore fails against the ruled behaviour, which stays as is: only a pending `fund` timer of an `agreed` milestone moves, and funding is due 3 days before the milestone's first task (never earlier than today).
+- The seed also leaves `milestone.startDate` and `endDate` null; the plan path always fills them from the tasks, and with null dates `plan_agreed` schedules funding for right now instead of 3 days before the first task.
+- Fix the seed for the `slip` deal only:
+  1. Start `design` at today + 7 days (5 days) and `build` right after it (5 days), so the funding timer lands in the future and the pump never fires it.
+  2. Set the milestone's `startDate` to today + 7 and `endDate` to today + 17, as `milestoneWindows` would.
+  3. Set the deal to `sent`, then call `agreeToPlan(db, dealId)` from `@tranche/agents-service/money`, which moves the milestone to `agreed` and writes one pending `fund` timer.
+- Expected values before the move, with `D(n)` meaning today + n days rendered by `formatDay`: `milestone-dates-work` is "D(7) - D(17)" and `scheduled-fund-work` is "Due D(4)".
+- The journey moves `design` from D(7) to D(14); `build` follows to D(19), because moves push dependents later and never pull them earlier.
+- Expected values after the move and after the reload: `milestone-dates-work` is "D(14) - D(24)" and `scheduled-fund-work` is "Due D(11)".
+- The journey can assert these exact strings instead of `not.toHaveText`, which also proves the funding timer moved by the same 7 days as the task.
