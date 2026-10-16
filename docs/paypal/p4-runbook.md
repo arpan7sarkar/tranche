@@ -1,5 +1,40 @@
 # P4 authorization/capture operator runbook
 
+## Pre-dispatch recovery and authorization cleanup
+
+Update: 2026-10-16, verified offline with the [Phase 1 slice 2 regressions](../phase-1-slice-2-record.md).
+For an operation that failed or crashed before any business dispatch, run the explicit retry command to obtain the next hash-bound approval summary.
+
+```powershell
+pnpm --filter @tranche/agents-service f0:runner retry-undispatched <operation-id>
+pnpm --filter @tranche/agents-service f0:runner inspect <run-id>
+```
+
+The retry command sends no PayPal request, requires an expired or cleared worker claim, and retains the immutable request ID, payload, consumed calls, and monetary exposure.
+It never reuses a consumed approval; present the returned next-attempt summary and obtain fresh operator approval before approve and resume.
+A possibly dispatched operation must use bounded read-only recovery and cannot use this retry path.
+The original execution deadline still applies to authorization and capture.
+
+If an authorization is open and capture preparation failed, cleanup is a separate operation with a separate approval.
+The private fee input file contains exactly the reviewed integer feeBoundCents; do not assume the fee is zero or reset the campaign allowance.
+
+```powershell
+pnpm --filter @tranche/agents-service f0:runner prepare-void <authorization-operation-id> .sandbox-private/void-fee.json
+pnpm --filter @tranche/agents-service f0:runner inspect <run-id>
+```
+
+Use the local successful authorization operation ID, not a raw provider resource ID.
+Before preparing cleanup, clear any definitely undispatched capture claim with retry-undispatched; even after executeUntil, this is allowed within the existing recoverUntil window to make cleanup possible.
+Preparation rejects any possibly dispatched capture, active worker, insufficient remaining lifecycle calls, or cumulative fee exposure above the agreed money cap.
+The approval summary includes the cleanup fee and call bound, and cleanup preparation blocks later normal payment-stage writes for that commitment.
+After reviewing and explicitly approving that cleanup operation, use the existing approve and resume commands with its own operation ID, payload hash, and next attempt.
+The first resume sends at most one void POST, and subsequent resumes use only bounded reads to confirm VOIDED against the same order and authorization.
+A 200/204 or lost write response alone never marks cleanup complete, and any observed capture blocks this cleanup path.
+Cleanup cannot replenish the money cap, and unused capture-fee reservations remain conservative.
+Provider access and real sandbox behavior for this path still need separately approved validation.
+
+## Checkout setup
+
 For audited retirement of an unused unapproved order before preparing a replacement, see the [read-only maintenance runbook](sandbox-maintenance-runbook.md).
 
 New private payment inputs must include checkout.returnUrl and checkout.cancelUrl, using the same application origin and the exact paths /sandbox/checkout/return and /sandbox/checkout/cancel.

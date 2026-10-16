@@ -26,8 +26,9 @@ Every write needs a concrete approval bound to the canonical request, participan
 The exact method, path and JSON body are persisted and included in the approval hash.
 The adapter must validate that the private merchant mappings, payload amounts and fee evidence match the approved summary before dispatch.
 Private mappings cannot be silently changed behind an approved request.
-Competing workers claim under a database lock; claim tokens fence stale workers, and expired claims enter read-only recovery.
-This version never resends a business write after a timeout or crash.
+Competing workers claim under a database lock; claim tokens fence stale workers, and expired claims require classified recovery.
+An operation that may have dispatched never sends a second business write; the explicit retry command only reopens a proven undispatched operation for fresh approval.
+For the retry, cleanup, and referral lease recovery added on 2026-10-16, see the [slice 2 record](../phase-1-slice-2-record.md) and [P4 recovery instructions](p4-runbook.md#pre-dispatch-recovery-and-authorization-cleanup).
 Recovery uses only bounded GET requests and retains inconclusive results when an endpoint cannot establish the outcome.
 Each HTTP request has a 15-second timeout, dispatch interpretation has a 45-second deadline, recovery has a 30-second deadline, and claims expire after 60 seconds.
 Recovery reads also have a persisted per-operation count bound.

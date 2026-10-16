@@ -2053,6 +2053,379 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     expect(x.fetcher).not.toHaveBeenCalled();
   });
 
+  it.each(["oauth", "status", "readiness"])(
+    "F0 retries undispatched payment: %s",
+    async (failure) => {
+      const x = await paymentSetup();
+      const original = x.fetcher.getMockImplementation();
+      if (!original) throw new Error("missing_mock");
+      x.fetcher.mockImplementation(async (url, init) => {
+        if (failure === "oauth" && String(url).endsWith("/token"))
+          return new Response(null, { status: 503 });
+        if (failure === "status" && String(url).includes("/merchant-integrations/"))
+          return new Response(null, { status: 503 });
+        return original(url, init);
+      });
+      if (failure === "readiness") x.statusBody.payments_receivable = false;
+      await x.dispatch(x.op);
+      const before = (await store.report(x.runId)).allocation;
+      await sandboxCli(["retry-undispatched", x.op.id], store, x.runner);
+      expect(await store.operation(x.op.id)).toMatchObject({
+        state: "awaiting_approval",
+        requestId: x.op.requestId,
+        payloadHash: x.op.payloadHash,
+      });
+      expect((await store.report(x.runId)).allocation).toEqual(before);
+      await expect(store.approve(x.op.id, x.op.payloadHash, 1)).rejects.toThrow(
+        "approval_mismatch",
+      );
+      x.fetcher.mockImplementation(original);
+      x.statusBody.payments_receivable = true;
+      await x.runner.resume(x.op.id);
+      expect((await store.operation(x.op.id)).state).toBe("awaiting_approval");
+      await store.approve(x.op.id, x.op.payloadHash, 2);
+      await x.runner.resume(x.op.id);
+      expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+      expect(
+        x.fetcher.mock.calls.filter(
+          ([, init]) => init?.method === "POST" && init.body !== "grant_type=client_credentials",
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
+  it.each([0, 1, 2])("F0 reclaims referral recovery after %i issued reads", async (issued) => {
+    const x = await onboardingSetup(6);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("lost response");
+      return Response.json({
+        ...x.referralBody,
+        partner_referral_id: "FAKE_REF",
+        submitter_client_id: x.context.platformClientId,
+        referral_data: { tracking_id: x.context.trackingId },
+      });
+    });
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    const stale = await store.beginReferralRecovery(proposal.id);
+    for (const kind of (["oauth", "recovery"] as const).slice(0, issued)) {
+      const id = await store.reserveClaimRequest(stale, kind);
+      await store.finishRequest(id, true);
+    }
+    await store.db
+      .$client`UPDATE sandbox_operation SET claim_until = now() - interval '1 second' WHERE id = ${x.op.id}`;
+    const before = (await store.report(x.runId)).allocation;
+    if (issued > 0) {
+      await expect(
+        sandboxCli(["apply-referral-recovery", proposal.id], store, x.runner),
+      ).rejects.toThrow("referral_recovery_reapproval_required");
+      expect((await store.report(x.runId)).allocation.consumedCalls).toBe(before.consumedCalls);
+      await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    }
+    await sandboxCli(["apply-referral-recovery", proposal.id], store, x.runner);
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+    await expect(store.failReferralRecovery(stale, proposal.id)).rejects.toThrow("stale_claim");
+    await expect(store.reserveClaimRequest(stale, "oauth")).rejects.toThrow("stale_claim");
+    await expect(
+      store.finishReferralRecovery(stale, proposal.id, { state: "inconclusive" }),
+    ).rejects.toThrow("stale_claim");
+    expect((await store.report(x.runId)).allocation.consumedCalls).toBe(before.consumedCalls + 2);
+    expect(
+      x.fetcher.mock.calls.filter(
+        ([, init]) => init?.method === "POST" && String(init.body).includes("tracking_id"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it.each([false, true])(
+    "F0 offers approved void cleanup after capture preparation fails, lost response: %s",
+    async (lost) => {
+      const x = await paymentSetup();
+      await x.dispatch(x.op);
+      x.setStatus("APPROVED");
+      await x.runner.resume(x.op.id);
+      const authorize = await x.next(x.op);
+      await x.dispatch(authorize);
+      const capture = await x.next(authorize);
+      x.statusBody.payments_receivable = false;
+      await x.dispatch(capture);
+      await sandboxCli(["retry-undispatched", capture.id], store, x.runner);
+      const input = join(x.directory, "void.json");
+      await writeFile(input, JSON.stringify({ feeBoundCents: 0 }));
+      const prepared = (await sandboxCli(
+        ["prepare-void", authorize.id, input],
+        store,
+        x.runner,
+      )) as { operationId: string };
+      const cleanup = await store.operation(prepared.operationId);
+      expect(cleanup.state).toBe("awaiting_approval");
+      expect(
+        (await store.inspect(x.runId)).approvals.find((a) => a.operationId === cleanup.id)?.payment,
+      ).toMatchObject({ cleanupCalls: 12, cleanupFeeBoundCents: 0 });
+      await expect(
+        sandboxCli(["prepare-void", authorize.id, input], store, x.runner),
+      ).rejects.toThrow();
+      const original = x.fetcher.getMockImplementation();
+      if (!original) throw new Error("missing_mock");
+      x.fetcher.mockImplementation(async (url, init) => {
+        if (String(url).endsWith("/void") && init?.method === "POST") {
+          x.authorization.status = "VOIDED";
+          if (lost) throw new Error("lost void response");
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).endsWith("/checkout/orders/ORDER1") && init?.method === "GET") {
+          const order = x.order();
+          const unit = order.purchase_units[0];
+          if (unit?.payments) unit.payments.captures = [];
+          return Response.json(order);
+        }
+        return original(url, init);
+      });
+      await x.runner.resume(cleanup.id);
+      expect(x.authorization.status).toBe("CREATED");
+      await x.dispatch(cleanup);
+      expect((await store.operation(cleanup.id)).state).toBe("inconclusive");
+      await x.runner.resume(cleanup.id);
+      expect((await store.operation(cleanup.id)).state).toBe("succeeded");
+      expect((await store.paymentResource(x.op.commitmentId)).result.evidence).toBe("voided");
+      expect((await store.report(x.runId)).allocation).toMatchObject({
+        reservedCents: 3,
+        committedCents: 53,
+        heldCalls: 0,
+      });
+      await expect(store.approve(capture.id, capture.payloadHash, 2)).rejects.toThrow(
+        "payment_cleanup_pending",
+      );
+      expect(
+        x.fetcher.mock.calls.filter(
+          ([url, init]) => String(url).endsWith("/void") && init?.method === "POST",
+        ),
+      ).toHaveLength(1);
+      expect(
+        x.fetcher.mock.calls.some(
+          ([url, init]) => String(url).endsWith("/capture") && init?.method === "POST",
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("F0 fences a crashed undispatched worker and never reuses its approval", async () => {
+    const { runId, op } = await approved();
+    const stale = await store.claim(op.id);
+    await expect(
+      sandboxCli(
+        ["retry-undispatched", op.id],
+        store,
+        new SandboxRunner(store, credentials, [adapter()]),
+      ),
+    ).rejects.toThrow("undispatched_retry_not_available");
+    await store.db
+      .$client`UPDATE sandbox_operation SET claim_until = now() - interval '1 second' WHERE id = ${op.id}`;
+    await store.retryUndispatched(op.id);
+    await expect(store.markDispatch(stale)).rejects.toThrow("claim_expired");
+    await expect(store.finish(stale, { state: "succeeded" })).rejects.toThrow("stale_claim");
+    await expect(store.approve(op.id, op.payloadHash, 1)).rejects.toThrow("approval_mismatch");
+    expect((await store.report(runId)).allocation).toMatchObject({
+      consumedCalls: 1,
+      heldCalls: 0,
+      reservedCents: 11,
+    });
+    await store.approve(op.id, op.payloadHash, 2);
+    const current = await store.claim(op.id);
+    expect(current.token).not.toBe(stale.token);
+    expect(current.operation.requestId).toBe(stale.operation.requestId);
+  });
+
+  it("F0 only one referral worker can reclaim an unused expired lease", async () => {
+    const x = await onboardingSetup(6);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url) =>
+      String(url).endsWith("/token") ? token() : new Response(null, { status: 503 }),
+    );
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    const stale = await store.beginReferralRecovery(proposal.id);
+    await expect(store.beginReferralRecovery(proposal.id)).rejects.toThrow("claim_active");
+    await store.db
+      .$client`UPDATE sandbox_operation SET claim_until = now() - interval '1 second' WHERE id = ${x.op.id}`;
+    const before = (await store.report(x.runId)).allocation;
+    const claims = await Promise.allSettled([
+      store.beginReferralRecovery(proposal.id),
+      store.beginReferralRecovery(proposal.id),
+    ]);
+    expect(claims.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect((await store.report(x.runId)).allocation).toEqual(before);
+    await expect(store.failReferralRecovery(stale, proposal.id)).rejects.toThrow("stale_claim");
+  });
+
+  it("F0 referral reclaim rejects altered approval identity without releasing reservations", async () => {
+    const x = await onboardingSetup(6);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url) =>
+      String(url).endsWith("/token") ? token() : new Response(null, { status: 503 }),
+    );
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    const stale = await store.beginReferralRecovery(proposal.id);
+    const issued = await store.reserveClaimRequest(stale, "oauth");
+    await store.finishRequest(issued, true);
+    await store.db
+      .$client`UPDATE sandbox_operation SET claim_until = now() - interval '1 second' WHERE id = ${x.op.id}`;
+    await store.db
+      .$client`UPDATE sandbox_referral_recovery SET referral_id = 'OTHER' WHERE id = ${proposal.id}`;
+    const before = (await store.report(x.runId)).allocation;
+    await expect(x.runner.recoverReferral(proposal.id)).rejects.toThrow("referral_recovery_stale");
+    expect((await store.report(x.runId)).allocation).toEqual(before);
+  });
+
+  it("F0 fresh referral approval cannot replenish the exhausted global allowance", async () => {
+    const x = await onboardingSetup(6);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url) =>
+      String(url).endsWith("/token") ? token() : new Response(null, { status: 503 }),
+    );
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    const stale = await store.beginReferralRecovery(proposal.id);
+    await store.reserveClaimRequest(stale, "oauth");
+    await store.db
+      .$client`UPDATE sandbox_operation SET claim_until = now() - interval '1 second' WHERE id = ${x.op.id}`;
+    await expect(x.runner.recoverReferral(proposal.id)).rejects.toThrow(
+      "referral_recovery_reapproval_required",
+    );
+    await store.db
+      .$client`UPDATE sandbox_allocation SET consumed_calls = 50 - held_calls WHERE id = 1`;
+    const before = (await store.report(x.runId)).allocation;
+    await expect(store.approveReferralRecovery(proposal.id, proposal.approvalHash)).rejects.toThrow(
+      "call_limit",
+    );
+    expect((await store.report(x.runId)).allocation).toEqual(before);
+  });
+
+  it("F0 refuses retry after any business dispatch, even after a lost response", async () => {
+    const x = await paymentSetup();
+    const original = x.fetcher.getMockImplementation();
+    if (!original) throw new Error("missing_mock");
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/checkout/orders") && init?.method === "POST")
+        throw new Error("lost response");
+      return original(url, init);
+    });
+    await x.dispatch(x.op);
+    const before = await store.report(x.runId);
+    await expect(sandboxCli(["retry-undispatched", x.op.id], store, x.runner)).rejects.toThrow(
+      "operation_may_have_dispatched",
+    );
+    expect(await store.report(x.runId)).toEqual(before);
+  });
+
+  it("F0 rejects tampered requests and cannot reset the shared retry call cap", async () => {
+    const { runId, op } = await approved();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 503 }));
+    const runner = new SandboxRunner(store, credentials, [adapter()], fetcher);
+    await runner.resume(op.id);
+    await store.db
+      .$client`UPDATE sandbox_operation SET spec = jsonb_set(spec, '{request,body}', '{"changed":true}') WHERE id = ${op.id}`;
+    await expect(store.retryUndispatched(op.id)).rejects.toThrow("payload_changed");
+    await store.db.$client.unsafe("UPDATE sandbox_operation SET spec = $1 WHERE id = $2", [
+      JSON.stringify(op.spec),
+      op.id,
+    ]);
+    await store.db.$client`UPDATE sandbox_allocation SET consumed_calls = 47 WHERE id = 1`;
+    await store.retryUndispatched(op.id);
+    await store.approve(op.id, op.payloadHash, 2);
+    await expect(runner.resume(op.id)).rejects.toThrow("call_limit");
+    expect((await store.report(runId)).allocation.consumedCalls).toBe(47);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("F0 reapproves a dispatch-boundary readiness failure without dispatching a write", async () => {
+    const x = await paymentSetup();
+    const record = store.recordPaymentReadiness.bind(store);
+    const spy = vi.spyOn(store, "recordPaymentReadiness").mockImplementation(async (claim) => {
+      await record(claim);
+      await store.db
+        .$client`UPDATE sandbox_payment SET readiness_at = now() - interval '16 minutes' WHERE commitment_id = ${x.op.commitmentId}`;
+    });
+    try {
+      await x.dispatch(x.op);
+    } finally {
+      spy.mockRestore();
+    }
+    await sandboxCli(["retry-undispatched", x.op.id], store, x.runner);
+    await store.approve(x.op.id, x.op.payloadHash, 2);
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+    expect(
+      x.fetcher.mock.calls.filter(
+        ([, init]) => init?.method === "POST" && init.body !== "grant_type=client_credentials",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("F0 blocks cleanup after an ambiguous capture and never creates a replacement", async () => {
+    const x = await paymentSetup();
+    await x.dispatch(x.op);
+    x.setStatus("APPROVED");
+    await x.runner.resume(x.op.id);
+    const authorize = await x.next(x.op);
+    await x.dispatch(authorize);
+    const capture = await x.next(authorize);
+    const original = x.fetcher.getMockImplementation();
+    if (!original) throw new Error("missing_mock");
+    x.fetcher.mockImplementation(async (url, init) => {
+      const response = await original(url, init);
+      if (String(url).endsWith("/capture") && init?.method === "POST")
+        throw new Error("lost capture response");
+      return response;
+    });
+    await x.dispatch(capture);
+    const input = join(x.directory, "void.json");
+    await writeFile(input, JSON.stringify({ feeBoundCents: 0 }));
+    const before = await store.report(x.runId);
+    await expect(
+      sandboxCli(["prepare-void", authorize.id, input], store, x.runner),
+    ).rejects.toThrow("cleanup_not_available");
+    expect(await store.report(x.runId)).toEqual(before);
+    expect(x.fetcher.mock.calls.some(([url]) => String(url).endsWith("/void"))).toBe(false);
+  });
+
+  it("F0 permits cleanup within recovery time without extending an expired capture deadline", async () => {
+    const x = await paymentSetup();
+    await x.dispatch(x.op);
+    x.setStatus("APPROVED");
+    await x.runner.resume(x.op.id);
+    const authorize = await x.next(x.op);
+    await x.dispatch(authorize);
+    const capture = await x.next(authorize);
+    x.statusBody.payments_receivable = false;
+    await x.dispatch(capture);
+    const input = join(x.directory, "void.json");
+    await writeFile(input, JSON.stringify({ feeBoundCents: 0 }));
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(x.p.context.executeUntil) + 1);
+    try {
+      await sandboxCli(["retry-undispatched", capture.id], store, x.runner);
+      await store.approve(capture.id, capture.payloadHash, 2);
+      await expect(x.runner.resume(capture.id)).rejects.toThrow("payment_deadline");
+      const prepared = (await sandboxCli(
+        ["prepare-void", authorize.id, input],
+        store,
+        x.runner,
+      )) as { operationId: string };
+      const cleanup = await store.operation(prepared.operationId);
+      expect(cleanup.spec.payment?.context.executeUntil).toBe(x.p.context.executeUntil);
+      expect(cleanup.state).toBe("awaiting_approval");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("CLI prepare, inspect, approve and report remain offline", async () => {
     const directory = await mkdtemp(join(tmpdir(), "tranche-p2-cli-"));
     try {

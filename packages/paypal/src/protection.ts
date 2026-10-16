@@ -106,15 +106,17 @@ export function paymentRequest(payment: SandboxPaymentSpec, commitmentId: string
   return {
     ...base,
     method: "POST",
-    path: `/v2/payments/authorizations/${p.authorizationId}/capture`,
-    body: { amount: paymentAmount(c), final_capture: true },
+    path: `/v2/payments/authorizations/${p.authorizationId}/${p.stage === "void_authorization" ? "void" : "capture"}`,
+    ...(p.stage === "void_authorization"
+      ? {}
+      : { body: { amount: paymentAmount(c), final_capture: true } }),
   };
 }
 export function paymentSpec(
   input: unknown,
   commitmentId: string = randomUUID(),
   stage: SandboxPaymentSpec["stage"] = "create_order",
-  references: { orderId?: string; authorizationId?: string } = {},
+  references: { orderId?: string; authorizationId?: string; cleanupFeeBoundCents?: number } = {},
 ): SandboxOperationSpec {
   const context = SandboxPaymentContext.parse(input);
   const payment = SandboxPaymentSpec.parse({ context, stage, ...references });
@@ -124,7 +126,8 @@ export function paymentSpec(
     currency: "USD",
     sender: "buyer",
     recipients: [{ alias: context.seller.seller, cents: context.principalCents }],
-    feeBoundCents: context.feeBounds[stage],
+    feeBoundCents:
+      stage === "void_authorization" ? references.cleanupFeeBoundCents : context.feeBounds[stage],
     commitmentId,
     resourceKey: commitmentId,
     recoveryCalls: context.recoveryCalls,
@@ -290,4 +293,26 @@ export function paymentCapture(body: unknown, p: SandboxPaymentSpec): SandboxPay
     authorizationId: p.authorizationId,
     captureId: a.id,
   };
+}
+
+export function paymentVoid(
+  orderBody: unknown,
+  authorizationBody: unknown,
+  p: SandboxPaymentSpec,
+  commitmentId: string,
+): SandboxPaymentResult {
+  const o = verifyPaymentOrder(orderBody, p, commitmentId);
+  const ref = paymentAuthorizationReference(o, p, commitmentId);
+  const a = resource.parse(authorizationBody);
+  if (
+    o.purchase_units.some((unit) => (unit.payments?.captures?.length ?? 0) > 0) ||
+    a.id !== ref.authorization.id ||
+    a.id !== p.authorizationId ||
+    a.status !== "VOIDED" ||
+    !amountMatches(a.amount, p.context) ||
+    (a.supplementary_data?.related_ids.order_id &&
+      a.supplementary_data.related_ids.order_id !== p.orderId)
+  )
+    throw new Error("void_not_verified");
+  return { evidence: "voided", orderId: o.id, authorizationId: a.id };
 }

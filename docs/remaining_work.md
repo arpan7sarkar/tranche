@@ -6,11 +6,11 @@ Lane H is merged; Lane E implementation is pending.
 
 ## Current checkpoint
 
-Phase 0 audit and Phase 1 slice 1 are complete locally.
-F0-03, F0-04, and F0-06 are complete; all other implementation units remain pending on this branch.
+Phase 0 audit and Phase 1 slices 1 and 2 are complete locally.
+F0-01, F0-03, F0-04, F0-05, and F0-06 are complete locally; lost-order recovery, P7, and BASE-01 corrections remain pending.
 The PR #20 review exposed a database guard bypass, addressed by a shared connection guard with identity checks and new regression tests.
 See the [Phase 0 audit](phase-0-audit.md), [slice 1 evidence](phase-1-slice-1-record.md), and [review correction record](pr-review-fixes.md) for dated evidence and limitations.
-Next: Phase 1 slice 2, pre-dispatch and referral recovery, followed by lost-order recovery and P7.
+Next: Phase 1 slice 3, lost-order recovery and P7, followed by the product outbox corrections.
 Every status below requires its completion evidence; skipped tests do not establish completion.
 
 ## Source plans
@@ -62,19 +62,19 @@ Keep the six F0 fixes together in the final PR while reviewing and testing each 
 Starting fake-model and eval foundations in Phase 2 does not complete E5-01 or E5-03; their full acceptance gates remain in Phase 7.
 Bring the email foundation forward from Phase 6 only if an earlier flow requires it, and record that dependency explicitly.
 Phase 8 prepares deployment; record provider readiness and any release approval required before publishing changes.
-Phase 0 inspection and Phase 1 slice 1 are complete, with results in the [slice 1 record](phase-1-slice-1-record.md).
-The next recommended scope is Phase 1 slice 2 for pre-dispatch and referral-recovery fixes; later execution phases remain pending.
+Phase 0 and Phase 1 slices 1 and 2 are complete, with results in the [slice 1 record](phase-1-slice-1-record.md) and [slice 2 record](phase-1-slice-2-record.md).
+The next recommended scope is Phase 1 slice 3 for lost-order recovery and P7; later execution phases remain pending.
 
 ## Workstream: existing money path and interfaces
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
 | BASE-01 | Pending | Reconcile the actual Lane H interfaces with the integration contract, trace onboarding, funding, webhook, renewal, capture, refund, and manual scripts for direct PayPal writes, and define durable intent/outbox fixes where required | An interface map and tests show that each business write has a stable request ID, recovery path, and verified inbound confirmation before the end-to-end claim |
-| F0-01 | Pending | Separate pre-dispatch failure from a dispatched PayPal write; retry or reapprove only when no write was dispatched, and provide a separately approved void path for an open authorization after failed capture preparation | Failure injection covers OAuth, readiness, status reads, dispatched uncertainty, and capture cleanup without duplicate calls |
+| F0-01 | Complete locally | Separate pre-dispatch failure from a dispatched PayPal write; retry or reapprove only when no write was dispatched, and provide a separately approved void path for an open authorization after failed capture preparation | Failure injection covers OAuth, readiness, status reads, dispatched uncertainty, and capture cleanup without duplicate calls |
 | F0-02 | Pending | Recover a lost create-order response using the original stable identity or authoritative operator adoption of a known order ID, with identity and amount checks | A lost response neither creates a replacement order blindly nor releases committed budget falsely |
 | F0-03 | Complete locally | Correct local Postgres examples for host port 5433 while retaining service-internal port 5432 and the isolated test database configuration | Local setup instructions and example environment match `docker-compose.yml` |
 | F0-04 | Complete locally | Pass `TEST_DATABASE_URL` into the actual Turbo test task and prove the guarded runner database suite executes | Test logs show the DB suite ran rather than silently skipping; read installed Turbo docs before configuration changes |
-| F0-05 | Pending | Add fenced lease recovery for a crash during `apply-referral-recovery`, preserving the same operation identity and reservations | Crash and retry tests show no duplicate POST and exact budget counts |
+| F0-05 | Complete locally | Add fenced lease recovery for a crash during `apply-referral-recovery`, preserving the same operation identity and reservations | Crash and retry tests show no duplicate POST and exact budget counts |
 | F0-06 | Complete locally | Move `paymentStageCalls`, `paymentTotalCalls`, and `paymentApproval` from contracts to pure core, updating imports and tests without a dependency cycle | Core property/unit tests and affected package typechecks pass |
 | P7-01 | Pending | Record the chosen authorization hold and `agency_pays` payment path in a PayPal decision document; mark P5 multi-payee and P6 Payouts deferred | Decision states what earlier F0 evidence proves, what product validation remains, and what cannot yet be claimed |
 

@@ -29,6 +29,21 @@ const context: SandboxPaymentContext = {
 };
 
 describe("sandbox payment budget", () => {
+  it("shows cleanup costs separately without replenishing the payment allowance", () => {
+    const payment = {
+      context,
+      stage: "void_authorization" as const,
+      orderId: "ORDER1",
+      authorizationId: "AUTH1",
+      cleanupFeeBoundCents: 2,
+    };
+    expect(SandboxPaymentApproval.parse(paymentApproval(context, payment))).toMatchObject({
+      lifecycleCalls: 32,
+      cleanupCalls: 10,
+      cleanupFeeBoundCents: 2,
+    });
+    expect(paymentTotalCalls(context)).toBe(32);
+  });
   it.each([
     [2, 7, 9, 10, 26],
     [3, 9, 11, 12, 32],

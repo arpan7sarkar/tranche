@@ -14,6 +14,24 @@ function setup(fetcher: typeof fetch) {
 }
 
 describe("counted sandbox transport", () => {
+  it("accepts an empty successful void response under its write permit", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const { client } = setup(fetcher);
+    const beforeDispatch = vi.fn(async () => {});
+    const requestId = randomUUID();
+    await expect(
+      client.request(
+        { method: "POST", path: "/v2/payments/authorizations/AUTH1/void" },
+        { permit: { requestId, beforeDispatch } },
+      ),
+    ).resolves.toBeUndefined();
+    expect(beforeDispatch).toHaveBeenCalledOnce();
+    const headers = fetcher.mock.calls[1]?.[1]?.headers as Record<string, string> | undefined;
+    expect(headers?.["PayPal-Request-Id"]).toBe(requestId);
+  });
   it("binds seller assertions to the configured platform and generates tokens only for transport", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
