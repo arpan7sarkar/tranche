@@ -2141,7 +2141,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
   });
 
   it.each([false, true])(
-    "F0 offers approved void cleanup after capture preparation fails, lost response: %s",
+    "review F0 offers replayable void cleanup, lost response: %s",
     async (lost) => {
       const x = await paymentSetup();
       await x.dispatch(x.op);
@@ -2155,19 +2155,28 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
       await sandboxCli(["retry-undispatched", capture.id], store, x.runner);
       const input = join(x.directory, "void.json");
       await writeFile(input, JSON.stringify({ feeBoundCents: 0 }));
-      const prepared = (await sandboxCli(
-        ["prepare-void", authorize.id, input],
-        store,
-        x.runner,
-      )) as { operationId: string };
+      const [prepared, concurrent] = (await Promise.all([
+        sandboxCli(["prepare-void", authorize.id, input], store, x.runner),
+        sandboxCli(["prepare-void", authorize.id, input], store, x.runner),
+      ])) as { operationId: string }[];
+      if (!prepared) throw new Error("missing_cleanup");
+      expect(concurrent?.operationId).toBe(prepared.operationId);
       const cleanup = await store.operation(prepared.operationId);
       expect(cleanup.state).toBe("awaiting_approval");
       expect(
         (await store.inspect(x.runId)).approvals.find((a) => a.operationId === cleanup.id)?.payment,
       ).toMatchObject({ cleanupCalls: 12, cleanupFeeBoundCents: 0 });
+      const beforeReplay = await store.report(x.runId);
+      const replay = (await sandboxCli(["prepare-void", authorize.id, input], store, x.runner)) as {
+        operationId: string;
+      };
+      expect(replay.operationId).toBe(cleanup.id);
+      expect(await store.report(x.runId)).toEqual(beforeReplay);
+      await writeFile(input, JSON.stringify({ feeBoundCents: 1 }));
       await expect(
         sandboxCli(["prepare-void", authorize.id, input], store, x.runner),
-      ).rejects.toThrow();
+      ).rejects.toThrow("cleanup_identity_conflict");
+      await writeFile(input, JSON.stringify({ feeBoundCents: 0 }));
       const original = x.fetcher.getMockImplementation();
       if (!original) throw new Error("missing_mock");
       x.fetcher.mockImplementation(async (url, init) => {
@@ -2191,6 +2200,13 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
       await x.runner.resume(cleanup.id);
       expect((await store.operation(cleanup.id)).state).toBe("succeeded");
       expect((await store.paymentResource(x.op.commitmentId)).result.evidence).toBe("voided");
+      const terminalReplay = (await sandboxCli(
+        ["prepare-void", authorize.id, input],
+        store,
+        x.runner,
+      )) as { operationId: string };
+      expect(terminalReplay.operationId).toBe(cleanup.id);
+      expect((await store.operation(cleanup.id)).state).toBe("succeeded");
       expect((await store.report(x.runId)).allocation).toMatchObject({
         reservedCents: 3,
         committedCents: 53,
@@ -2424,6 +2440,59 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     } finally {
       clock.mockRestore();
     }
+  });
+
+  it("review active leases ignore an application clock running ahead", async () => {
+    const { op } = await approved();
+    await store.claim(op.id);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+    try {
+      await expect(store.retryUndispatched(op.id)).rejects.toThrow(
+        "undispatched_retry_not_available",
+      );
+    } finally {
+      clock.mockRestore();
+    }
+    expect((await store.operation(op.id)).state).toBe("dispatching");
+  });
+
+  it("review expired leases ignore an application clock running behind", async () => {
+    const { op } = await approved();
+    await store.claim(op.id);
+    await store.db
+      .$client`UPDATE sandbox_operation SET claim_until = now() - interval '1 second' WHERE id = ${op.id}`;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() - 120_000);
+    try {
+      await store.retryUndispatched(op.id);
+    } finally {
+      clock.mockRestore();
+    }
+    expect((await store.operation(op.id)).state).toBe("awaiting_approval");
+  });
+
+  it("review referral settlement uses the database lease clock", async () => {
+    const x = await onboardingSetup(6);
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/token")) return token();
+      if (init?.method === "POST") throw new Error("lost response");
+      return Response.json({
+        ...x.referralBody,
+        partner_referral_id: "FAKE_REF",
+        submitter_client_id: x.context.platformClientId,
+        referral_data: { tracking_id: x.context.trackingId },
+      });
+    });
+    await x.runner.resume(x.op.id);
+    const proposal = await store.proposeReferralRecovery(x.op.id, "FAKE_REF");
+    await store.approveReferralRecovery(proposal.id, proposal.approvalHash);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 120_000);
+    try {
+      await x.runner.recoverReferral(proposal.id);
+    } finally {
+      clock.mockRestore();
+    }
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
   });
 
   it("CLI prepare, inspect, approve and report remain offline", async () => {

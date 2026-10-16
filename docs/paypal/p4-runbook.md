@@ -24,6 +24,8 @@ pnpm --filter @tranche/agents-service f0:runner inspect <run-id>
 ```
 
 Use the local successful authorization operation ID, not a raw provider resource ID.
+Repeating prepare-void with the same authorization and fee input returns the existing cleanup operation, including after a timeout or completion, without another reservation or request identity.
+Changing the fee input for an existing cleanup returns cleanup_identity_conflict; inspect the persisted operation rather than creating another cleanup.
 Before preparing cleanup, clear any definitely undispatched capture claim with retry-undispatched; even after executeUntil, this is allowed within the existing recoverUntil window to make cleanup possible.
 Preparation rejects any possibly dispatched capture, active worker, insufficient remaining lifecycle calls, or cumulative fee exposure above the agreed money cap.
 The approval summary includes the cleanup fee and call bound, and cleanup preparation blocks later normal payment-stage writes for that commitment.
@@ -175,7 +177,8 @@ Each resume may need a fresh OAuth request and consumes the existing reservation
 For authorization or capture recovery, one resume may consume two recovery GETs; capture with N=2 allows one such confirmation pass.
 Pending capture, missing references, wrong buyer/seller, revoked grants, invalid amounts, stale readiness or exhausted calls must remain unresolved rather than becoming successful.
 The 24-hour execution limit blocks new writes, while the separate bounded recovery window permits implemented reads only.
-No expiry, refund or void resets the spend allowance, and no cleanup or reservation-extension command exists in this implementation.
+No expiry, refund or void resets the spend allowance, and no reservation-extension command exists.
+The separately approved prepare-void path described above provides authorization cleanup within the existing recovery window.
 Do not run standalone preflight calls as an uncounted substitute during an active experiment.
 
 ## Opt-in real integration test

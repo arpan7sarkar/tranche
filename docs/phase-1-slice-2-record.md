@@ -4,6 +4,7 @@ Date: 2026-10-16.
 Baseline: `b994685` on `fix/f0-test-setup-and-budget-rules`.
 Scope: F0-01 pre-dispatch recovery and approved authorization cleanup, plus F0-05 referral-recovery crash handling.
 Both units are implemented and verified locally with fake providers; real PayPal behavior remains unverified for these changes.
+The later [PR review correction record](pr-review-fixes.md) supersedes this checkpoint for cleanup replay, database lease timing, and the latest validation counts.
 
 ## Reproduction before implementation
 

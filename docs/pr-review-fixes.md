@@ -32,3 +32,36 @@ The complete agents-service suite passed 186 tests with two real-sandbox cases i
 Contracts passed 104 tests and core passed 124 tests, for 430 passing cases across these checks including the 16 guard cases.
 Biome, typechecks, and git diff whitespace checks passed.
 No real PayPal operations, application database migrations, or remote CI runs were performed.
+
+## PR #21 reproduction and corrections
+
+Before the corrections, five selected CLI/runner regression cases failed against the guarded disposable database with fake provider responses.
+Two cleanup cases exposed the raw semantic_key unique-constraint error when concurrent or repeated prepare-void calls generated different operation IDs.
+Two retry cases exposed incorrect eligibility when the application clock was ahead of an active lease or behind an expired lease.
+The referral recovery case exposed a stale_claim failure with the application clock ahead of the database.
+
+Cleanup preparation now finds the existing semantic identity under the allocation lock and returns the same operation when the run and payload match.
+Concurrent calls, timeout retries, and retries after completion retain the same operation ID, request ID, reservation, and approval history.
+A changed payload returns the named cleanup_identity_conflict error.
+Eight application-clock lease checks now use PostgreSQL now(), matching dispatch, request reservation, and recovery claims.
+Business execution and onboarding deadlines retain their existing behavior; worker fencing still requires the current claim token.
+
+## PR #21 validation
+
+The complete agents-service suite passed 206 tests with two real-sandbox cases skipped, including all 122 runner cases.
+The shared database guard passed all 16 cases.
+Contracts passed 104 tests, core passed 125 tests, and PayPal passed 99 tests with four real-sandbox cases skipped.
+The total is 550 passing tests and six intentionally skipped real-sandbox cases.
+Contracts, core, DB, PayPal, and agents-service typechecks passed.
+Biome and git diff whitespace checks passed.
+No real PayPal requests or remote CI runs were performed.
+
+## Branch and publication status
+
+The database guard and consolidated documentation are committed locally on fix/f0-test-setup-and-budget-rules as 1e7bc90.
+The recovery branch was rebased onto that corrected local branch, and its review corrections are recorded separately from the database fix.
+An upstream read on 2026-10-17 showed main at 81b5098, PR #20 at b994685, and PR #21 at 20c068c, so neither remote PR contains these corrections yet.
+After PR #20 merges, rebase PR #21 onto the updated main while dropping its inherited PR #20 commits, leaving only recovery changes.
+The required PR #21 title is `fix(f0): Recover interrupted operations and add approved void cleanup`.
+The title has not been changed because authenticated GitHub PR reads returned 404 in this session.
+No pushes, merges, or PR metadata updates were performed.

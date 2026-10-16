@@ -27,6 +27,7 @@ The exact method, path and JSON body are persisted and included in the approval 
 The adapter must validate that the private merchant mappings, payload amounts and fee evidence match the approved summary before dispatch.
 Private mappings cannot be silently changed behind an approved request.
 Competing workers claim under a database lock; claim tokens fence stale workers, and expired claims require classified recovery.
+Worker lease creation and expiry checks use PostgreSQL time, including retry and referral recovery, so application clock skew cannot change claim eligibility.
 An operation that may have dispatched never sends a second business write; the explicit retry command only reopens a proven undispatched operation for fresh approval.
 For the retry, cleanup, and referral lease recovery added on 2026-10-16, see the [slice 2 record](../phase-1-slice-2-record.md) and [P4 recovery instructions](p4-runbook.md#pre-dispatch-recovery-and-authorization-cleanup).
 Recovery uses only bounded GET requests and retains inconclusive results when an endpoint cannot establish the outcome.

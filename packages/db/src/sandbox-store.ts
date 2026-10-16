@@ -70,6 +70,14 @@ export class SandboxStore {
     return SandboxAllocation.parse({ ...row, currency: "USD", limitCents: 100, callLimit: 50 });
   }
 
+  private async leaseActive(tx: Tx, operationId: string): Promise<boolean> {
+    const [row] = await tx
+      .select({ active: sql<boolean>`${operations.claimUntil} > now()` })
+      .from(operations)
+      .where(eq(operations.id, operationId));
+    return row?.active === true;
+  }
+
   async start(): Promise<string> {
     return this.db.transaction(async (tx) => {
       await tx.insert(allocations).values({ id: 1 }).onConflictDoNothing();
@@ -82,6 +90,10 @@ export class SandboxStore {
   async prepare(runId: string, operationId: string, input: unknown): Promise<StoredOperation> {
     const spec = SandboxOperationSpec.parse(input);
     const payloadHash = sandboxPayloadHash(spec);
+    const semanticKey = sandboxPayloadHash({
+      kind: spec.kind,
+      resourceKey: spec.payment ? spec.commitmentId : spec.resourceKey,
+    });
     return this.db.transaction(async (tx) => {
       const allocation = await this.allocation(tx);
       const [run] = await tx.select().from(runs).where(eq(runs.id, runId));
@@ -91,6 +103,18 @@ export class SandboxStore {
         if (existing.runId !== runId || existing.payloadHash !== payloadHash)
           throw new Error("identity_conflict");
         return existing;
+      }
+      if (spec.kind === "void_authorization") {
+        const [cleanup] = await tx
+          .select()
+          .from(operations)
+          .where(eq(operations.semanticKey, semanticKey))
+          .for("update");
+        if (cleanup) {
+          if (cleanup.runId !== runId || cleanup.payloadHash !== payloadHash)
+            throw new Error("cleanup_identity_conflict");
+          return cleanup;
+        }
       }
       if (spec.payment) await this.requireNoCleanup(tx, spec);
       const principal = spec.recipients.reduce((sum, r) => sum + r.cents, 0);
@@ -248,10 +272,7 @@ export class SandboxStore {
           requestId: randomUUID(),
           payloadHash,
           spec,
-          semanticKey: sandboxPayloadHash({
-            kind: spec.kind,
-            resourceKey: spec.payment ? spec.commitmentId : spec.resourceKey,
-          }),
+          semanticKey,
           state: needsSandboxApproval(spec) ? "awaiting_approval" : "ready",
         })
         .returning();
@@ -529,7 +550,7 @@ export class SandboxStore {
         row.claimToken !== claim.token ||
         op.claimToken !== claim.token ||
         !op.claimUntil ||
-        op.claimUntil.getTime() <= Date.now()
+        !(await this.leaseActive(tx, op.id))
       )
         throw new Error("stale_claim");
       this.validateMaintenance(row, op);
@@ -774,7 +795,7 @@ export class SandboxStore {
     await this.db.transaction(async (tx) => {
       await this.allocation(tx);
       const { op, p } = await this.buyerChangeCandidate(tx, claim.operation.id, "recovering");
-      if (op.claimToken !== claim.token || !op.claimUntil || op.claimUntil.getTime() <= Date.now())
+      if (op.claimToken !== claim.token || !op.claimUntil || !(await this.leaseActive(tx, op.id)))
         throw new Error("stale_claim");
       const [change] = await tx
         .select()
@@ -831,7 +852,7 @@ export class SandboxStore {
       if (
         !op ||
         !["inconclusive", "failed", "dispatching", "recovering"].includes(op.state) ||
-        (op.claimUntil && op.claimUntil.getTime() > Date.now())
+        (await this.leaseActive(tx, op.id))
       )
         throw new Error("undispatched_retry_not_available");
       if (op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec)))
@@ -1313,7 +1334,7 @@ export class SandboxStore {
         if (
           op.claimToken !== row.claimToken ||
           !op.claimUntil ||
-          op.claimUntil.getTime() > Date.now()
+          (await this.leaseActive(tx, op.id))
         )
           throw new Error("claim_active");
         const issued = await tx
@@ -1385,7 +1406,7 @@ export class SandboxStore {
         op?.claimToken !== claim.token ||
         op.state !== "recovering" ||
         !op.claimUntil ||
-        op.claimUntil.getTime() <= Date.now() ||
+        !(await this.leaseActive(tx, op.id)) ||
         row.operationId !== op.id ||
         !op.spec.onboarding ||
         Date.parse(op.spec.onboarding.checkUntil) <= Date.now()
@@ -1457,7 +1478,7 @@ export class SandboxStore {
         op?.claimToken !== claim.token ||
         op.state !== "recovering" ||
         !op.claimUntil ||
-        op.claimUntil.getTime() <= Date.now()
+        !(await this.leaseActive(tx, op.id))
       )
         throw new Error("stale_claim");
       const issued = await tx
@@ -1524,7 +1545,7 @@ export class SandboxStore {
           op.recoveryReads >= op.spec.recoveryCalls ||
           op.heldCalls <= 1)
       ) {
-        if (op.claimUntil && op.claimUntil.getTime() > Date.now()) throw new Error("claim_active");
+        if (await this.leaseActive(tx, op.id)) throw new Error("claim_active");
         await tx
           .update(allocations)
           .set({ heldCalls: allocation.heldCalls - op.heldCalls })
@@ -1830,7 +1851,7 @@ export class SandboxStore {
         ["succeeded", "failed"].includes(op.state)
       )
         return false;
-      if (op.claimUntil && op.claimUntil.getTime() > Date.now()) throw new Error("claim_active");
+      if (await this.leaseActive(tx, op.id)) throw new Error("claim_active");
       if (op.state === "blocked" && op.heldCalls === 0) return false;
       await tx
         .update(allocations)
