@@ -1,5 +1,8 @@
 # Phase 1 slice 1 implementation record
 
+Review correction, 2026-10-17: the original guard tests below missed URL query overrides and unrelated servers on the expected port.
+The shared guard and fixture identity correction supersede that guard, with reproduction and validation in the [review record](pr-review-fixes.md).
+
 Date: 2026-10-15.
 Scope: F0-03 local database configuration, F0-04 guarded test execution, and F0-06 pure payment budget rules.
 Baseline: `81b5098`, with planning documents already present as local untracked files.

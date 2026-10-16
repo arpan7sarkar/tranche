@@ -3,7 +3,7 @@
 Date: 2026-10-15.
 Baseline: local `main` at `81b5098`.
 Scope: inspect the existing money paths, integration interfaces, test configuration, and six F0 follow-ups before implementation.
-This is the audit checkpoint for the [implementation plan](remaining-work-implementation-plan.md).
+This is the audit checkpoint for the [implementation plan](remaining_work.md).
 Application code was not changed, and no PayPal operations, migrations, or test suites were executed during this audit.
 
 ## Outcome
@@ -17,17 +17,17 @@ The audit portion of Phase 0 is complete; BASE-01 remains open because its write
 
 | Integration | Existing implementation and requirement |
 | --- | --- |
-| Web database and PayPal | Use `getDb` and `getPayPal` from `apps/web/src/server/db.ts` and `paypal.ts`. |
-| Agency access | Use `memberOrNull`, `requireMember`, and `requireDealAccess` from `apps/web/src/server/session.ts`; do not create alternate authorization paths. |
-| Policy and human actions | `apps/agents/src/money/index.ts` exports `agreeToPlan`, `decideApproval`, and `submitHumanAction`. |
-| Agreement | `apps/agents/src/money/actions.ts:543` accepts the reviewed plan version; callers must handle agreed, plan_changed, already_agreed, and not_agreeable. |
-| Negotiation | `apps/agents/src/money/actions.ts:295` rejects acceptance from system or the offering side and compares the complete latest offer. |
-| Client policy | `apps/web/src/server/portal.ts:20` supplies the shared default; do not import a Next server module into the worker runtime. |
-| Rescheduling | Reuse `applyReschedule` from the money service, rather than recomputing timer changes in an agent. |
-| Tick registration | `apps/agents/src/money/schedule.ts` exports moneyTick every minute and reconcile as the hourly task name. |
-| Worker entry | `apps/agents/src/index.ts` registers existing money tasks and ping; Lane E consumer registration is still absent. |
-| Delivery verification | `apps/agents/src/money/inbox.ts` carries the applied inbox row ID as deliveryId, including manual notes; the future verifier must load that exact row. |
-| Verification evidence | `actions.ts:323` reads milestone evidence and applies the core gate; future integration must prove delivery isolation and release-time behavior rather than assuming it. |
+| Web database and PayPal | Use `getDb` and `getPayPal` from `apps/web/src/server/db.ts` and `paypal.ts` |
+| Agency access | Use `memberOrNull`, `requireMember`, and `requireDealAccess` from `apps/web/src/server/session.ts`; do not create alternate authorization paths |
+| Policy and human actions | `apps/agents/src/money/index.ts` exports `agreeToPlan`, `decideApproval`, and `submitHumanAction` |
+| Agreement | `apps/agents/src/money/actions.ts:543` accepts the reviewed plan version; callers must handle agreed, plan_changed, already_agreed, and not_agreeable |
+| Negotiation | `apps/agents/src/money/actions.ts:295` rejects acceptance from system or the offering side and compares the complete latest offer |
+| Client policy | `apps/web/src/server/portal.ts:20` supplies the shared default; do not import a Next server module into the worker runtime |
+| Rescheduling | Reuse `applyReschedule` from the money service, rather than recomputing timer changes in an agent |
+| Tick registration | `apps/agents/src/money/schedule.ts` exports moneyTick every minute and reconcile as the hourly task name |
+| Worker entry | `apps/agents/src/index.ts` registers existing money tasks and ping; Lane E consumer registration is still absent |
+| Delivery verification | `apps/agents/src/money/inbox.ts` carries the applied inbox row ID as deliveryId, including manual notes; the future verifier must load that exact row |
+| Verification evidence | `actions.ts:323` reads milestone evidence and applies the core gate; future integration must prove delivery isolation and release-time behavior rather than assuming it |
 
 The agent and verifier packages currently export empty placeholders, so no completed Lane E runtime is implied by the existing money worker.
 
@@ -35,16 +35,16 @@ The agent and verifier packages currently export empty placeholders, so no compl
 
 | Path | Current behavior | Audit result |
 | --- | --- | --- |
-| Seller onboarding | `apps/web/src/server/onboarding.ts:12` directly calls createSellerReferral, which supplies a deterministic referral request ID in the PayPal client. | Request ID exists, but the write is outside the durable product outbox. |
-| Portal funding order | `apps/web/src/server/funding.ts:94` creates the order inside the milestone DB transaction, using fund plus milestone ID and hold count. | A stable request ID exists, but no durable intent is committed before the external call; a lost response or DB rollback needs reproduction. |
-| Scheduled funding order | `apps/agents/src/money/funding.ts:94` creates an order while processing funding work, then persists the hold. | The timer originates from outbox work, but recovery must prove the parent request identity survives a lost response and unchanged hold count. |
-| Initial hold placement | Browser confirmation and CHECKOUT.ORDER.APPROVED enqueue the same place:<holdId> outbox identity. | Existing deduplication path should be preserved and regression-tested. |
-| Renewal | `apps/agents/src/money/holds-renew.ts` uses the outbox request ID or deterministic order/hold suffixes; replacement coordination exists. | Inspectable durable path exists; no fresh runtime or PayPal verification was performed. |
-| Release and cancellation | `effects.ts`, `outbox-handlers.ts`, and `holds.ts` enqueue capture/release and void/refund operations. | Existing outbox handlers should be reused; provider error names still need sandbox evidence. |
-| PayPal webhook intake | `apps/web/src/app/api/webhooks/paypal/route.ts` verifies the raw body before inserting a source event ID into inbox and kicking the money tick. | Correct verification-before-insert order is present by inspection. |
-| Webhook registration script | `packages/paypal/scripts/register-webhook.ts` directly deletes matching hooks before creating a replacement. | No durable outbox or request ID is supplied for these writes; a failure after deletion can leave registration missing. |
-| Manual funding script | `packages/paypal/scripts/fund-manually.ts` directly creates and places two holds with random request IDs. | This is not a bounded one-milestone product-path test and does not have durable cross-run identity. |
-| F0 capability runner | `apps/agents/scripts/f0/runner.ts` and `packages/db/src/sandbox-store.ts` implement a separate approval, attempt, and budget journal. | Do not treat this experiment journal as proof that the product outbox is wired end to end. |
+| Seller onboarding | `apps/web/src/server/onboarding.ts:12` directly calls createSellerReferral, which supplies a deterministic referral request ID in the PayPal client | Request ID exists, but the write is outside the durable product outbox |
+| Portal funding order | `apps/web/src/server/funding.ts:94` creates the order inside the milestone DB transaction, using fund plus milestone ID and hold count | A stable request ID exists, but no durable intent is committed before the external call; a lost response or DB rollback needs reproduction |
+| Scheduled funding order | `apps/agents/src/money/funding.ts:94` creates an order while processing funding work, then persists the hold | The timer originates from outbox work, but recovery must prove the parent request identity survives a lost response and unchanged hold count |
+| Initial hold placement | Browser confirmation and CHECKOUT.ORDER.APPROVED enqueue the same place:<holdId> outbox identity | Existing deduplication path should be preserved and regression-tested |
+| Renewal | `apps/agents/src/money/holds-renew.ts` uses the outbox request ID or deterministic order/hold suffixes; replacement coordination exists | Inspectable durable path exists; no fresh runtime or PayPal verification was performed |
+| Release and cancellation | `effects.ts`, `outbox-handlers.ts`, and `holds.ts` enqueue capture/release and void/refund operations | Existing outbox handlers should be reused; provider error names still need sandbox evidence |
+| PayPal webhook intake | `apps/web/src/app/api/webhooks/paypal/route.ts` verifies the raw body before inserting a source event ID into inbox and kicking the money tick | Correct verification-before-insert order is present by inspection |
+| Webhook registration script | `packages/paypal/scripts/register-webhook.ts` directly deletes matching hooks before creating a replacement | No durable outbox or request ID is supplied for these writes; a failure after deletion can leave registration missing |
+| Manual funding script | `packages/paypal/scripts/fund-manually.ts` directly creates and places two holds with random request IDs | This is not a bounded one-milestone product-path test and does not have durable cross-run identity |
+| F0 capability runner | `apps/agents/scripts/f0/runner.ts` and `packages/db/src/sandbox-store.ts` implement a separate approval, attempt, and budget journal | Do not treat this experiment journal as proof that the product outbox is wired end to end |
 
 The product outbox executor has a five-minute lease, attempt fencing, retries under the same request ID, and a called state that preserves a response before DB settlement.
 The inbox processor uses row locking, a savepoint, bounded backoff, and dead-letter handling after ten attempts.

@@ -3,7 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { SandboxOperationSpec } from "@tranche/contracts";
-import { createSandboxStore, type SandboxStore } from "@tranche/db";
+import { SandboxStore } from "@tranche/db";
+import { openSandboxTestDb, sandboxTestOptions } from "@tranche/db/testing";
 import { onboardingSpec, paymentSpec } from "@tranche/paypal";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { onboardingAdapter } from "./adapters";
@@ -81,22 +82,13 @@ describe("private browser artifacts", () => {
 });
 
 const testUrl = process.env.TEST_DATABASE_URL;
-if (testUrl) {
-  const url = new URL(testUrl);
-  if (
-    !["localhost", "127.0.0.1"].includes(url.hostname) ||
-    url.port !== "55432" ||
-    url.pathname !== "/tranche_p2_test"
-  ) {
-    throw new Error("Use only the disposable local tranche_p2_test database on port 55432");
-  }
-}
+if (testUrl) sandboxTestOptions(testUrl);
 
 describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
   let store: SandboxStore;
   const onboardingDirectories: string[] = [];
-  beforeAll(() => {
-    store = createSandboxStore(testUrl);
+  beforeAll(async () => {
+    store = new SandboxStore(await openSandboxTestDb(testUrl));
   });
   beforeEach(async () => {
     await store.db.$client.unsafe(
@@ -104,7 +96,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     );
   });
   afterAll(async () => {
-    await store.db.$client.end();
+    if (store) await store.db.$client.end();
     for (const directory of onboardingDirectories) await removeTestDirectory(directory);
   });
 
@@ -220,7 +212,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     expect(JSON.stringify(await store.inspect(x.runId))).not.toMatch(
       /PRIVATE_CONSENT|PLATFORM00001|SELLERA000001|FAKE_CLIENT|FAKE_BN|FAKE_REF/,
     );
-    const reopened = createSandboxStore(testUrl);
+    const reopened = new SandboxStore(await openSandboxTestDb(testUrl));
     try {
       const runner = new SandboxRunner(
         reopened,
@@ -899,7 +891,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     const fetcher = vi.fn<typeof fetch>();
     await new SandboxRunner(store, credentials, [adapter()], fetcher).resume(op.id);
     expect(fetcher).not.toHaveBeenCalled();
-    const reopened = createSandboxStore(testUrl);
+    const reopened = new SandboxStore(await openSandboxTestDb(testUrl));
     try {
       const report = await reopened.report(runId);
       expect(report.allocation.reservedCents).toBe(11);
@@ -1017,7 +1009,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     await new SandboxRunner(store, credentials, [adapter()], fetcher).resume(op.id);
     expect((await store.operation(op.id)).state).toBe("inconclusive");
     expect((await store.report(runId)).allocation.reservedCents).toBe(11);
-    const restarted = createSandboxStore(testUrl);
+    const restarted = new SandboxStore(await openSandboxTestDb(testUrl));
     try {
       const recovery = vi
         .fn<typeof fetch>()
@@ -1092,7 +1084,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(token())
       .mockResolvedValue(Response.json({}));
-    const reopened = createSandboxStore(testUrl);
+    const reopened = new SandboxStore(await openSandboxTestDb(testUrl));
     try {
       await new SandboxRunner(reopened, credentials, [adapter()], resumed).resume(op.id);
       expect((await reopened.operation(op.id)).state).toBe("succeeded");
@@ -1499,7 +1491,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     await expect(store.approveBuyerChange(change.id, change.approvalHash)).rejects.toThrow(
       "buyer_change_approval_mismatch",
     );
-    const reopened = createSandboxStore(testUrl);
+    const reopened = new SandboxStore(await openSandboxTestDb(testUrl));
     try {
       const runner = new SandboxRunner(
         reopened,
@@ -1719,7 +1711,7 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
       privateFile: x.artifacts.filePath(checkoutKey ?? ""),
     });
     x.setStatus("APPROVED");
-    const reopened = createSandboxStore(testUrl);
+    const reopened = new SandboxStore(await openSandboxTestDb(testUrl));
     try {
       await new SandboxRunner(
         reopened,

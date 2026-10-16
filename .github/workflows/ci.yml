@@ -40,6 +40,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm biome ci .
       - run: pnpm typecheck
+      - name: Identify the owned disposable test database
+        run: >-
+          docker exec "${{ job.services['postgres-test'].id }}"
+          psql -U tranche -d tranche_p2_test -v ON_ERROR_STOP=1
+          -c "ALTER DATABASE tranche_p2_test SET tranche.test_fixture = 'tranche-f0-disposable-v1'"
       - run: pnpm --filter @tranche/db db:migrate:test
       - run: pnpm test
       - run: pnpm build
