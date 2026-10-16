@@ -10,7 +10,7 @@ Phase 0 audit and Phase 1 slices 1 and 2 are complete locally.
 F0-01, F0-03, F0-04, F0-05, and F0-06 are complete locally; lost-order recovery, P7, and BASE-01 corrections remain pending.
 The PR #20 review exposed a database guard bypass, addressed by a shared connection guard with identity checks and new regression tests.
 The PR #21 corrections make repeated cleanup preparation return the existing operation and use the database clock for worker lease checks.
-The latest local validation passed 550 tests, with six real-sandbox cases skipped; the corrections have not been published or verified in remote CI.
+The latest local validation passed 550 tests, with six real-sandbox cases skipped; the corrections are pushed to their respective PR branches, with remote CI still unverified.
 See the [Phase 0 audit](phase-0-audit.md), [slice 1 evidence](phase-1-slice-1-record.md), and [review correction record](pr-review-fixes.md) for dated evidence and limitations.
 Next: Phase 1 slice 3, lost-order recovery and P7, followed by the product outbox corrections.
 Every status below requires its completion evidence; skipped tests do not establish completion.

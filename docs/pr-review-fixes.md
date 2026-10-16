@@ -60,8 +60,11 @@ No real PayPal requests or remote CI runs were performed.
 
 The database guard and consolidated documentation are committed locally on fix/f0-test-setup-and-budget-rules as 1e7bc90.
 The recovery branch was rebased onto that corrected local branch, and its review corrections are recorded separately from the database fix.
-An upstream read on 2026-10-17 showed main at 81b5098, PR #20 at b994685, and PR #21 at 20c068c, so neither remote PR contains these corrections yet.
+The pre-push upstream read on 2026-10-17 showed main at 81b5098, PR #20 at b994685, and PR #21 at 20c068c.
+After checking the fixes against the supplied review comments, all 16 guard tests and five selected recovery regressions passed again before publication.
+The PR #20 corrections were pushed to fix/f0-test-setup-and-budget-rules at 1e7bc90.
+The PR #21 corrections were then pushed to fix/f0-recovery-and-authorization-cleanup at b2dc730 using an explicit force-with-lease against the verified old head 20c068c.
 After PR #20 merges, rebase PR #21 onto the updated main while dropping its inherited PR #20 commits, leaving only recovery changes.
 The required PR #21 title is `fix(f0): Recover interrupted operations and add approved void cleanup`.
 The title has not been changed because authenticated GitHub PR reads returned 404 in this session.
-No pushes, merges, or PR metadata updates were performed.
+No merges or successful PR metadata updates were performed, and remote CI remains unverified.
