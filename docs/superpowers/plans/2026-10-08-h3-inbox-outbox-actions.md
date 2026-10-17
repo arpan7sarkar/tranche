@@ -143,7 +143,7 @@ describe.runIf(Boolean(db))("createTestDb", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/db exec vitest run src/testing.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/db exec vitest run src/testing.test.ts`
 Expected: FAIL with "Failed to resolve import ./testing".
 
 - [ ] **Step 3: Add the alert event type**
@@ -225,7 +225,7 @@ In `packages/db/package.json` set:
 
 - [ ] **Step 6: Generate the migration and run the tests**
 
-Run: `pnpm --filter @tranche/db db:generate && DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/db test && pnpm --filter @tranche/contracts test`
+Run: `pnpm --filter @tranche/db db:generate && DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/db test && pnpm --filter @tranche/contracts test`
 Expected: a new `packages/db/drizzle/0001_*.sql` with 4 `ALTER TABLE "milestone" ADD COLUMN` and 1 `ALTER TABLE "outbox" ADD COLUMN`; all tests PASS.
 
 - [ ] **Step 7: Commit**
@@ -531,7 +531,7 @@ describe.runIf(Boolean(db))("advanceMilestone", () => {
 
 - [ ] **Step 4: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/milestones.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/milestones.test.ts`
 Expected: FAIL with "Failed to resolve import ./milestones".
 
 - [ ] **Step 5: Implement the modules**
@@ -899,7 +899,7 @@ export async function applyEffects(tx: Tx, ctx: EffectContext, effects: Effect[]
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/milestones.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/milestones.test.ts`
 Expected: PASS, 7 tests.
 
 - [ ] **Step 7: Commit**
@@ -1074,7 +1074,7 @@ describe.runIf(Boolean(db))("handlePayPalEvent", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/paypal-events.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/paypal-events.test.ts`
 Expected: FAIL with "Failed to resolve import ./paypal-events".
 
 - [ ] **Step 3: Implement**
@@ -1226,7 +1226,7 @@ Dispute and transition refusals are ignored on purpose: PayPal redelivers events
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/paypal-events.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/paypal-events.test.ts`
 Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Commit**
@@ -1424,7 +1424,7 @@ describe.runIf(Boolean(db))("processInbox", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/inbox.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/inbox.test.ts`
 Expected: FAIL with "Failed to resolve import ./inbox".
 
 - [ ] **Step 3: Implement**
@@ -1565,7 +1565,7 @@ async function handleTimerDue(tx: Tx, deps: Deps, scheduledActionId: string): Pr
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/inbox.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/inbox.test.ts`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Commit**
@@ -1826,7 +1826,7 @@ describe.runIf(Boolean(db))("processActions", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/actions.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/actions.test.ts`
 Expected: FAIL with "Failed to resolve import ./actions".
 
 - [ ] **Step 3: Implement**
@@ -2175,7 +2175,7 @@ export async function submitHumanAction(db: Db, input: ProposedActionInput): Pro
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/actions.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/actions.test.ts`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Commit**
@@ -2355,7 +2355,7 @@ describe.runIf(Boolean(db))("executeOutbox", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/outbox.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/outbox.test.ts`
 Expected: FAIL with "executeOutbox is not exported" (or a type error on the import).
 
 - [ ] **Step 3: Implement the handlers**
@@ -2608,7 +2608,7 @@ A settle that throws `StaleMilestoneError` is retried like a network error; the 
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/outbox.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/outbox.test.ts`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 6: Commit**
@@ -2732,7 +2732,7 @@ describe.runIf(Boolean(mocks.db))("POST /api/webhooks/paypal", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/app/api/webhooks/paypal/route.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/app/api/webhooks/paypal/route.test.ts`
 Expected: FAIL with "Failed to resolve import ./route".
 
 - [ ] **Step 4: Implement**
@@ -2832,7 +2832,7 @@ export async function POST(request: Request): Promise<Response> {
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/app/api/webhooks/paypal/route.test.ts && pnpm --filter @tranche/web build`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/app/api/webhooks/paypal/route.test.ts && pnpm --filter @tranche/web build`
 Expected: PASS, 4 tests; the build lists `ƒ /api/webhooks/paypal`.
 
 - [ ] **Step 6: Register the webhook in the sandbox (manual)**
@@ -2924,7 +2924,7 @@ describe.runIf(Boolean(db))("reconcile", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/reconcile.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/reconcile.test.ts`
 Expected: FAIL with "Failed to resolve import ./reconcile".
 
 - [ ] **Step 3: Implement**
@@ -2985,7 +2985,7 @@ ponytail: alerts repeat every hour until the mismatch is fixed; deduplicate per 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/reconcile.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/reconcile.test.ts`
 Expected: PASS, 3 tests.
 
 - [ ] **Step 5: Commit**
@@ -3056,7 +3056,7 @@ describe.runIf(Boolean(db))("runTick", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/tick.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/tick.test.ts`
 Expected: FAIL with "Failed to resolve import ./tick".
 
 - [ ] **Step 3: Implement**
@@ -3166,7 +3166,7 @@ and these scripts:
 
 - [ ] **Step 4: Run tests and the build**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service test && pnpm --filter @tranche/agents-service build && ls apps/agents/dist`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service test && pnpm --filter @tranche/agents-service build && ls apps/agents/dist`
 Expected: all money tests PASS; `dist` contains `index.mjs` and `cron.mjs`.
 
 - [ ] **Step 5: End-to-end smoke in the sandbox**

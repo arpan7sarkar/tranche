@@ -9,6 +9,12 @@ Implementation closeout: [P3 closeout](p3-closeout.md).
 
 ## Agreed execution order
 
+Recovery update, 2026-10-16: rerun `apply-referral-recovery` on the same recovery ID after a worker lease expires.
+If the worker issued no requests, the replacement worker uses the existing approval with a new fencing token.
+If calls were already issued, the command reports `referral_recovery_reapproval_required` and returns that same row to awaiting_approval; inspect it and obtain fresh approval before `approve-referral-recovery` and the next apply.
+Consumed calls, original deadlines, and recovery-read limits are preserved, and only unused calls from the interrupted approval are released.
+An active worker, changed referral identity, or exhausted allowance stops recovery; no second referral POST is sent.
+
 Implement and test P4 offline before actual sandbox onboarding, as requested by the contributor.
 Then obtain separate approval for P3 referral execution, complete Seller A's browser consent and verify authoritative readiness and grants.
 Only after those checks and the P4 path-specific prerequisites pass may a separately approved P4 payment test run.

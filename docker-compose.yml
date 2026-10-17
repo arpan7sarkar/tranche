@@ -9,5 +9,23 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql
+  postgres-test:
+    image: postgres:18
+    profiles: [test]
+    environment:
+      POSTGRES_USER: tranche
+      POSTGRES_PASSWORD: tranche
+      POSTGRES_DB: tranche_p2_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    volumes:
+      - ./packages/db/scripts/init-sandbox-test.sql:/docker-entrypoint-initdb.d/10-tranche-test.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tranche -d tranche_p2_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 volumes:
   pgdata:

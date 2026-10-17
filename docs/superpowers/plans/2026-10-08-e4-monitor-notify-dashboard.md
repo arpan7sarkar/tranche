@@ -478,7 +478,7 @@ describe.runIf(Boolean(db))("runMonitor", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/monitor/run.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/monitor/run.test.ts`
 Expected: FAIL with "Failed to resolve import ./run".
 
 - [ ] **Step 3: Write snapshot, drafting and run**
@@ -664,7 +664,7 @@ export * from "./snapshot";
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/monitor`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/monitor`
 Expected: PASS, 10 tests.
 
 - [ ] **Step 5: Commit**
@@ -731,9 +731,9 @@ Expected: 0 type errors; `dist/index.mjs` built.
 Then in a scratch shell (not committed), simulate an overdue release on the seed deal and run one tick:
 
 ```bash
-psql postgres://tranche:tranche@localhost:5432/tranche -c "update milestone set state='release_pending' where key='build'; insert into event (deal_id, milestone_id, type, payload, created_at) select deal_id, id, 'milestone.release_pending', '{}', now() - interval '50 hours' from milestone where key='build';"
+psql postgres://tranche:tranche@localhost:5433/tranche -c "update milestone set state='release_pending' where key='build'; insert into event (deal_id, milestone_id, type, payload, created_at) select deal_id, id, 'milestone.release_pending', '{}', now() - interval '50 hours' from milestone where key='build';"
 pnpm tsx --env-file=.env -e "import('./apps/agents/src/agents/monitor.ts').then(m => m.monitorTick()).then(() => process.exit(0))"
-psql postgres://tranche:tranche@localhost:5432/tranche -c "select type, status, idempotency_key from proposed_action where agent='monitor';"
+psql postgres://tranche:tranche@localhost:5433/tranche -c "select type, status, idempotency_key from proposed_action where agent='monitor';"
 ```
 
 Expected: one `send_reminder` and one `flag_risk` row with today's date in the key; running the tick again adds nothing.
@@ -907,7 +907,7 @@ describe.runIf(Boolean(db))("processApprovedNotifyActions", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/notify`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/notify`
 Expected: FAIL with "Failed to resolve import ./describe" and "./notifier".
 
 - [ ] **Step 3: Write the sender, describer and notifier**
@@ -1105,7 +1105,7 @@ RESEND_FROM=Tranche <onboarding@resend.dev>
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/notify`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/notify`
 Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Commit**
@@ -1196,7 +1196,7 @@ describe.runIf(Boolean(db))("notifyApprovalRequests", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/notify/approvals.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/notify/approvals.test.ts`
 Expected: FAIL with "notifyApprovalRequests is not exported".
 
 - [ ] **Step 3: Write approval emails and the tick**
@@ -1273,7 +1273,7 @@ await notifierTick();
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/notify && pnpm typecheck`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/notify && pnpm typecheck`
 Expected: PASS, 6 tests; 0 type errors.
 
 - [ ] **Step 5: Send one real email**
@@ -1391,7 +1391,7 @@ describe.runIf(Boolean(db))("loadDashboardData", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/dashboard/data.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/dashboard/data.test.ts`
 Expected: FAIL with "Failed to resolve import ./data".
 
 - [ ] **Step 3: Declare the views**
@@ -1612,7 +1612,7 @@ export async function GET() {
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/dashboard/data.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/dashboard/data.test.ts`
 Expected: PASS, 2 tests.
 
 - [ ] **Step 6: Commit**

@@ -34,6 +34,7 @@ export const SandboxOperationKind = z.enum([
   "create_order",
   "authorize_order",
   "capture_order",
+  "void_authorization",
   "release_payment",
   "payout",
   "read_status",
@@ -64,6 +65,8 @@ export const SandboxOperationSpec = z
     recoveryCalls: z.number().int().min(1).max(10),
   })
   .superRefine((spec, ctx) => {
+    if (spec.kind === "void_authorization" && !spec.payment)
+      ctx.addIssue({ code: "custom", message: "Cleanup payment context required" });
     if (
       spec.payment &&
       (spec.kind !== spec.payment.stage ||
@@ -71,7 +74,12 @@ export const SandboxOperationSpec = z
         spec.recipients.length !== 1 ||
         spec.recipients[0]?.alias !== spec.payment.context.seller.seller ||
         spec.recipients[0]?.cents !== spec.payment.context.principalCents ||
-        spec.feeBoundCents !== spec.payment.context.feeBounds[spec.payment.stage] ||
+        spec.feeBoundCents !==
+          (spec.payment.stage === "void_authorization"
+            ? spec.payment.cleanupFeeBoundCents
+            : spec.payment.context.feeBounds[spec.payment.stage]) ||
+        (spec.payment.stage !== "void_authorization" &&
+          spec.payment.cleanupFeeBoundCents !== undefined) ||
         spec.recoveryCalls !== spec.payment.context.recoveryCalls ||
         spec.onboarding)
     )

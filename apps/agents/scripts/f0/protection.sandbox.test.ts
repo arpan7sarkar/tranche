@@ -46,6 +46,7 @@ it.skipIf(process.env.RUN_PAYPAL_P4_SANDBOX_TEST !== "1")(
             create_order: "buyer_approved",
             authorize_order: "authorized",
             capture_order: "captured_immediate",
+            void_authorization: "voided",
           }[op.spec.payment.stage],
         );
     } catch {

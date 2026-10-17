@@ -2066,7 +2066,7 @@ When PayPal changes its sandbox login page, `SANDBOX_SELECTORS` is the only thin
 import { defineConfig, devices } from "@playwright/test";
 
 const fake = process.env.E2E_FAKE_PAYPAL !== "0";
-const db = process.env.E2E_DATABASE_URL ?? "postgres://tranche:tranche@localhost:5432/tranche_e2e";
+const db = process.env.E2E_DATABASE_URL ?? "postgres://tranche:tranche@localhost:5433/tranche_e2e";
 const appEnv = {
   DATABASE_URL: db,
   APP_URL: "http://localhost:3100",
@@ -2112,7 +2112,7 @@ import { AGENCY, readState } from "../support/state";
 
 setup("sign up the agency and save the session", async ({ request, baseURL }) => {
   const { userId } = await ensureAgencyUser(baseURL!, AGENCY);
-  const db = createDb(process.env.E2E_DATABASE_URL ?? "postgres://tranche:tranche@localhost:5432/tranche_e2e");
+  const db = createDb(process.env.E2E_DATABASE_URL ?? "postgres://tranche:tranche@localhost:5433/tranche_e2e");
   await linkMember(db, readState().workspaceId, userId);
   await db.$client.end();
   await request.post("/api/auth/sign-in/email", { data: { email: AGENCY.email, password: AGENCY.password }, headers: { Origin: baseURL! } });

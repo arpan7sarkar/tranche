@@ -4,6 +4,8 @@ import { PgTable } from "drizzle-orm/pg-core";
 import postgres from "postgres";
 import { createDb, type Db, migrateDb, schema } from "./index";
 
+export { openSandboxTestDb, sandboxTestOptions } from "./sandbox-test-db";
+
 // 42P04 / 23505: the database exists, or a concurrent run created it first.
 const EXISTS = new Set(["42P04", "23505"]);
 // 55006: template1 is busy because another run is creating a database at the same moment.

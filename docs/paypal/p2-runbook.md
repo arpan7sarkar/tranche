@@ -26,8 +26,10 @@ Every write needs a concrete approval bound to the canonical request, participan
 The exact method, path and JSON body are persisted and included in the approval hash.
 The adapter must validate that the private merchant mappings, payload amounts and fee evidence match the approved summary before dispatch.
 Private mappings cannot be silently changed behind an approved request.
-Competing workers claim under a database lock; claim tokens fence stale workers, and expired claims enter read-only recovery.
-This version never resends a business write after a timeout or crash.
+Competing workers claim under a database lock; claim tokens fence stale workers, and expired claims require classified recovery.
+Worker lease creation and expiry checks use PostgreSQL time, including retry and referral recovery, so application clock skew cannot change claim eligibility.
+An operation that may have dispatched never sends a second business write; the explicit retry command only reopens a proven undispatched operation for fresh approval.
+For the retry, cleanup, and referral lease recovery added on 2026-10-16, see the [slice 2 record](../phase-1-slice-2-record.md) and [P4 recovery instructions](p4-runbook.md#pre-dispatch-recovery-and-authorization-cleanup).
 Recovery uses only bounded GET requests and retains inconclusive results when an endpoint cannot establish the outcome.
 Each HTTP request has a 15-second timeout, dispatch interpretation has a 45-second deadline, recovery has a 30-second deadline, and claims expire after 60 seconds.
 Recovery reads also have a persisted per-operation count bound.
@@ -91,6 +93,8 @@ After browser actions, adapters must confirm approval or consent through authori
 The database suite requires TEST_DATABASE_URL pointing only to localhost or 127.0.0.1, port 55432, database tranche_p2_test.
 Its setup truncates sandbox tables in that disposable database before each case; it rejects other destinations and never falls back to DATABASE_URL.
 Apply the generated migrations to that test database first and set TEST_DATABASE_URL privately in the test process.
+For the repository's disposable Docker fixture and guarded migration command, follow the [root setup instructions](../../README.md#disposable-f0-integration-database).
+The application Compose service uses host port 5433, while this isolated F0 test service uses host port 55432.
 Without TEST_DATABASE_URL, the database scenarios are explicitly skipped rather than evidence of a passing persistence check.
 
 ```powershell

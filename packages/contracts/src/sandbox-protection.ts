@@ -2,7 +2,13 @@ import { z } from "zod";
 import { PayPalMerchantId, PayPalOpaqueId, SandboxOnboardingContext } from "./sandbox-onboarding";
 
 export const SandboxPaymentPath = z.enum(["authorization_capture", "delayed_disbursement"]);
-export const SandboxPaymentStage = z.enum(["create_order", "authorize_order", "capture_order"]);
+export const SandboxPaymentStage = z.enum([
+  "create_order",
+  "authorize_order",
+  "capture_order",
+  "void_authorization",
+]);
+export const SandboxVoidInput = z.strictObject({ feeBoundCents: z.number().int().min(0).max(100) });
 export const SandboxCheckout = z
   .strictObject({
     returnUrl: z.url().max(2048),
@@ -82,6 +88,7 @@ export const SandboxPaymentSpec = z.strictObject({
   stage: SandboxPaymentStage,
   orderId: PayPalOpaqueId.optional(),
   authorizationId: PayPalOpaqueId.optional(),
+  cleanupFeeBoundCents: z.number().int().min(0).max(100).optional(),
 });
 export type SandboxPaymentSpec = z.infer<typeof SandboxPaymentSpec>;
 export const SandboxPaymentEvidence = z.enum([
@@ -89,6 +96,7 @@ export const SandboxPaymentEvidence = z.enum([
   "buyer_approved",
   "authorized",
   "captured_immediate",
+  "voided",
   "pending",
   "inconclusive",
 ]);
@@ -114,22 +122,6 @@ export const SandboxPaymentApproval = z.strictObject({
   recoverUntil: z.iso.datetime(),
   lifecycleCalls: z.number().int().positive().max(50),
   totalFeeBoundCents: z.number().int().min(0).max(100),
+  cleanupCalls: z.number().int().positive().max(50).optional(),
+  cleanupFeeBoundCents: z.number().int().min(0).max(100).optional(),
 });
-export function paymentStageCalls(stage: z.infer<typeof SandboxPaymentStage>, n: number): number {
-  return { create_order: 3, authorize_order: 5, capture_order: 6 }[stage] + 2 * n;
-}
-export function paymentTotalCalls(c: SandboxPaymentContext): number {
-  return 14 + 6 * c.recoveryCalls;
-}
-export function paymentApproval(c: SandboxPaymentContext) {
-  return {
-    ...(c.checkout ? { checkout: c.checkout } : {}),
-    path: c.path,
-    buyerMappingVersion: c.buyerMappingVersion,
-    sellerMappingVersion: c.seller.mappingVersion,
-    executeUntil: c.executeUntil,
-    recoverUntil: c.recoverUntil,
-    lifecycleCalls: paymentTotalCalls(c),
-    totalFeeBoundCents: Object.values(c.feeBounds).reduce((a, b) => a + b, 0),
-  };
-}

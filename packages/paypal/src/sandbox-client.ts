@@ -59,6 +59,7 @@ export class SandboxClient {
         ]),
       });
       if (!response.ok) throw new SandboxTransportError("http", response.status);
+      if (response.status === 204) return undefined;
       try {
         const body: unknown = await response.json();
         return body;

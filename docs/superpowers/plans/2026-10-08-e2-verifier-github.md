@@ -869,7 +869,7 @@ The second test expects 1 because the `ci_green` milestone (`m3`) accepts any ba
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/app/api/github`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/app/api/github`
 Expected: FAIL with "Failed to resolve import ./signature" and "./deliveries".
 
 - [ ] **Step 4: Implement**
@@ -981,7 +981,7 @@ export async function POST(request: Request) {
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/app/api/github`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/app/api/github`
 Expected: PASS, 7 tests.
 
 - [ ] **Step 6: End-to-end check with a real merge (manual)**
@@ -989,7 +989,7 @@ Expected: PASS, 7 tests.
 With `pnpm dev` and the tunnel running, set a seeded milestone to `in_progress` with a `pr_merged` check on your demo repo, merge a PR there, then:
 
 ```bash
-psql postgres://tranche:tranche@localhost:5432/tranche -c "select source, source_event_id, message from inbox order by received_at desc limit 1"
+psql postgres://tranche:tranche@localhost:5433/tranche -c "select source, source_event_id, message from inbox order by received_at desc limit 1"
 ```
 
 Expected: one `github` row whose `message` has `type: delivery.detected` and the merge SHA.
@@ -1458,7 +1458,7 @@ describe.runIf(Boolean(db))("judgeDelivery", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pnpm --filter @tranche/agents add @tranche/verifiers@workspace:* && DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/verifier`
+Run: `pnpm --filter @tranche/agents add @tranche/verifiers@workspace:* && DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/verifier`
 Expected: FAIL with "Failed to resolve import ./decide" and "./judge".
 
 - [ ] **Step 3: Implement**
@@ -1586,7 +1586,7 @@ export async function judgeDelivery(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/verifier`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/verifier`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 5: Commit**
@@ -1725,7 +1725,7 @@ describe.runIf(Boolean(db))("verifyMilestone", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents exec vitest run src/verifier/verify.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents exec vitest run src/verifier/verify.test.ts`
 Expected: FAIL with "Failed to resolve import ./verify".
 
 - [ ] **Step 3: Implement**
@@ -1891,7 +1891,7 @@ export { type VerifyDeps, verifyMilestone } from "./verifier/verify";
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents test && pnpm typecheck`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents test && pnpm typecheck`
 Expected: PASS (all agents tests); 0 type errors.
 If `verificationGate` has a different signature in H1, adapt the `gate` call in `verify.ts` and the `gateRows` shape, not H's function.
 
@@ -1997,8 +1997,8 @@ Expected: PASS; build succeeds.
 5. Check the result:
 
 ```bash
-psql postgres://tranche:tranche@localhost:5432/tranche -c "select kind, passed, summary from evidence where milestone_id='<id>' order by created_at"
-psql postgres://tranche:tranche@localhost:5432/tranche -c "select type, status, reasoning from proposed_action where agent='verifier' order by created_at desc limit 1"
+psql postgres://tranche:tranche@localhost:5433/tranche -c "select kind, passed, summary from evidence where milestone_id='<id>' order by created_at"
+psql postgres://tranche:tranche@localhost:5433/tranche -c "select type, status, reasoning from proposed_action where agent='verifier' order by created_at desc limit 1"
 ```
 
 Expected: one evidence row per check, screenshots, one `ai_verdict`, and one pending `mark_verified` or `request_changes` proposal whose reasoning matches the evidence.

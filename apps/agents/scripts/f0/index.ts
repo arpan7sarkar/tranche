@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   onboardingApprovalSummary,
-  paymentApproval,
   SandboxApprovalSummary,
   SandboxOperationSpec,
   SandboxReferralRecoveryInput,
+  SandboxVoidInput,
 } from "@tranche/contracts";
+import { paymentApproval } from "@tranche/core";
 import { createSandboxStore, type SandboxStore } from "@tranche/db";
 import { onboardingSpec, paymentSpec } from "@tranche/paypal";
 import { onboardingAdapter } from "./adapters";
@@ -16,6 +17,7 @@ import { PrivateSandboxArtifacts } from "./private-artifacts";
 import { SandboxRunner } from "./runner";
 
 export const sandboxHelp =
+  "Recovery: retry-undispatched <operation-id> (fresh approval required) | prepare-void <authorization-operation-id> <private-fee-input-file> (separate approval required). " +
   "Read-only maintenance: maintenance <operation-id> <private-input-file> | approve-maintenance <id> <approval-hash> | apply-maintenance <id>. " +
   "Sandbox runner: onboard <private-input-file> | protect <private-input-file> | buyer-change <order-operation-id> <private-input-file> | approve-buyer-change <change-id> <approval-hash> | apply-buyer-change <change-id> | payment-next <operation-id> | checkout-file <operation-id> | referral-recovery <operation-id> <private-input-file> | approve-referral-recovery <id> <approval-hash> | apply-referral-recovery <id> | start <private-spec-file> | inspect <run-id> | report <run-id> | approve <operation-id> <payload-hash> <attempt> | resume <operation-id> | consent-file <operation-id> | refresh-consent <operation-id>. Onboarding and authorization/capture adapters are available; delayed disbursement is blocked. All writes require approval.";
 
@@ -28,6 +30,29 @@ export async function sandboxCli(
   ),
 ): Promise<unknown> {
   const [command, first, second, third] = args;
+  if (command === "retry-undispatched" && args.length === 2 && first) {
+    await store.retryUndispatched(first);
+    return store.inspect((await store.operation(first)).runId);
+  }
+  if (command === "prepare-void" && args.length === 3 && first && second) {
+    const input = SandboxVoidInput.parse(JSON.parse(await readFile(second, "utf8")));
+    const source = await store.operation(first);
+    if (source.state !== "succeeded" || source.spec.payment?.stage !== "authorize_order")
+      throw new Error("authorization_stage_required");
+    const payment = await store.paymentResource(source.commitmentId);
+    if (!payment.result.orderId || !payment.result.authorizationId)
+      throw new Error("authorization_reference_required");
+    const cleanup = await store.prepare(
+      source.runId,
+      randomUUID(),
+      paymentSpec(payment.context, source.commitmentId, "void_authorization", {
+        orderId: payment.result.orderId,
+        authorizationId: payment.result.authorizationId,
+        cleanupFeeBoundCents: input.feeBoundCents,
+      }),
+    );
+    return { operationId: cleanup.id, inspection: await store.inspect(source.runId) };
+  }
   if (command === "maintenance" && args.length === 3 && first && second)
     return store.proposeMaintenance(first, JSON.parse(await readFile(second, "utf8")));
   if (command === "approve-maintenance" && args.length === 3 && first && second) {
@@ -82,7 +107,9 @@ export async function sandboxCli(
         sender: op.spec.sender,
         recipients: op.spec.recipients,
         feeBoundCents: op.spec.feeBoundCents,
-        ...(op.spec.payment ? { payment: paymentApproval(op.spec.payment.context) } : {}),
+        ...(op.spec.payment
+          ? { payment: paymentApproval(op.spec.payment.context, op.spec.payment) }
+          : {}),
         ...(op.spec.onboarding
           ? { onboarding: onboardingApprovalSummary(op.spec.onboarding) }
           : {}),
@@ -97,7 +124,7 @@ export async function sandboxCli(
     if (
       previous.state !== "succeeded" ||
       !previous.spec.payment ||
-      previous.spec.payment.stage === "capture_order"
+      !["create_order", "authorize_order"].includes(previous.spec.payment.stage)
     )
       throw new Error("payment_not_advanceable");
     const r = await store.paymentResource(previous.commitmentId);

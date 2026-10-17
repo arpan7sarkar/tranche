@@ -137,6 +137,8 @@ export class SandboxRunner {
     const op = await this.store.operation(row.operationId);
     const recover = this.adapter(op).recoverReferral;
     if (!recover || !op.spec.onboarding) throw new Error("referral_recovery_unavailable");
+    if (await this.store.finalizeOnboardingExpiry(op.id))
+      throw new Error("onboarding_recovery_limit");
     const claim = await this.store.beginReferralRecovery(id);
     try {
       const body = await this.client(claim).request(

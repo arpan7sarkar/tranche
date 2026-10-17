@@ -7,6 +7,7 @@ import {
   paymentCapture,
   paymentRequest,
   paymentSpec,
+  paymentVoid,
   verifyAuthorizationResource,
   verifyBuyerChangeOrder,
   verifyPaymentOrder,
@@ -43,6 +44,63 @@ const c = SandboxPaymentContext.parse({
 const commitmentId = randomUUID();
 const spec = paymentSpec(c, commitmentId);
 const p = SandboxPaymentSpec.parse(spec.payment);
+
+describe("approved authorization cleanup", () => {
+  function fixture() {
+    const spec = paymentSpec(c, commitmentId, "void_authorization", {
+      orderId: "ORDER1",
+      authorizationId: "AUTH1",
+      cleanupFeeBoundCents: 0,
+    });
+    const payment = SandboxPaymentSpec.parse(spec.payment);
+    const authorization = { ...auth(), status: "VOIDED" };
+    const body = {
+      ...order("COMPLETED"),
+      purchase_units: [
+        {
+          ...order().purchase_units[0],
+          payments: { authorizations: [authorization], captures: [] as unknown[] },
+        },
+      ],
+    };
+    return { spec, payment, authorization, body };
+  }
+  it("uses a separately approved void endpoint and requires read-back evidence", () => {
+    const x = fixture();
+    expect(x.spec.request).toMatchObject({
+      method: "POST",
+      path: "/v2/payments/authorizations/AUTH1/void",
+    });
+    expect(x.spec.request.body).toBeUndefined();
+    expect(paymentVoid(x.body, x.authorization, x.payment, commitmentId)).toEqual({
+      evidence: "voided",
+      orderId: "ORDER1",
+      authorizationId: "AUTH1",
+    });
+    expect(() =>
+      paymentSpec(c, commitmentId, "void_authorization", {
+        orderId: "ORDER1",
+        authorizationId: "AUTH1",
+      }),
+    ).toThrow();
+  });
+  it.each(["status", "amount", "authorization", "order", "buyer", "seller", "capture"])(
+    "rejects mismatched cleanup evidence: %s",
+    (field) => {
+      const x = fixture();
+      if (field === "status") x.authorization.status = "CREATED";
+      if (field === "amount") x.authorization.amount.value = "0.51";
+      if (field === "authorization") x.authorization.id = "OTHER";
+      if (field === "order") x.body.id = "OTHER";
+      if (field === "buyer") x.body.payer.payer_id = "OTHER";
+      const unit = x.body.purchase_units[0];
+      if (!unit?.payee) throw new Error("missing_fixture");
+      if (field === "seller") unit.payee.merchant_id = "OTHER";
+      if (field === "capture") unit.payments.captures = [{}];
+      expect(() => paymentVoid(x.body, x.authorization, x.payment, commitmentId)).toThrow();
+    },
+  );
+});
 function order(status = "APPROVED") {
   return {
     id: "ORDER1",

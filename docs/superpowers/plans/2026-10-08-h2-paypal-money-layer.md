@@ -2201,7 +2201,7 @@ describe.runIf(Boolean(db))("onboarding", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/server/onboarding.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/server/onboarding.test.ts`
 Expected: FAIL with "Failed to resolve import ./onboarding".
 
 - [ ] **Step 3: Write the server modules and routes**
@@ -2337,7 +2337,7 @@ The return route ignores PayPal's query parameters (`merchantIdInPayPal`, `permi
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/server/onboarding.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/server/onboarding.test.ts`
 Expected: PASS, 4 tests.
 Run: `pnpm --filter @tranche/web typecheck`
 Expected: PASS once `apps/web/src/server/session.ts` exists from the H5 auth task; if H5 has not landed yet, this is the only expected error.
@@ -2547,7 +2547,7 @@ describe.runIf(Boolean(db))("funding", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/server/funding.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/server/funding.test.ts`
 Expected: FAIL with "Failed to resolve import ./funding".
 
 - [ ] **Step 3: Write the funding module and routes**
@@ -2728,7 +2728,7 @@ export async function POST(_request: Request, ctx: RouteContext<"/api/portal/[to
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run src/server/funding.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run src/server/funding.test.ts`
 Expected: PASS, 8 tests.
 Run: `pnpm --filter @tranche/web typecheck && pnpm check`
 Expected: PASS once `apps/web/src/server/portal.ts` exists from the H5 portal task.

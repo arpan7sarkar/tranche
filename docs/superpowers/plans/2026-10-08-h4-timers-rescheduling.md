@@ -420,7 +420,7 @@ describe.runIf(Boolean(db))("claimDueTimers", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/timers.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/timers.test.ts`
 Expected: FAIL with "claimDueTimers is not exported" and "fundingDueAt is not exported".
 
 - [ ] **Step 3: Implement**
@@ -502,7 +502,7 @@ In `apps/agents/src/money/tick.test.ts` change the last expectation to:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service test`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service test`
 Expected: PASS, including H3's suites.
 
 - [ ] **Step 5: Commit**
@@ -615,7 +615,7 @@ describe.runIf(Boolean(db))("fund handler", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/funding.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/funding.test.ts`
 Expected: FAIL; the `fund` row ends `failed` with "no outbox handler for fund".
 
 - [ ] **Step 3: Implement**
@@ -718,7 +718,7 @@ In `apps/agents/src/money/outbox-handlers.ts`, add `import { fundHandler } from 
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/funding.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/funding.test.ts`
 Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit**
@@ -898,7 +898,7 @@ describe.runIf(Boolean(db))("hold renewal", () => {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/renewal.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/renewal.test.ts`
 Expected: FAIL; no `renew_hold` timer is planned and renew rows fail with "no outbox handler for renew_hold".
 
 - [ ] **Step 4: Implement planning**
@@ -1042,7 +1042,7 @@ In `apps/agents/src/money/outbox-handlers.ts`, import `renewHandler` alongside `
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service test`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service test`
 Expected: PASS, 8 new renewal tests plus every H3 suite.
 
 - [ ] **Step 7: Commit**
@@ -1193,7 +1193,7 @@ describe.runIf(Boolean(db))("applyReschedule", () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/reschedule.test.ts`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service exec vitest run src/money/reschedule.test.ts`
 Expected: FAIL with "Failed to resolve import ./reschedule".
 
 - [ ] **Step 3: Implement**
@@ -1313,7 +1313,7 @@ export { applyReschedule, RescheduleError } from "./reschedule";
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/agents-service test`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/agents-service test`
 Expected: PASS, 5 new reschedule tests plus every earlier suite.
 
 - [ ] **Step 5: Commit**
@@ -1431,7 +1431,7 @@ describe.runIf(Boolean(mocks.db))("POST /api/deals/[dealId]/tasks/reschedule", (
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web exec vitest run "src/app/api/deals/[dealId]/tasks/reschedule/route.test.ts"`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web exec vitest run "src/app/api/deals/[dealId]/tasks/reschedule/route.test.ts"`
 Expected: FAIL with "Failed to resolve import ./route".
 
 - [ ] **Step 4: Implement**
@@ -1468,7 +1468,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ dealId: st
 
 - [ ] **Step 5: Run tests and the build**
 
-Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5432/tranche pnpm --filter @tranche/web test && pnpm --filter @tranche/web build`
+Run: `DATABASE_URL=postgres://tranche:tranche@localhost:5433/tranche pnpm --filter @tranche/web test && pnpm --filter @tranche/web build`
 Expected: PASS, 4 tests; the build lists `ƒ /api/deals/[dealId]/tasks/reschedule`.
 
 - [ ] **Step 6: Commit and open the PR**

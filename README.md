@@ -4,6 +4,7 @@ Milestone-protected payments for freelancers and agencies, run by an AI agent, s
 Built for the PayPal AI Hackathon.
 
 Design: [`docs/superpowers/specs/2026-10-08-tranche-design.md`](docs/superpowers/specs/2026-10-08-tranche-design.md)
+Implementation phases, current status, and pending tasks: [remaining work](docs/remaining_work.md).
 
 F0 contributors: start with the [sandbox capability plan](docs/paypal/f0-plan.md), then read the [current handoff](docs/paypal/f0-status.md).
 For implemented sandbox configuration and authentication commands, use the [P1 operator runbook](docs/paypal/p1-runbook.md).
@@ -44,6 +45,27 @@ pnpm dev
 ```
 
 Running the agents service locally needs the [Render CLI](https://render.com/docs/cli): `pnpm dev:agents`.
+Compose exposes the application database at `localhost:5433`; container-internal connections use port 5432.
+For existing local `.env` files, update only the application database port if it still points to this Compose service on 5432.
+
+### Disposable F0 integration database
+
+The F0 runner suite requires a separate disposable database and rejects the application database.
+Start the optional test service, migrate it, and explicitly set its URL before running tests.
+
+```bash
+docker compose --profile test up -d --wait postgres-test
+export TEST_DATABASE_URL='postgres://tranche:tranche@localhost:55432/tranche_p2_test'
+pnpm --filter @tranche/db db:migrate:test
+pnpm test
+```
+
+The test service uses temporary storage that is lost when the container stops.
+The guarded migration command never falls back to `DATABASE_URL`.
+It rejects URL query strings and fragments and checks both the selected database name and the fixture marker before any migration or truncation.
+The marker is initialized inside the owned test container; a foreign Postgres on the same port is rejected.
+If an old disposable container predates the marker, recreate only `postgres-test` with `docker compose --profile test up -d --wait --force-recreate postgres-test`.
+Turbo forwards both database variables and executes tests without cached results.
 
 ## Commands
 
