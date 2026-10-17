@@ -1,5 +1,7 @@
 # P4 authorization/capture operator runbook
 
+For lost order responses and product creation recovery, see the [recovery runbook](product-recovery-runbook.md).
+
 ## Pre-dispatch recovery and authorization cleanup
 
 Update: 2026-10-16, verified offline with the [Phase 1 slice 2 regressions](../phase-1-slice-2-record.md).

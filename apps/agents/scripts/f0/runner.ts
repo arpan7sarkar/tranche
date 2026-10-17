@@ -1,4 +1,4 @@
-import { type SandboxOperationSpec, SandboxOutcome } from "@tranche/contracts";
+import { PayPalOpaqueId, type SandboxOperationSpec, SandboxOutcome } from "@tranche/contracts";
 import {
   type DispatchClaim,
   type SandboxStore,
@@ -29,7 +29,7 @@ export interface SandboxAdapter {
   recover(
     operation: StoredOperation,
     read: (request: SandboxRequest) => Promise<unknown>,
-    options?: { refreshConsent?: boolean },
+    options?: { refreshConsent?: boolean; adoptedOrderId?: string },
   ): Promise<unknown>;
 }
 
@@ -71,6 +71,31 @@ export class SandboxRunner {
       },
       this.fetcher,
     );
+  }
+
+  async adoptOrder(operationId: string, orderId: string, payloadHash: string): Promise<void> {
+    PayPalOpaqueId.parse(orderId);
+    const op = await this.store.operation(operationId);
+    const adapter = this.adapter(op);
+    const claim = await this.store.beginRecovery(operationId, undefined, payloadHash);
+    try {
+      const client = this.client(claim);
+      const signal = AbortSignal.timeout(30_000);
+      const outcome = await bounded(signal, () =>
+        adapter.recover(
+          claim.operation,
+          (request) => {
+            if (request.method !== "GET") throw new Error("recovery_read_only");
+            return client.request(request, { recovery: true, signal });
+          },
+          { adoptedOrderId: orderId },
+        ),
+      );
+      await this.store.finishRecovery(claim, outcome);
+    } catch (error) {
+      await this.store.finishRecovery(claim, { state: "inconclusive" });
+      throw error;
+    }
   }
 
   async changeBuyer(id: string): Promise<void> {

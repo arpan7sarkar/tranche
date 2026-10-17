@@ -1,9 +1,9 @@
 import "server-only";
+import { startDurableFunding } from "@tranche/agents-service/money";
 import type { HoldMechanism } from "@tranche/contracts";
-import { PENDING_ORDER_TTL_HOURS, pendingOrderVerdict, platformFee } from "@tranche/core";
 import { type Db, schema, type Tx } from "@tranche/db";
-import { approveUrlOf, type PayPal, PayPalError } from "@tranche/paypal";
-import { and, desc, eq } from "drizzle-orm";
+import { type PayPal, PayPalError } from "@tranche/paypal";
+import { and, eq } from "drizzle-orm";
 
 export class FundingError extends Error {
   constructor(
@@ -13,8 +13,6 @@ export class FundingError extends Error {
     super(message);
   }
 }
-
-const HOUR_MS = 60 * 60 * 1000;
 
 async function orderStatus(paypal: Pick<PayPal, "getOrder">, orderId: string) {
   try {
@@ -44,82 +42,32 @@ export async function startFunding(
     portalToken: string;
   },
 ): Promise<{ orderId: string; approveUrl: string | null }> {
-  // ponytail: holds the milestone row lock across PayPal calls (max 20s each); move order creation to the outbox if funding traffic grows
-  const result = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({ m: schema.milestone, d: schema.deal, w: schema.workspace, c: schema.client })
-      .from(schema.milestone)
-      .innerJoin(schema.deal, eq(schema.deal.id, schema.milestone.dealId))
-      .innerJoin(schema.workspace, eq(schema.workspace.id, schema.deal.workspaceId))
-      .innerJoin(schema.client, eq(schema.client.id, schema.deal.clientId))
-      .where(
-        and(eq(schema.milestone.id, input.milestoneId), eq(schema.milestone.dealId, input.dealId)),
-      )
-      .for("update", { of: schema.milestone });
-    if (!row) throw new FundingError(404, "Milestone not found");
-    if (row.m.state !== "funding")
-      throw new FundingError(409, `Milestone is ${row.m.state}, not waiting for funding`);
-    if (row.w.paypalOnboarding !== "active" || !row.w.paypalMerchantId)
-      throw new FundingError(409, "The agency has not finished connecting PayPal");
-
-    const holds = await tx
-      .select()
-      .from(schema.hold)
-      .where(eq(schema.hold.milestoneId, row.m.id))
-      .orderBy(desc(schema.hold.createdAt));
-    if (holds.some((h) => h.status === "active"))
-      throw new FundingError(409, "Milestone is already funded");
-    const now = new Date();
-    const pending = holds.find((h) => h.status === "pending");
-    if (pending) {
-      const order = await orderStatus(paypal, pending.paypalOrderId);
-      switch (pendingOrderVerdict(order?.status ?? null, pending.expiresAt, now)) {
-        case "reuse":
-          return { orderId: pending.paypalOrderId, approveUrl: order && approveUrlOf(order) };
-        case "confirming":
-          await enqueuePlaceHold(tx, pending.id);
-          return "confirming" as const;
-        case "wait":
-          return "confirming" as const;
-        case "dead":
-          await tx
-            .update(schema.hold)
-            .set({ status: "failed" })
-            .where(eq(schema.hold.id, pending.id));
-      }
-    }
-
-    const amount = { currency: row.d.currency, minor: row.m.priceMinor };
-    const portal = `${input.appUrl}/portal/${input.portalToken}`;
-    const order = await paypal.createFundingOrder({
-      requestId: `fund-${row.m.id}-${holds.length}`,
+  const [m] = await db
+    .select({ state: schema.milestone.state })
+    .from(schema.milestone)
+    .where(
+      and(eq(schema.milestone.id, input.milestoneId), eq(schema.milestone.dealId, input.dealId)),
+    );
+  if (!m) throw new FundingError(404, "Milestone not found");
+  if (m.state !== "funding") throw new FundingError(409, "Milestone is not waiting for funding");
+  try {
+    const result = await startDurableFunding(db, paypal, {
+      milestoneId: input.milestoneId,
+      dealId: input.dealId,
+      states: ["funding"],
       mechanism: input.mechanism,
-      amount,
-      platformFee: platformFee(amount),
-      payeeMerchantId: row.w.paypalMerchantId,
-      milestoneId: row.m.id,
-      vaultId: row.c.paypalVaultId,
-      returnUrl: `${portal}?funded=${row.m.id}`,
-      cancelUrl: portal,
+      requestId: `fund:${input.milestoneId}`,
+      returnUrl: `${input.appUrl}/portal/return?milestoneId=${input.milestoneId}`,
+      cancelUrl: input.appUrl,
+      now: new Date(),
     });
-    const [hold] = await tx
-      .insert(schema.hold)
-      .values({
-        milestoneId: row.m.id,
-        mechanism: input.mechanism,
-        paypalOrderId: order.orderId,
-        amountMinor: amount.minor,
-        currency: amount.currency,
-        status: "pending",
-        expiresAt: new Date(now.getTime() + PENDING_ORDER_TTL_HOURS * HOUR_MS),
-      })
-      .returning({ id: schema.hold.id });
-    if (hold && !order.approveUrl) await enqueuePlaceHold(tx, hold.id);
-    return { orderId: order.orderId, approveUrl: order.approveUrl };
-  });
-  // Thrown after commit so the place_hold enqueue above is kept.
-  if (result === "confirming") throw new FundingError(409, "Your payment is being confirmed");
-  return result;
+    if (result.status === "created" || result.status === "reused")
+      return { orderId: result.orderId, approveUrl: result.approveUrl };
+    throw new FundingError(409, "Your payment is being confirmed");
+  } catch (error) {
+    if (error instanceof FundingError) throw error;
+    throw new FundingError(409, "Funding is pending verification. Please try again shortly.");
+  }
 }
 
 export async function confirmApproval(

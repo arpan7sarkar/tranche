@@ -33,7 +33,7 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("fund handler", () => {
     await fund(paypal, milestoneId);
     expect(paypal.createFundingOrder).toHaveBeenCalledWith(
       expect.objectContaining({
-        requestId: `fund:${milestoneId}:0`,
+        requestId: `create-funding:${milestoneId}:0`,
         mechanism: "authorization",
         amount: { currency: "USD", minor: 100000 },
         platformFee: { currency: "USD", minor: 2000 },

@@ -14,6 +14,7 @@ Earlier requested amounts retained below are historical inputs and do not author
 Created: 2026-10-09.
 Scope: phased execution of the sandbox capability check in [design sections 9 and 15](../superpowers/specs/2026-10-08-tranche-design.md).
 Current progress and the next action live in [f0-status.md](f0-status.md).
+The [P7 implementation decision](payment-path-decision.md) selects authorization and agency_pays for the product and explicitly defers P5/P6 without claiming the original capability campaign complete.
 Use [f0-evidence-template.md](f0-evidence-template.md) for each experiment.
 The [2026-10-11 sandbox readiness implementation plan](sandbox-readiness-implementation-plan.md) maps the contributor's image requirements to the remaining P1 assessment and P2 execution foundation.
 

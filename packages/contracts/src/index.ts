@@ -5,6 +5,7 @@ export * from "./evidence";
 export * from "./ids";
 export * from "./money";
 export * from "./negotiation";
+export * from "./payment-intents";
 export * from "./plan";
 export * from "./policy";
 export * from "./sandbox-capabilities";

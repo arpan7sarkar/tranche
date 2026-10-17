@@ -9,6 +9,7 @@ export type PayPalConfig = {
 };
 
 export type RequestOptions = {
+  beforeDispatch?: (() => Promise<void>) | undefined;
   method: "GET" | "POST" | "PATCH" | "DELETE";
   path: string;
   query?: Record<string, string> | undefined;
@@ -90,6 +91,7 @@ export function createTransport(config: PayPalConfig) {
       headers["PayPal-Partner-Attribution-Id"] = config.partnerAttributionId;
 
     const qs = opts.query ? `?${new URLSearchParams(opts.query)}` : "";
+    await opts.beforeDispatch?.();
     const res = await send(`${config.baseUrl}${opts.path}${qs}`, {
       method: opts.method,
       headers,

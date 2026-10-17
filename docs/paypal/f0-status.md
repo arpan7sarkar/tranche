@@ -136,9 +136,9 @@ Dependencies were installed during P1 using the unchanged frozen lockfile.
 | P2 | Offline foundation complete | Current implementing contributor | Contracts, pure checks, seven tables, generated migrations, transport, CLI and recovery verified; real capability adapters deferred to P3-P6 |
 | P3 | Seller A actual sandbox onboarding verified | Current implementing contributor | Original referral response recovered by operator; consent approved and same operation verified ready through a counted API read |
 | P4 | US-to-US USD 1 authorization and capture verified | Current implementing contributor | Matching capture confirmed by counted reads; delayed disbursement and milestone release remain untested |
-| P5 | Not started | Unassigned | Test multiple-payee capture |
-| P6 | Not started | Unassigned | Test Payouts and assess source funding |
-| P7 | Not started | Unassigned | Review evidence and write the payment-path decision |
+| P5 | Deferred for current product scope | Unassigned | No capability result claimed; see the P7 decision |
+| P6 | Deferred for current product scope | Unassigned | No capability or source-funding result claimed; see the P7 decision |
+| P7 | Implementation decision recorded | Current implementing contributor | Authorization plus agency_pays selected with evidence limits in the [decision](payment-path-decision.md) |
 
 ## Capability tracking
 

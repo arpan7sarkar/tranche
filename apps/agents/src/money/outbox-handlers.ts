@@ -2,6 +2,12 @@ import { platformFee } from "@tranche/core";
 import { schema } from "@tranche/db";
 import { holdFromOrder, type PlaceHoldResult } from "@tranche/paypal";
 import { eq, inArray } from "drizzle-orm";
+import {
+  createOrder,
+  createReplacementOrder,
+  createSellerReferral,
+  registerWebhook,
+} from "./creation-handlers";
 import type { Deps } from "./deps";
 import { errorMessage } from "./errors";
 import { activateHold, confirmRelease, failPendingHold, getHold, type HoldRow } from "./holds";
@@ -25,6 +31,11 @@ const placeHold: OutboxHandler = {
   async call(deps, row) {
     const hold = await getHold(deps.db, String(row.request.holdId));
     if (hold.status !== "pending") return { skipped: true };
+    const [milestone] = await deps.db
+      .select({ state: schema.milestone.state })
+      .from(schema.milestone)
+      .where(eq(schema.milestone.id, hold.milestoneId));
+    if (!milestone || ["cancelled", "refunded"].includes(milestone.state)) return { skipped: true };
     return deps.paypal.placeHold({
       requestId: row.requestId,
       orderId: hold.paypalOrderId,
@@ -214,6 +225,10 @@ const disputeEvidence: OutboxHandler = {
 };
 
 export const outboxHandlers: Partial<Record<OutboxKind, OutboxHandler>> = {
+  create_funding_order: createOrder,
+  create_replacement_order: createReplacementOrder,
+  create_seller_referral: createSellerReferral,
+  register_webhook: registerWebhook,
   place_hold: placeHold,
   release,
   void_hold: voidHold,

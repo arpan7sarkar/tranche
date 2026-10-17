@@ -140,17 +140,28 @@ export function paymentAdapters(
           };
         }
       },
-      recover: async (op, read) => {
+      recover: async (op, read, options) => {
         const initial = context(op.spec);
         const r = await store.paymentResource(op.commitmentId);
-        if (Date.parse(r.context.recoverUntil) <= Date.now() || !r.result.orderId)
+        const orderId = r.result.orderId ?? options?.adoptedOrderId;
+        if (Date.parse(r.context.recoverUntil) <= Date.now() || !orderId)
           return { state: "inconclusive" };
         const p = SandboxPaymentSpec.parse({
           ...initial,
-          orderId: r.result.orderId,
+          orderId,
           ...(r.result.authorizationId ? { authorizationId: r.result.authorizationId } : {}),
         });
         const o = verifyPaymentOrder(await read(paymentRead(p, "order")), p, op.commitmentId);
+        if (
+          options?.adoptedOrderId &&
+          (!["CREATED", "PAYER_ACTION_REQUIRED", "APPROVED"].includes(o.status) ||
+            o.purchase_units.some(
+              (unit) =>
+                (unit.payments?.authorizations?.length ?? 0) > 0 ||
+                (unit.payments?.captures?.length ?? 0) > 0,
+            ))
+        )
+          throw new Error("adopted_order_already_advanced");
         if (kind === "void_authorization") {
           const payment = paymentVoid(
             o,

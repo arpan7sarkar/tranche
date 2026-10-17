@@ -25,10 +25,10 @@ const fence = (row: OutboxRow) => and(eq(o.id, row.id), eq(o.attempts, row.attem
 class LeaseLost extends Error {}
 
 // Rows are claimed one at a time, each under its own lease, so a slow batch cannot outlive it.
-export async function executeOutbox(deps: Deps, limit = 10): Promise<number> {
+export async function executeOutbox(deps: Deps, limit = 10, onlyId?: string): Promise<number> {
   const seen: string[] = [];
   while (seen.length < limit) {
-    const row = await claim(deps, seen);
+    const row = await claim(deps, seen, onlyId);
     if (!row) break;
     seen.push(row.id);
     await runOne(deps, row).catch((err: unknown) =>
@@ -39,7 +39,7 @@ export async function executeOutbox(deps: Deps, limit = 10): Promise<number> {
   return seen.length;
 }
 
-async function claim(deps: Deps, seen: string[]): Promise<OutboxRow | null> {
+async function claim(deps: Deps, seen: string[], onlyId?: string): Promise<OutboxRow | null> {
   const now = deps.now();
   // Rows of a kind nobody handles yet stay pending instead of failing.
   const kinds = Object.keys(outboxHandlers);
@@ -50,6 +50,7 @@ async function claim(deps: Deps, seen: string[]): Promise<OutboxRow | null> {
       .where(
         and(
           inArray(o.status, ["pending", "sent", "called"]),
+          onlyId ? eq(o.id, onlyId) : undefined,
           inArray(o.kind, kinds),
           lte(o.nextAttemptAt, now),
           seen.length > 0 ? notInArray(o.id, seen) : undefined,

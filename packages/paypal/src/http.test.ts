@@ -6,6 +6,33 @@ import { authAssertion, createTransport } from "./http";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("transport", () => {
+  it("records dispatch after OAuth and refuses the write when its claim is lost", async () => {
+    const m = mockPayPal([{ method: "POST", path: "/order", body: { id: "ORDER" } }]);
+    const beforeDispatch = vi.fn(async () => {
+      expect(m.tokenCalls()).toBe(1);
+      expect(m.calls).toHaveLength(0);
+      throw new Error("claim_lost");
+    });
+    await expect(
+      createTransport(CONFIG).request({ method: "POST", path: "/order", beforeDispatch }),
+    ).rejects.toThrow("claim_lost");
+    expect(m.calls).toHaveLength(0);
+  });
+
+  it("does not record dispatch if OAuth fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("oauth unavailable");
+      }),
+    );
+    const beforeDispatch = vi.fn(async () => {});
+    await expect(
+      createTransport(CONFIG).request({ method: "POST", path: "/order", beforeDispatch }),
+    ).rejects.toThrow();
+    expect(beforeDispatch).not.toHaveBeenCalled();
+  });
+
   it("refreshes the token once on 401", async () => {
     const m = mockPayPal([
       { method: "GET", path: "/a", status: 401, body: { error: "invalid_token" } },

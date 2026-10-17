@@ -21,11 +21,15 @@ export type AuthorizationRes = {
 };
 export type OrderRes = {
   id: string;
+  intent?: string;
   status: string;
   links?: Link[];
   payment_source?: { paypal?: { attributes?: { vault?: { id?: string; status?: string } } } };
   purchase_units?: Array<{
     reference_id?: string;
+    custom_id?: string;
+    amount?: Amount;
+    payee?: { merchant_id?: string };
     payments?: { captures?: CaptureRes[]; authorizations?: AuthorizationRes[] };
   }>;
 };
@@ -163,6 +167,8 @@ export function createPayPalClient(config: PayPalConfig) {
     transport: t,
 
     async createSellerReferral(input: {
+      beforeDispatch?: () => Promise<void>;
+      requestId?: string;
       trackingId: string;
       returnUrl: string;
       mechanism: HoldMechanism;
@@ -170,7 +176,8 @@ export function createPayPalClient(config: PayPalConfig) {
       const res = await t.request<{ links: Link[] }>({
         method: "POST",
         path: "/v2/customer/partner-referrals",
-        requestId: `referral-${input.mechanism}-${input.trackingId}`,
+        beforeDispatch: input.beforeDispatch,
+        requestId: input.requestId ?? `referral-${input.mechanism}-${input.trackingId}`,
         body: {
           tracking_id: input.trackingId,
           partner_config_override: { return_url: input.returnUrl },
@@ -271,6 +278,7 @@ export function createPayPalClient(config: PayPalConfig) {
     },
 
     async createFundingOrder(input: {
+      beforeDispatch?: () => Promise<void>;
       requestId: string;
       mechanism: HoldMechanism;
       amount: Money;
@@ -302,6 +310,7 @@ export function createPayPalClient(config: PayPalConfig) {
       const order = await t.request<OrderRes>({
         method: "POST",
         path: "/v2/checkout/orders",
+        beforeDispatch: input.beforeDispatch,
         requestId: input.requestId,
         prefer: "return=representation",
         body: {
@@ -309,7 +318,7 @@ export function createPayPalClient(config: PayPalConfig) {
           purchase_units: [
             {
               reference_id: input.milestoneId,
-              custom_id: input.milestoneId,
+              custom_id: input.requestId,
               amount: amountOf(input.amount),
               payee: { merchant_id: input.payeeMerchantId },
               ...instruction({

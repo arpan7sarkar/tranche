@@ -57,6 +57,26 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
       .from(schema.outbox)
       .where(eq(schema.outbox.requestId, `place:${holdId}`));
 
+  it("BASE-01 commits the exact funding intent before calling PayPal", async () => {
+    const f = await fundable();
+    const paypal = fakePayPal();
+    paypal.createFundingOrder.mockImplementation(async () => {
+      const rows = await db
+        .select()
+        .from(schema.outbox)
+        .where(eq(schema.outbox.kind, "create_funding_order"));
+      expect(rows.some((row) => row.request.milestoneId === f.milestoneId)).toBe(true);
+      throw new Error("provider response lost");
+    });
+    await expect(startFunding(db, paypal, { ...base, ...f })).rejects.toThrow();
+    const rows = await db
+      .select()
+      .from(schema.outbox)
+      .where(eq(schema.outbox.kind, "create_funding_order"));
+    expect(rows.filter((row) => row.request.milestoneId === f.milestoneId)).toHaveLength(1);
+    expect(await holdsOf(f.milestoneId)).toHaveLength(0);
+  });
+
   it("refuses a milestone from another deal", async () => {
     const a = await fundable();
     const b = await fundable();
