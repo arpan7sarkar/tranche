@@ -1,3 +1,4 @@
+import "./agents/tasks";
 import { type TaskContext, task } from "@renderinc/sdk/workflows";
 import "./money/tasks";
 
