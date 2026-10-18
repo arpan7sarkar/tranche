@@ -5,10 +5,12 @@ export {
   decideApproval,
   submitHumanAction,
 } from "./actions";
+export { recoverCreation, registerPayPalWebhook, startSellerOnboarding } from "./creation";
 export type { Tx } from "./db";
 export type { Deps, PayPal } from "./deps";
 export { ForbiddenError } from "./errors";
 export { appendEvent } from "./events";
+export { startFunding as startDurableFunding } from "./funding";
 export { MONEY_HANDLERS } from "./handlers";
 export { advanceMilestone, StaleMilestoneError } from "./milestones";
 export type { OutboxHandler, OutboxRow } from "./outbox";

@@ -17,7 +17,7 @@ import { PrivateSandboxArtifacts } from "./private-artifacts";
 import { SandboxRunner } from "./runner";
 
 export const sandboxHelp =
-  "Recovery: retry-undispatched <operation-id> (fresh approval required) | prepare-void <authorization-operation-id> <private-fee-input-file> (separate approval required). " +
+  "Recovery: adopt-order <operation-id> <known-order-id> <payload-hash> (counted read-only adoption) | retry-undispatched <operation-id> (fresh approval required) | prepare-void <authorization-operation-id> <private-fee-input-file> (separate approval required). " +
   "Read-only maintenance: maintenance <operation-id> <private-input-file> | approve-maintenance <id> <approval-hash> | apply-maintenance <id>. " +
   "Sandbox runner: onboard <private-input-file> | protect <private-input-file> | buyer-change <order-operation-id> <private-input-file> | approve-buyer-change <change-id> <approval-hash> | apply-buyer-change <change-id> | payment-next <operation-id> | checkout-file <operation-id> | referral-recovery <operation-id> <private-input-file> | approve-referral-recovery <id> <approval-hash> | apply-referral-recovery <id> | start <private-spec-file> | inspect <run-id> | report <run-id> | approve <operation-id> <payload-hash> <attempt> | resume <operation-id> | consent-file <operation-id> | refresh-consent <operation-id>. Onboarding and authorization/capture adapters are available; delayed disbursement is blocked. All writes require approval.";
 
@@ -30,6 +30,10 @@ export async function sandboxCli(
   ),
 ): Promise<unknown> {
   const [command, first, second, third] = args;
+  if (command === "adopt-order" && args.length === 4 && first && second && third) {
+    await runner.adoptOrder(first, second, third);
+    return store.inspect((await store.operation(first)).runId);
+  }
   if (command === "retry-undispatched" && args.length === 2 && first) {
     await store.retryUndispatched(first);
     return store.inspect((await store.operation(first)).runId);

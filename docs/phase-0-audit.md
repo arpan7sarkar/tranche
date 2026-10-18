@@ -4,6 +4,7 @@ Date: 2026-10-15.
 Baseline: local `main` at `81b5098`.
 Scope: inspect the existing money paths, integration interfaces, test configuration, and six F0 follow-ups before implementation.
 This is the audit checkpoint for the [implementation plan](remaining_work.md).
+The [Phase 1 completion record](phase-1-completion-record.md) records subsequent fixes; the findings below describe the original audited baseline.
 Application code was not changed, and no PayPal operations, migrations, or test suites were executed during this audit.
 
 ## Outcome

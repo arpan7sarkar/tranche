@@ -1858,6 +1858,105 @@ describe.skipIf(!testUrl)("P2 disposable PostgreSQL runner integration", () => {
     ).toHaveLength(1);
   });
 
+  it.each(["amount", "seller", "buyer", "commitment", "order", "intent"])(
+    "F0-02 refuses adoption with mismatched %s",
+    async (field) => {
+      const x = await paymentSetup();
+      const original = x.fetcher.getMockImplementation();
+      if (!original) throw new Error("missing_mock");
+      x.fetcher.mockImplementation(async (url, init) => {
+        if (String(url).endsWith("/v2/checkout/orders") && init?.method === "POST")
+          throw new Error("lost");
+        if (String(url).endsWith("/orders/ORDER1")) {
+          const order = x.order();
+          const unit = order.purchase_units[0];
+          if (!unit) throw new Error("missing_unit");
+          if (field === "amount") unit.amount.value = "0.01";
+          if (field === "seller") unit.payee.merchant_id = "WRONGSELLER01";
+          if (field === "buyer") order.payer = { payer_id: "WRONGBUYER001" };
+          if (field === "commitment") unit.reference_id = "other-commitment";
+          if (field === "order") order.id = "OTHER";
+          if (field === "intent") order.intent = "CAPTURE";
+          return Response.json(order);
+        }
+        return original(url, init);
+      });
+      await x.dispatch(x.op);
+      const before = (await store.report(x.runId)).allocation;
+      await expect(
+        sandboxCli(["adopt-order", x.op.id, "ORDER1", x.op.payloadHash], store, x.runner),
+      ).rejects.toThrow();
+      expect((await store.paymentResource(x.op.commitmentId)).result.orderId).toBeUndefined();
+      expect((await store.operation(x.op.id)).state).toBe("inconclusive");
+      expect((await store.report(x.runId)).allocation.reservedCents).toBe(before.reservedCents);
+    },
+  );
+
+  it("F0-02 rejects wrong approval identity and live claims before reading", async () => {
+    const x = await paymentSetup();
+    await store.approve(x.op.id, x.op.payloadHash, 1);
+    const claim = await store.claim(x.op.id);
+    await expect(
+      sandboxCli(["adopt-order", x.op.id, "ORDER1", "bad-hash"], store, x.runner),
+    ).rejects.toThrow("order_adoption_identity_mismatch");
+    await expect(
+      sandboxCli(["adopt-order", x.op.id, "ORDER1", x.op.payloadHash], store, x.runner),
+    ).rejects.toThrow("order_not_dispatched");
+    await store.recordPaymentReadiness(claim);
+    await store.markDispatch(claim);
+    await expect(
+      sandboxCli(["adopt-order", x.op.id, "ORDER1", x.op.payloadHash], store, x.runner),
+    ).rejects.toThrow("claim_active");
+    expect(x.fetcher).not.toHaveBeenCalled();
+  });
+
+  it("F0-02 adopts a lost order through a counted read after restart", async () => {
+    const x = await paymentSetup();
+    const original = x.fetcher.getMockImplementation();
+    if (!original) throw new Error("missing_mock");
+    x.fetcher.mockImplementation(async (url, init) => {
+      if (String(url).endsWith("/v2/checkout/orders") && init?.method === "POST")
+        throw new Error("lost response after provider created ORDER1");
+      return original(url, init);
+    });
+    await x.dispatch(x.op);
+    const before = (await store.report(x.runId)).allocation;
+    const reopened = new SandboxStore(await openSandboxTestDb(testUrl));
+    try {
+      const runner = new SandboxRunner(
+        reopened,
+        credentials,
+        paymentAdapters(reopened, x.artifacts, credentials.clientId),
+        x.fetcher,
+      );
+      await sandboxCli(
+        ["adopt-order", x.op.id, "ORDER1", x.op.payloadHash],
+        reopened,
+        runner,
+        x.artifacts,
+      );
+    } finally {
+      await reopened.db.$client.end();
+    }
+    expect((await store.operation(x.op.id)).state).toBe("waiting_for_browser");
+    expect((await store.paymentResource(x.op.commitmentId)).result.orderId).toBe("ORDER1");
+    expect((await store.report(x.runId)).allocation).toMatchObject({
+      committedCents: before.committedCents,
+      reservedCents: before.reservedCents,
+      consumedCalls: before.consumedCalls + 2,
+      heldCalls: before.heldCalls - 2,
+    });
+    expect(
+      x.fetcher.mock.calls.filter(
+        ([u, i]) => String(u).endsWith("/v2/checkout/orders") && i?.method === "POST",
+      ),
+    ).toHaveLength(1);
+    x.setStatus("APPROVED");
+    await x.runner.resume(x.op.id);
+    expect((await store.operation(x.op.id)).state).toBe("succeeded");
+    expect((await x.next(x.op)).spec.payment?.stage).toBe("authorize_order");
+  });
+
   it("P4 records a lost create response as inconclusive and never repeats the POST", async () => {
     const x = await paymentSetup();
     const original = x.fetcher.getMockImplementation();

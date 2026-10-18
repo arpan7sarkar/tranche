@@ -1,6 +1,8 @@
+import { FundingOrderResponse } from "@tranche/contracts";
 import { platformFee, renewalAction } from "@tranche/core";
 import { schema } from "@tranche/db";
 import { and, eq } from "drizzle-orm";
+import { recordCreation } from "./creation";
 import { PermanentError } from "./errors";
 import { appendEvent } from "./events";
 import { activeHold, getHold } from "./holds";
@@ -50,17 +52,18 @@ export const renewHandler: OutboxHandler = {
         if (!ctx.client.paypalVaultId) {
           throw new PermanentError("no vaulted payment method to renew the hold");
         }
-        const order = await deps.paypal.createFundingOrder({
-          requestId: `${row.requestId}:order`,
-          mechanism: "authorization",
-          amount,
-          platformFee: platformFee(amount),
-          payeeMerchantId: ctx.merchantId,
-          milestoneId,
-          vaultId: ctx.client.paypalVaultId,
-          returnUrl: ctx.returnUrl,
-          cancelUrl: ctx.cancelUrl,
-        });
+        const order = FundingOrderResponse.parse(
+          await recordCreation(deps, "create_replacement_order", `${row.requestId}:order`, {
+            mechanism: "authorization",
+            amount,
+            platformFee: platformFee(amount),
+            payeeMerchantId: ctx.merchantId,
+            milestoneId,
+            vaultId: ctx.client.paypalVaultId,
+            returnUrl: ctx.returnUrl,
+            cancelUrl: ctx.cancelUrl,
+          }),
+        );
         const placed = await deps.paypal.placeHold({
           requestId: `${row.requestId}:hold`,
           orderId: order.orderId,

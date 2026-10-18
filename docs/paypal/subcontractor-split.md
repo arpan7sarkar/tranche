@@ -11,3 +11,5 @@ The agents service refuses to start when `SUBCONTRACTOR_SPLIT` is set to anythin
 `payouts` stays disabled until its money path is designed.
 Sending a Payouts batch from the platform account after capturing the full amount to the agency would pay each subcontractor share out of Tranche's own balance.
 A working design has to route the subcontractor shares to the platform first, for example as part of the platform fee on capture, before paying them out.
+
+The [P7 decision](payment-path-decision.md) selects this split with authorization holds and records the evidence limits and deferred P5/P6 work.

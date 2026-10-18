@@ -4,6 +4,10 @@ import type { Deps } from "./deps";
 import { PermanentError } from "./errors";
 
 export type OutboxKind =
+  | "create_funding_order"
+  | "create_replacement_order"
+  | "create_seller_referral"
+  | "register_webhook"
   | "place_hold"
   | "release"
   | "void_hold"

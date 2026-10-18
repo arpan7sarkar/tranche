@@ -11,6 +11,7 @@
     "build": "tsdown",
     "start": "node dist/index.mjs",
     "typecheck": "tsc",
+    "money:recover": "node --env-file-if-exists=../../.env --import=tsx scripts/recover-creation.ts",
     "f0:preflight": "node --env-file-if-exists=../../.env --import=tsx scripts/f0/preflight.ts",
     "f0:runner": "node --env-file-if-exists=../../.env --import=tsx scripts/f0/index.ts",
     "test": "vitest run --passWithNoTests"

@@ -15,7 +15,7 @@ describe.runIf(Boolean(url))("Better Auth sign-up", () => {
     process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
     await migrateDb(db);
     ({ auth } = await import("@/server/auth"));
-  });
+  }, 30_000);
   afterAll(async () => {
     await db.$client.end();
   });

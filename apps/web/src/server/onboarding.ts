@@ -1,29 +1,16 @@
 import "server-only";
+import { startSellerOnboarding } from "@tranche/agents-service/money";
 import type { HoldMechanism } from "@tranche/contracts";
 import { type Db, schema } from "@tranche/db";
 import { type PayPal, requiredSellerFeatures, type SellerFeature } from "@tranche/paypal";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export async function startOnboarding(
   db: Db,
   paypal: Pick<PayPal, "createSellerReferral">,
   input: { workspaceId: string; appUrl: string; mechanism: HoldMechanism },
 ): Promise<{ actionUrl: string }> {
-  const { actionUrl } = await paypal.createSellerReferral({
-    trackingId: input.workspaceId,
-    returnUrl: `${input.appUrl}/api/paypal/onboarding/return`,
-    mechanism: input.mechanism,
-  });
-  await db
-    .update(schema.workspace)
-    .set({ paypalOnboarding: "pending" })
-    .where(
-      and(
-        eq(schema.workspace.id, input.workspaceId),
-        ne(schema.workspace.paypalOnboarding, "active"),
-      ),
-    );
-  return { actionUrl };
+  return startSellerOnboarding(db, paypal, input);
 }
 
 const RECHECK_AFTER_MS = 60_000;

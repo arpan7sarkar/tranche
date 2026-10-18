@@ -1507,7 +1507,11 @@ export class SandboxStore {
     });
   }
 
-  async beginRecovery(operationId: string, buyerChangeId?: string): Promise<DispatchClaim> {
+  async beginRecovery(
+    operationId: string,
+    buyerChangeId?: string,
+    adoptionHash?: string,
+  ): Promise<DispatchClaim> {
     const claim = await this.db.transaction(async (tx) => {
       const allocation = await this.allocation(tx);
       const [op] = await tx
@@ -1522,6 +1526,23 @@ export class SandboxStore {
         throw new Error("not_recoverable");
       if (op.payloadHash !== sandboxPayloadHash(SandboxOperationSpec.parse(op.spec)))
         throw new Error("payload_changed");
+      if (adoptionHash !== undefined) {
+        if (op.spec.payment?.stage !== "create_order" || op.payloadHash !== adoptionHash)
+          throw new Error("order_adoption_identity_mismatch");
+        const resource = await this.paymentWithin(tx, op.commitmentId);
+        if (resource.result.orderId) throw new Error("order_already_known");
+        const [sent] = await tx
+          .select()
+          .from(attempts)
+          .where(
+            and(
+              eq(attempts.operationId, op.id),
+              eq(attempts.kind, "business"),
+              eq(attempts.dispatched, 1),
+            ),
+          );
+        if (!sent) throw new Error("order_not_dispatched");
+      }
       const [maintenanceRow] = await tx
         .select()
         .from(maintenance)
