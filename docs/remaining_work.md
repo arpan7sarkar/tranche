@@ -6,15 +6,16 @@ Lane H is merged; Lane E implementation is pending.
 
 ## Current checkpoint
 
-Phase 0 audit and all four Phase 1 slices are complete locally.
-F0-01 through F0-06, P7-01, and BASE-01 are complete locally: 8 of the 33 tracked tasks are complete, with 25 tasks pending in later phases.
-The PR #20 review exposed a database guard bypass, addressed by a shared connection guard with identity checks and new regression tests.
-The PR #21 corrections make repeated cleanup preparation return the existing operation and use the database clock for worker lease checks.
-PR #20/#21 and their review corrections are merged in the main baseline at 0aef343.
-The Phase 1 follow-up is local and uncommitted on fix/phase-1-money-foundation.
-Local validation passed 945 tests, with six real-sandbox cases skipped; remote CI and real product sandbox behavior remain unverified.
-See the [Phase 0 audit](phase-0-audit.md), [slice 1 evidence](phase-1-slice-1-record.md), and [review correction record](pr-review-fixes.md) for dated evidence and limitations.
-See the [Phase 1 completion record](phase-1-completion-record.md), [payment-path decision](paypal/payment-path-decision.md), and [recovery runbook](paypal/product-recovery-runbook.md) for implementation evidence and limits.
+Phase 0, Phase 1, and Phase 2 are complete locally.
+F0-01 through F0-06, P7-01, BASE-01, E1-01, and E1-02 are complete locally: 10 of the 33 tracked tasks are complete, with 23 tasks pending in later phases.
+The Phase 1 follow-up was merged as PR #22 at bad27a1.
+Phase 2 is local and uncommitted on feat/agent-runtime.
+The latest local package results total 981 passing tests, with six real-sandbox tests intentionally skipped.
+Root tests, all workspace typechecks, agents service and web production builds, and repository-wide Biome checks passed.
+The PR readiness review found and corrected a CI database URL mismatch; the Phase 2 runtime and workflow tests now pass with CI's separate database URLs.
+See the [Phase 2 runtime record](phase-2-runtime-record.md) for behavior, migration, command results, and limitations.
+Earlier evidence remains in the [Phase 0 audit](phase-0-audit.md), [Phase 1 completion record](phase-1-completion-record.md), and [review correction record](pr-review-fixes.md).
+Real provider validation, remote CI, deployment, and full product end-to-end proof remain unverified.
 Every status below requires its completion evidence; skipped tests do not establish completion.
 
 ## Source plans
@@ -67,8 +68,8 @@ Starting fake-model and eval foundations in Phase 2 does not complete E5-01 or E
 Bring the email foundation forward from Phase 6 only if an earlier flow requires it, and record that dependency explicitly.
 Phase 8 prepares deployment; record provider readiness and any release approval required before publishing changes.
 Earlier slice results remain in the [slice 1 record](phase-1-slice-1-record.md) and [slice 2 record](phase-1-slice-2-record.md).
-The next recommended scope is Phase 2, covering E1-01 and E1-02 with the shared fake-model and replay-harness foundations only.
-Phases 2 through 10 remain pending; local Phase 1 completion does not establish sandbox, deployment, or end-to-end product completion.
+The next recommended scope is Phase 3, covering E1-03 and E1-04: planner rules, draft-plan APIs, and the authenticated brief-to-plan UI.
+Phases 3 through 10 remain pending; local runtime completion does not establish sandbox, deployment, or end-to-end product completion.
 
 ## Workstream: existing money path and interfaces
 
@@ -91,14 +92,17 @@ Do not confuse the October 12 F0 authorization capture with proof that onboardin
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| E1-01 | Pending | Build `packages/agents` model routing, structured outputs, untrusted-input wrapper, read-only tools, and stable public decision functions such as `draftPlan` | Schema tests reject malformed output and hostile brief content cannot become instructions or invoke money tools |
-| E1-02 | Pending | Add the proposal writer and Render Workflows consumers in `apps/agents`, using the current DB and money service contracts | Duplicate event delivery makes at most one logical proposal and every resource belongs to the deal |
+| E1-01 | Complete locally | Build `packages/agents` model routing, structured outputs, untrusted-input wrapper, read-only tools, and a stable database-free decision boundary (`decideAction`); domain functions such as `draftPlan` follow in their owning phases | Schema tests reject malformed output and hostile brief content cannot become instructions or invoke money tools |
+| E1-02 | Complete locally | Add the proposal writer and Render Workflows consumers in `apps/agents`, using the current DB and money service contracts | Duplicate event delivery makes at most one logical proposal and every resource belongs to the deal |
 | E1-03 | Pending | Implement planner constraints, dependency validation, priced milestones, acceptance criteria, and a draft-plan API | Unit tests and a brief-to-plan integration case cover invalid budgets, cycles, dates, and a valid saved draft |
 | E1-04 | Pending | Connect the authenticated agency brief flow to plan review and the existing Gantt, with empty, loading, failure, light, and dark states | A member can create and edit a draft through the UI; unauthenticated and cross-workspace calls fail |
 
 Use the existing Better Auth flow and server helpers, rather than an older development login shim.
 Freeze db-free decision function contracts before wiring workflows so evals exercise production logic.
 When the model is unavailable, only model-dependent jobs pause; deterministic money timers and machine-only verification continue.
+The Phase 2 production consumer registry has no domain handlers yet; the shared path is proven with a fake-model workflow integration test.
+Generated migration 0012 adds per-event consumer receipts and must be applied before the new consumers run against an application database.
+E5-01 and E5-03 remain pending: Phase 2 supplies only their scripted-model, replay, and scoring foundations.
 
 ## Workstream: E2 verification and GitHub
 

@@ -33,8 +33,7 @@ async function ensureDatabase(base: string, dbName: string): Promise<void> {
 // Every test run against one Postgres shares this database, so a test file holds an advisory
 // lock on it from before migrating until it ends its client. Without it, two concurrent runs
 // (two worktrees, or a watch beside a full run) truncate and insert under each other's tests.
-export async function createTestDb(name: string): Promise<Db> {
-  const base = process.env.DATABASE_URL;
+export async function createTestDb(name: string, base = process.env.DATABASE_URL): Promise<Db> {
   if (!base) throw new Error("DATABASE_URL is not set");
   const dbName = `tranche_test_${name.toLowerCase().replace(/[^a-z0-9_]/g, "_")}`;
   await ensureDatabase(base, dbName);

@@ -4,12 +4,13 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { deal } from "./core";
+import { deal, event } from "./core";
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
 
@@ -58,3 +59,15 @@ export const eventCursor = pgTable("event_cursor", {
   consumer: text().primaryKey(),
   lastEventId: bigint({ mode: "number" }).notNull().default(0),
 });
+
+export const agentEventReceipt = pgTable(
+  "agent_event_receipt",
+  {
+    consumer: text().notNull(),
+    eventId: bigint({ mode: "number" })
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    completedAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.consumer, t.eventId] })],
+);

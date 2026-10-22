@@ -1,4 +1,5 @@
 export * from "./actions";
+export * from "./agent-decision";
 export * from "./criteria";
 export * from "./events";
 export * from "./evidence";
