@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./launch": "./src/agents/launch.ts",
     "./money": "./src/money/index.ts"
   },
   "scripts": {
@@ -26,6 +27,7 @@
     "@tranche/paypal": "workspace:*",
     "@tranche/verifiers": "workspace:*",
     "drizzle-orm": "0.45.4",
+    "playwright": "1.64.0",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -8,7 +8,11 @@ import type { DealView } from "@/server/deals";
 import { addDays, type GanttTask, toGanttData, toIsoDate } from "./gantt-data";
 import "./gantt.css";
 
-type Props = { view: DealView; onMove: (taskId: string, start: string) => Promise<boolean> };
+type Props = {
+  view: DealView;
+  onMove: (taskId: string, start: string) => Promise<boolean>;
+  readOnly?: boolean;
+};
 
 const BRYNTUM_URL = "/bryntum/gantt.module.js";
 
@@ -31,7 +35,7 @@ async function load(gantt: Gantt, data: ReturnType<typeof toGanttData>) {
     await gantt.setTimeSpan(localDate(addDays(first, -2)), localDate(addDays(last, 9)));
 }
 
-export default function DealGantt({ view, onMove }: Props) {
+export default function DealGantt({ view, onMove, readOnly = false }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const gantt = useRef<Gantt | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -55,6 +59,7 @@ export default function DealGantt({ view, onMove }: Props) {
       (bryntum: { Gantt: new (config: GanttConfig) => Gantt }) => {
         if (disposed || !host.current) return;
         const instance = new bryntum.Gantt({
+          readOnly,
           appendTo: host.current,
           columns: [{ type: "name", field: "name", text: "Work", width: 320 }],
           viewPreset: "weekAndDayLetter",
@@ -125,7 +130,7 @@ export default function DealGantt({ view, onMove }: Props) {
       gantt.current?.destroy();
       gantt.current = null;
     };
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     if (gantt.current) void load(gantt.current, data);

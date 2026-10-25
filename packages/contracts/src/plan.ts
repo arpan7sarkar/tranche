@@ -32,14 +32,16 @@ export const PlanMilestone = z.object({
 });
 export type PlanMilestone = z.infer<typeof PlanMilestone>;
 
-const PlanShape = z.object({
+export const PlanCandidate = z.object({
   summary: z.string().min(1).max(4000),
   currency: CurrencyCode,
   milestones: z.array(PlanMilestone).min(1).max(12),
   tasks: z.array(PlanTask).min(1).max(80),
 });
 
-export function planIssues(plan: z.infer<typeof PlanShape>): string[] {
+export type PlanCandidate = z.infer<typeof PlanCandidate>;
+
+export function planIssues(plan: PlanCandidate): string[] {
   const issues: string[] = [];
   const taskKeys = new Set<string>();
   const milestoneKeys = new Set<string>();
@@ -97,7 +99,7 @@ export function planIssues(plan: z.infer<typeof PlanShape>): string[] {
   return issues;
 }
 
-export const PlanDraft = PlanShape.superRefine((plan, ctx) => {
+export const PlanDraft = PlanCandidate.superRefine((plan, ctx) => {
   for (const message of planIssues(plan)) ctx.addIssue({ code: "custom", message });
 });
 export type PlanDraft = z.infer<typeof PlanDraft>;

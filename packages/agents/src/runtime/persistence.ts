@@ -76,7 +76,7 @@ async function validateOwnership(tx: Tx, p: ProposedActionInput) {
   }
 }
 export async function proposeAction(
-  db: Db,
+  db: Db | Tx,
   input: ProposedActionInput,
 ): Promise<{ id: string; created: boolean }> {
   const p = ProposedActionInput.parse(input);
@@ -104,7 +104,7 @@ export async function proposeAction(
   });
 }
 export async function recordEvidence(
-  db: Db,
+  db: Db | Tx,
   input: EvidenceInput,
   dealId: string,
 ): Promise<{ id: string; created: boolean }> {

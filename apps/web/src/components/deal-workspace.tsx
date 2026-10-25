@@ -11,6 +11,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ActivityPanel } from "@/components/activity-panel";
@@ -245,6 +246,11 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
           <h1 className="text-4xl break-words">{view.deal.title}</h1>
+          {["sent", "negotiating"].includes(view.deal.status) && (
+            <Link className="text-sm underline" href={`/deals/${dealId}/negotiation`}>
+              Open negotiation room
+            </Link>
+          )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
             <span>{view.deal.clientName}</span>
             <span className="tabular text-foreground">{formatMoney(total)}</span>
@@ -265,7 +271,10 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
             </Button>
             {view.milestones.length === 0 ? (
               <p id="send-plan-reason" className="text-xs text-muted-foreground">
-                Add at least one milestone first.
+                Add at least one milestone first.{" "}
+                <Link href={`/deals/new?draft=${dealId}`} className="underline">
+                  Review the draft plan
+                </Link>
               </p>
             ) : null}
           </div>

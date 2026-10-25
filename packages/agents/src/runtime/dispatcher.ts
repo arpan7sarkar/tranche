@@ -10,6 +10,7 @@ export async function consumeEvents(
   types: readonly DomainEventType[],
   handler: (event: EventRow) => Promise<void>,
   batchSize = 50,
+  independent = false,
 ): Promise<number> {
   if (
     !consumer ||
@@ -48,10 +49,19 @@ export async function consumeEvents(
           ),
         ),
       )
-      .orderBy(asc(schema.event.id))
+      .orderBy(
+        ...(independent
+          ? [sql`${schema.event.id} <= ${cursor.lastEventId}`, asc(schema.event.id)]
+          : [asc(schema.event.id)]),
+      )
       .limit(batchSize);
     let done = 0;
     for (const event of rows) {
+      if (independent)
+        await tx
+          .update(schema.eventCursor)
+          .set({ lastEventId: event.id })
+          .where(eq(schema.eventCursor.consumer, consumer));
       try {
         await handler(event);
       } catch (error) {
@@ -59,6 +69,7 @@ export async function consumeEvents(
           console.error(
             JSON.stringify({ msg: "agent.consumer_failed", consumer, eventId: event.id }),
           );
+        if (independent) continue;
         break;
       }
       await tx.insert(schema.agentEventReceipt).values({ consumer, eventId: event.id });

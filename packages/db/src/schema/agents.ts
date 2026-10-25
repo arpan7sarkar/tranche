@@ -1,6 +1,8 @@
-import type { Mandate, Offer } from "@tranche/contracts";
+import type { Mandate, Offer, PlanDraft } from "@tranche/contracts";
+import { sql } from "drizzle-orm";
 import {
   bigint,
+  date,
   integer,
   jsonb,
   pgTable,
@@ -14,16 +16,25 @@ import { deal, event } from "./core";
 
 const createdAt = () => timestamp({ withTimezone: true }).notNull().defaultNow();
 
-export const negotiation = pgTable("negotiation", {
-  id: uuid().primaryKey().defaultRandom(),
-  dealId: uuid()
-    .notNull()
-    .references(() => deal.id, { onDelete: "cascade" }),
-  status: text().$type<"open" | "agreed" | "escalated" | "failed">().notNull().default("open"),
-  agencyMandate: jsonb().$type<Mandate>().notNull(),
-  clientMandate: jsonb().$type<Mandate>().notNull(),
-  createdAt: createdAt(),
-});
+export const negotiation = pgTable(
+  "negotiation",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    dealId: uuid()
+      .notNull()
+      .references(() => deal.id, { onDelete: "cascade" }),
+    status: text().$type<"open" | "agreed" | "escalated" | "failed">().notNull().default("open"),
+    agencyMandate: jsonb().$type<Mandate>().notNull(),
+    clientMandate: jsonb().$type<Mandate>().notNull(),
+    basePlan: jsonb().$type<PlanDraft>(),
+    basePlanVersion: text(),
+    startDate: date(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("negotiation_one_open_per_deal").on(t.dealId).where(sql`${t.status} = 'open'`),
+  ],
+);
 
 export const negotiationTurn = pgTable(
   "negotiation_turn",

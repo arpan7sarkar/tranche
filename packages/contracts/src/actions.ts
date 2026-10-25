@@ -43,9 +43,15 @@ const text = z.string().min(1).max(4000);
 
 export const ActionPayload = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create_plan"), plan: PlanDraft }),
-  z.object({ type: z.literal("mark_verified"), milestoneId: Id, evidenceIds: z.array(Id).min(1) }),
+  z.object({
+    type: z.literal("mark_verified"),
+    milestoneId: Id,
+    evidenceIds: z.array(Id).min(1),
+    deliveryId: Id.optional(),
+  }),
   z.object({
     type: z.literal("request_changes"),
+    deliveryId: Id.optional(),
     milestoneId: Id,
     evidenceIds: z.array(Id).min(1),
     missing: z.array(z.string().min(1).max(500)).min(1),
