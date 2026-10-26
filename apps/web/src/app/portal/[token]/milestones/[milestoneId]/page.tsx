@@ -50,7 +50,10 @@ async function Evidence({ params }: { params: Promise<{ token: string; milestone
     .filter((e) => e.kind === "screenshot")
     .map((e) => ({
       id: e.id,
-      src: trustedImageUrl(e.data.imageUrl, process.env.EVIDENCE_IMAGE_ORIGIN),
+      src:
+        e.data.imageUrl === `/api/evidence/images/${e.id}`
+          ? `/api/portal/${encodeURIComponent(token)}/evidence/${e.id}`
+          : trustedImageUrl(e.data.imageUrl, process.env.EVIDENCE_IMAGE_ORIGIN),
       alt: e.summary,
     }));
 

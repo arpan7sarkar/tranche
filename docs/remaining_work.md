@@ -2,16 +2,19 @@
 
 This is the single implementation plan, current status, and pending task list for the October 15 Lane E handoff.
 The integration contract takes precedence over older lane plans.
-Lane H is merged; Lane E implementation is pending.
+Lane H is merged; Lane E runtime, planner, verification, and negotiation are implemented locally.
 
 ## Current checkpoint
 
-Phase 0, Phase 1, and Phase 2 are complete locally.
-F0-01 through F0-06, P7-01, BASE-01, E1-01, and E1-02 are complete locally: 10 of the 33 tracked tasks are complete, with 23 tasks pending in later phases.
+Phases 0 through 5 are complete locally.
+F0-01 through F0-06, P7-01, BASE-01, E1-01 through E1-04, E2-01 through E2-04, and E3-01 through E3-03 are complete locally: 19 of the 33 tracked tasks are complete, with 14 tasks pending in later phases.
 The Phase 1 follow-up was merged as PR #22 at bad27a1.
-Phase 2 is local and uncommitted on feat/agent-runtime.
-The latest local package results total 981 passing tests, with six real-sandbox tests intentionally skipped.
-Root tests, all workspace typechecks, agents service and web production builds, and repository-wide Biome checks passed.
+Phase 2 was merged as PR #23 at 217d857.
+Phases 3, 4, and 5 are local and uncommitted on feat/planner-and-delivery-verification.
+See the [Phase 3/4 implementation record](phase-3-4-implementation-record.md) for verification results, setup, and provider limitations.
+The Phase 5 full run passed 1,074 tests, all workspace typechecks, both production builds, and repository-wide Biome checks.
+Six real-sandbox tests and two opt-in screenshot tests were skipped in that run.
+See the [Phase 5 negotiation record](phase-5-negotiation-record.md) for implementation, migration, setup, and validation boundaries.
 The PR readiness review found and corrected a CI database URL mismatch; the Phase 2 runtime and workflow tests now pass with CI's separate database URLs.
 See the [Phase 2 runtime record](phase-2-runtime-record.md) for behavior, migration, command results, and limitations.
 Earlier evidence remains in the [Phase 0 audit](phase-0-audit.md), [Phase 1 completion record](phase-1-completion-record.md), and [review correction record](pr-review-fixes.md).
@@ -68,8 +71,8 @@ Starting fake-model and eval foundations in Phase 2 does not complete E5-01 or E
 Bring the email foundation forward from Phase 6 only if an earlier flow requires it, and record that dependency explicitly.
 Phase 8 prepares deployment; record provider readiness and any release approval required before publishing changes.
 Earlier slice results remain in the [slice 1 record](phase-1-slice-1-record.md) and [slice 2 record](phase-1-slice-2-record.md).
-The next recommended scope is Phase 3, covering E1-03 and E1-04: planner rules, draft-plan APIs, and the authenticated brief-to-plan UI.
-Phases 3 through 10 remain pending; local runtime completion does not establish sandbox, deployment, or end-to-end product completion.
+The next recommended scope is Phase 6, covering E4-01 through E4-03: monitoring, durable notifications, and the workspace dashboard.
+Phases 6 through 10 remain pending; local runtime completion does not establish sandbox, deployment, or end-to-end product completion.
 
 ## Workstream: existing money path and interfaces
 
@@ -94,13 +97,14 @@ Do not confuse the October 12 F0 authorization capture with proof that onboardin
 | --- | --- | --- | --- |
 | E1-01 | Complete locally | Build `packages/agents` model routing, structured outputs, untrusted-input wrapper, read-only tools, and a stable database-free decision boundary (`decideAction`); domain functions such as `draftPlan` follow in their owning phases | Schema tests reject malformed output and hostile brief content cannot become instructions or invoke money tools |
 | E1-02 | Complete locally | Add the proposal writer and Render Workflows consumers in `apps/agents`, using the current DB and money service contracts | Duplicate event delivery makes at most one logical proposal and every resource belongs to the deal |
-| E1-03 | Pending | Implement planner constraints, dependency validation, priced milestones, acceptance criteria, and a draft-plan API | Unit tests and a brief-to-plan integration case cover invalid budgets, cycles, dates, and a valid saved draft |
-| E1-04 | Pending | Connect the authenticated agency brief flow to plan review and the existing Gantt, with empty, loading, failure, light, and dark states | A member can create and edit a draft through the UI; unauthenticated and cross-workspace calls fail |
+| E1-03 | Complete locally | Implement planner constraints, dependency validation, priced milestones, acceptance criteria, and a draft-plan API | Unit tests and a brief-to-plan integration case cover invalid budgets, cycles, dates, and a valid saved draft |
+| E1-04 | Complete locally | Connect the authenticated agency brief flow to plan review and the existing Gantt, with empty, loading, failure, light, and dark states | A member can create and edit a draft through the UI; unauthenticated and cross-workspace calls fail |
 
 Use the existing Better Auth flow and server helpers, rather than an older development login shim.
 Freeze db-free decision function contracts before wiring workflows so evals exercise production logic.
 When the model is unavailable, only model-dependent jobs pause; deterministic money timers and machine-only verification continue.
-The Phase 2 production consumer registry has no domain handlers yet; the shared path is proven with a fake-model workflow integration test.
+The production registry now consumes deal.created for planning, milestone.verification_requested for exact-delivery verification, and negotiation.started for bounded negotiation.
+Independent consumer retries allow later machine-only deliveries to proceed while an earlier model-dependent delivery is paused.
 Generated migration 0012 adds per-event consumer receipts and must be applied before the new consumers run against an application database.
 E5-01 and E5-03 remain pending: Phase 2 supplies only their scripted-model, replay, and scoring foundations.
 
@@ -108,12 +112,13 @@ E5-01 and E5-03 remain pending: Phase 2 supplies only their scripted-model, repl
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| E2-01 | Pending | Build URL safety, `url_live`, PageSpeed, screenshot, and image evidence checks; guard DNS, redirects, and browser subresources | SSRF cases reject private targets; an exact `localhost:4020` allowance works only behind a test environment flag and cannot be enabled in production |
-| E2-02 | Pending | Build a read-only GitHub App reader for PR merge and CI results, including authenticated webhook verification, deduplication, and delayed CI reconciliation | Signed webhooks and repeat deliveries yield one logical delivery; forged hooks and inaccessible repos fail safely |
-| E2-03 | Pending | Implement machine criteria and structured `judgeDelivery`, applying the current core `verificationGate` semantics | A failed or absent machine check cannot be overridden by the model; `repo: null` fails `pr_merged` and `ci_green` |
-| E2-04 | Pending | Register verification orchestration on `milestone.verification_requested`, loading the exact referenced `deliveryId` and its original `delivery.detected` inbox row | A merged PR and manual submission on the same milestone verify only the applied delivery; notes up to 2000 characters enter only `untrusted("agency notes", notes, 2000)` in non-system content and never count as evidence |
+| E2-01 | Complete locally | Build URL safety, `url_live`, PageSpeed, screenshot, and image evidence checks; guard DNS, redirects, and browser subresources | SSRF cases reject private targets; an exact `localhost:4020` allowance works only behind a test environment flag and cannot be enabled in production |
+| E2-02 | Complete locally | Build a read-only GitHub App reader for PR merge and CI results, including authenticated webhook verification, deduplication, and delayed CI reconciliation | Signed webhooks and repeat deliveries yield one logical delivery; forged hooks and inaccessible repos fail safely |
+| E2-03 | Complete locally | Implement machine criteria and structured `judgeDelivery`, applying the current core `verificationGate` semantics | A failed or absent machine check cannot be overridden by the model; `repo: null` fails `pr_merged` and `ci_green` |
+| E2-04 | Complete locally | Register verification orchestration on `milestone.verification_requested`, loading the exact referenced `deliveryId` and its original `delivery.detected` inbox row | A merged PR and manual submission on the same milestone verify only the applied delivery; notes up to 2000 characters enter only `untrusted("agency notes", notes, 2000)` in non-system content and never count as evidence |
 
-Screenshots must be served only from a trusted evidence image origin; add the storage/upload path before rendering such images.
+Screenshot bytes are stored separately in evidence_image by generated migration 0013 and served through authenticated workspace/client routes.
+Legacy external images still require the configured trusted evidence origin.
 Manual deliveries carry `source: "manual"` with `repo`, `sha`, and `prNumber` set to null.
 The verifier may use delivery notes for context but cannot turn them into machine-check proof.
 
@@ -121,9 +126,9 @@ The verifier may use delivery notes for context but cannot turn them into machin
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| E3-01 | Pending | Implement the structured negotiation protocol, fixture model, private mandate handling, and bounded rounds | Tests reject scope changes, mandate leaks, and non-monotonic concessions |
-| E3-02 | Pending | Implement initiation, turn runner, offers, and acceptance with current `acceptIssue`, `defaultClientPolicy()`, and `agreeToPlan(db, dealId, expectedPlanVersion)` | Acceptance uses the accepting client or agency side, exactly matches the other side's latest full offer, rechecks version and mandate, and handles all four `agreeToPlan` results |
-| E3-03 | Pending | Add authenticated negotiation routes, room UI, escalation, and evaluation fixtures | Two-party happy and stale-offer cases pass; a release initiated by the agency still waits for client approval |
+| E3-01 | Complete locally | Implement the structured negotiation protocol, fixture model, private mandate handling, and bounded rounds | Tests reject scope changes, mandate leaks, and non-monotonic concessions |
+| E3-02 | Complete locally | Implement initiation, turn runner, offers, and acceptance with current `acceptIssue`, `defaultClientPolicy()`, and `agreeToPlan(db, dealId, expectedPlanVersion)` | Acceptance uses the accepting client or agency side, exactly matches the other side's latest full offer, rechecks version and mandate, and handles all four `agreeToPlan` results |
+| E3-03 | Complete locally | Add authenticated negotiation routes, room UI, escalation, and evaluation fixtures | Two-party happy and stale-offer cases pass; a release initiated by the agency still waits for client approval |
 
 ## Workstream: E4 monitor, notifications, and dashboard
 

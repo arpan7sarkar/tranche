@@ -17,8 +17,10 @@
     "@ai-sdk/openai": "4.0.89",
     "@paypal/agent-toolkit": "1.11.0",
     "@tranche/contracts": "workspace:*",
+    "@tranche/core": "workspace:*",
     "@tranche/db": "workspace:*",
     "@tranche/paypal": "workspace:*",
+    "@tranche/verifiers": "workspace:*",
     "ai": "7.0.134",
     "drizzle-orm": "0.45.4",
     "zod": "4.6.5"

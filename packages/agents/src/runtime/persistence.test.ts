@@ -220,4 +220,30 @@ describe.runIf(Boolean(process.env.TEST_DATABASE_URL))("agent persistence and co
     expect(await consumeEvents(db, "late", types, async () => {})).toBe(1);
     expect(await db.select().from(schema.agentEventReceipt)).toHaveLength(2);
   });
+  it("rotates independent work past paused events and retries them without losing receipts", async () => {
+    const paused = await event();
+    const machine = await event();
+    const seen: number[] = [];
+    const handler = async (row: { id: number }) => {
+      if (row.id === paused.id) throw new ModelDisabledError();
+      seen.push(row.id);
+    };
+    expect(await consumeEvents(db, "independent", types, handler, 1, true)).toBe(0);
+    expect(await consumeEvents(db, "independent", types, handler, 1, true)).toBe(1);
+    expect(seen).toEqual([machine.id]);
+    expect(
+      await consumeEvents(
+        db,
+        "independent",
+        types,
+        async (row) => {
+          seen.push(row.id);
+        },
+        1,
+        true,
+      ),
+    ).toBe(1);
+    expect(seen).toEqual([machine.id, paused.id]);
+    expect(await db.select().from(schema.agentEventReceipt)).toHaveLength(2);
+  });
 });

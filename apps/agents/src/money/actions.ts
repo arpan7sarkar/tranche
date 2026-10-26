@@ -12,8 +12,9 @@ import {
   planVersion,
   schedulePlan,
   verificationGate,
+  withinMandate,
 } from "@tranche/core";
-import { type Db, schema } from "@tranche/db";
+import { type Db, loadNegotiationPlan, schema } from "@tranche/db";
 import { and, desc, eq, inArray, max, notInArray, or, sql } from "drizzle-orm";
 import type { Tx } from "./db";
 import type { Deps } from "./deps";
@@ -299,6 +300,25 @@ async function acceptIssue(
   p: Extract<ProposedActionRow["payload"], { type: "accept_plan" }>,
 ): Promise<string | null> {
   const t = schema.negotiationTurn;
+  const [negotiation] = await tx
+    .select()
+    .from(schema.negotiation)
+    .where(and(eq(schema.negotiation.id, p.negotiationId), eq(schema.negotiation.dealId, dealId)));
+  if (!negotiation || ["failed", "escalated"].includes(negotiation.status))
+    return "negotiation_closed";
+  if (negotiation.basePlanVersion) {
+    const current = await loadNegotiationPlan(tx, dealId);
+    if (current?.version !== negotiation.basePlanVersion || !current.editable)
+      return "plan_changed";
+    const start = negotiation.startDate;
+    if (
+      !start ||
+      ![negotiation.agencyMandate, negotiation.clientMandate].every(
+        (m) => withinMandate(p.plan, m, start).ok,
+      )
+    )
+      return "negotiation_mandate_changed";
+  }
   const [latest] = await tx
     .select({ side: t.side, offer: t.offer })
     .from(t)
@@ -366,6 +386,25 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
   const now = deps.now();
   const p = row.payload;
   const payload = { proposedActionId: row.id };
+  if ((p.type === "mark_verified" || p.type === "request_changes") && p.deliveryId) {
+    await tx
+      .select({ id: schema.milestone.id })
+      .from(schema.milestone)
+      .where(eq(schema.milestone.id, p.milestoneId))
+      .for("update");
+    const [latest] = await tx
+      .select()
+      .from(schema.event)
+      .where(
+        and(
+          eq(schema.event.milestoneId, p.milestoneId),
+          eq(schema.event.type, "milestone.verification_requested"),
+        ),
+      )
+      .orderBy(desc(schema.event.id))
+      .limit(1);
+    if (latest?.payload.deliveryId !== p.deliveryId) throw new PermanentError("stale_delivery");
+  }
   switch (p.type) {
     case "mark_verified":
       return mustAdvance(
@@ -414,11 +453,26 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
       return;
     }
     case "accept_plan": {
+      await tx.select().from(schema.deal).where(eq(schema.deal.id, row.dealId)).for("update");
       // Re-checked here: the other side may have countered while this waited for approval.
       const issue = await acceptIssue(tx, row.dealId, row.side, p);
       if (issue) throw new PermanentError(issue);
-      await writePlan(tx, row.dealId, p.plan, now);
-      const agreed = await agreeToPlanTx(tx, row.dealId, null, now);
+      const [negotiation] = await tx
+        .select()
+        .from(schema.negotiation)
+        .where(eq(schema.negotiation.id, p.negotiationId));
+      await writePlan(tx, row.dealId, p.plan, now, negotiation?.startDate ?? undefined);
+      const milestones = await tx
+        .select()
+        .from(schema.milestone)
+        .where(eq(schema.milestone.dealId, row.dealId))
+        .orderBy(schema.milestone.position);
+      const agreed = await agreeToPlanTx(
+        tx,
+        row.dealId,
+        planVersion(p.plan.currency, milestones),
+        now,
+      );
       if (agreed !== "agreed") throw new PermanentError(`the plan could not be agreed: ${agreed}`);
       return;
     }
@@ -441,7 +495,13 @@ export async function runExecutor(tx: Tx, deps: Deps, row: ProposedActionRow): P
   }
 }
 
-export async function writePlan(tx: Tx, dealId: string, plan: PlanDraft, now: Date): Promise<void> {
+export async function writePlan(
+  tx: Tx,
+  dealId: string,
+  plan: PlanDraft,
+  now: Date,
+  startDate = now.toISOString().slice(0, 10),
+): Promise<void> {
   const [deal] = await tx
     .select()
     .from(schema.deal)
@@ -460,7 +520,7 @@ export async function writePlan(tx: Tx, dealId: string, plan: PlanDraft, now: Da
   }
   await tx.delete(schema.milestone).where(eq(schema.milestone.dealId, dealId));
 
-  const schedule = schedulePlan(plan.tasks, now.toISOString().slice(0, 10));
+  const schedule = schedulePlan(plan.tasks, startDate);
   const windows = milestoneWindows(plan.tasks, schedule);
   const ms = await tx
     .insert(schema.milestone)

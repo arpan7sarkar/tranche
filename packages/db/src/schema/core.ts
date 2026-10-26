@@ -252,6 +252,13 @@ export const evidence = pgTable(
   (t) => [index().on(t.milestoneId, t.createdAt)],
 );
 
+export const evidenceImage = pgTable("evidence_image", {
+  evidenceId: uuid()
+    .primaryKey()
+    .references(() => evidence.id, { onDelete: "cascade" }),
+  base64: text().notNull(),
+});
+
 export const event = pgTable(
   "event",
   {
