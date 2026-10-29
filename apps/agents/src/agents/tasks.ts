@@ -1,8 +1,16 @@
 import { type TaskContext, task } from "@renderinc/sdk/workflows";
-import { planDeal, runNegotiation, verifyMilestone } from "@tranche/agents";
+import { planDeal, runMonitor, runNegotiation, verifyMilestone } from "@tranche/agents";
 import type { PlanDealInput } from "@tranche/contracts";
 import { consume, consumers } from "./consumers";
-import { agentDb } from "./handlers";
+import { AGENT_HANDLERS, agentDb } from "./handlers";
+export const notificationsTask = task(
+  { name: "notifications", timeoutSeconds: 1800 },
+  async (_ctx: TaskContext) => AGENT_HANDLERS.notifications?.(),
+);
+export const monitorTask = task(
+  { name: "monitor", timeoutSeconds: 1800 },
+  async (_ctx: TaskContext) => runMonitor(agentDb()),
+);
 export const runNegotiationTask = task(
   { name: "runNegotiation", timeoutSeconds: 1800 },
   async (_ctx: TaskContext, id: string) => runNegotiation(agentDb(), id),

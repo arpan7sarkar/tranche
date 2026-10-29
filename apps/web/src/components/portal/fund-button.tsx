@@ -163,7 +163,10 @@ export function FundButton({
     order.catch(settle);
     if (FAKE_PAYPAL) {
       void order.then(
-        (o) => setFakeOrderId(o.orderId),
+        (o) => {
+          setFakeOrderId(o.orderId);
+          setStatus("ready");
+        },
         () => {},
       );
       return;

@@ -6,11 +6,17 @@ Lane H is merged; Lane E runtime, planner, verification, and negotiation are imp
 
 ## Current checkpoint
 
-Phases 0 through 5 are complete locally.
-F0-01 through F0-06, P7-01, BASE-01, E1-01 through E1-04, E2-01 through E2-04, and E3-01 through E3-03 are complete locally: 19 of the 33 tracked tasks are complete, with 14 tasks pending in later phases.
+Phases 0 through 7 are complete for their local implementation and offline verification scope.
+25 of the 33 tracked tasks are complete locally; E5-05 has its local CI configuration implemented, while its deployment portion and seven other tasks remain pending.
 The Phase 1 follow-up was merged as PR #22 at bad27a1.
 Phase 2 was merged as PR #23 at 217d857.
-Phases 3, 4, and 5 are local and uncommitted on feat/planner-and-delivery-verification.
+Phases 3, 4, and 5 were merged as PR #24 at 2936955.
+Phases 6 and 7 are implemented on feat/monitoring-dashboard-and-offline-validation and remain uncommitted.
+The final full local regression run passed 1,131 tests, with six real-sandbox cases and two opt-in screenshot cases skipped.
+All ten Playwright cases passed against local fakes, including brief-to-plan, dashboard states and scripted assistant interaction, delivery recovery, signed PR delivery, happy payment, rejected delivery, and exact-date slip and reload.
+The replay suite passes 22 scripted-fixture regressions across all four agents without provider calls.
+These fixtures validate decision logic and integration behavior, not live-model quality.
+Next.js reports a dependency security advisory during builds; that notice is unresolved.
 See the [Phase 3/4 implementation record](phase-3-4-implementation-record.md) for verification results, setup, and provider limitations.
 The Phase 5 full run passed 1,074 tests, all workspace typechecks, both production builds, and repository-wide Biome checks.
 Six real-sandbox tests and two opt-in screenshot tests were skipped in that run.
@@ -18,8 +24,61 @@ See the [Phase 5 negotiation record](phase-5-negotiation-record.md) for implemen
 The PR readiness review found and corrected a CI database URL mismatch; the Phase 2 runtime and workflow tests now pass with CI's separate database URLs.
 See the [Phase 2 runtime record](phase-2-runtime-record.md) for behavior, migration, command results, and limitations.
 Earlier evidence remains in the [Phase 0 audit](phase-0-audit.md), [Phase 1 completion record](phase-1-completion-record.md), and [review correction record](pr-review-fixes.md).
-Real provider validation, remote CI, deployment, and full product end-to-end proof remain unverified.
+Real provider validation, remote CI, deployment, and a live-provider end-to-end product run remain unverified.
 Every status below requires its completion evidence; skipped tests do not establish completion.
+
+### Phase 6/7 local verification
+
+The October 28-29 review ran the full regression suite against the guarded disposable database.
+The final run passed 1,131 tests across nine workspaces, with eight opt-in tests skipped.
+The separate offline replay command passed 22 cases; these are already included in the full regression total.
+All nine workspace typecheck tasks passed, with five served from Turbo cache in the final typecheck run.
+The agents production build passed, and each browser run built the production web application using fake-provider settings.
+The final repository-wide Biome check passed across 460 files, and `git diff --check` passed.
+The final ten-case Playwright run passed in 50.2 seconds with zero retries.
+The final theme reads a concrete color from a central CSS token because AG Studio rejects a CSS variable or border tuple in that theme input.
+The 89 design-token tests are included in the 398 passing web tests.
+
+Dashboard loading, error, retry, empty, and scripted assistant-response states are browser-tested.
+The assistant browser test substitutes the model proxy response; proxy authorization, input bounds, and tool restrictions have separate unit tests.
+Notification coverage includes eight database cases, including provider acceptance followed by a failed database confirmation and retry with the same identity and payload.
+Pending delivery, failed inbox processing, and resubmission are tested against one persistent inbox identity.
+The PR browser case verifies webhook signatures, repeat delivery, the fake GitHub reader, and resulting machine evidence.
+The brief journey uses the production draft API and planner with an injected scripted model, then edits, saves, and reloads the Gantt.
+The service process and running Next.js server preload a Node TCP guard that rejects destinations outside the explicit loopback ports.
+Unit tests prove that external raw sockets, provider fetches, and redirects to an external host are blocked before connecting.
+Agency and client browser contexts also reject non-local HTTP requests, with service workers disabled.
+This is a test-harness guard, not an operating-system network sandbox; build-time dependency checks and browser installation are outside it.
+CI commands are present; remote CI has not been run or verified by this review.
+Deployment smoke tests remain Phase 8 work, and real provider validation remains Phase 9 work.
+
+| Demo regression | Executable evidence |
+| --- | --- |
+| Verify the exact applied delivery, ignoring newer unrelated or forged inputs | `packages/agents/src/verifier/verify.test.ts`, `apps/agents/src/money/verification-delivery.test.ts` |
+| Treat manual notes as untrusted and reject PR/CI criteria without a repository | `packages/agents/src/verifier/verify.test.ts`, `packages/verifiers/src/checks.test.ts`, `e2e/specs/rejected-delivery.spec.ts` |
+| Allow only the exact test-local URL exception and reject private redirects and production enablement | `packages/verifiers/src/network.test.ts`, `e2e/tests/network-guard.test.ts` |
+| Preserve current-plan negotiation acceptance, mandates, and agreement outcomes | `packages/agents/src/negotiator/run.test.ts`, `apps/agents/src/money/negotiation.test.ts` |
+| Seed a sent, agreed plan and preserve exact dependent milestone and funding dates through reload | `e2e/support/seed-e2e.ts`, `e2e/specs/slip-and-replan.spec.ts` |
+| Exercise manual notes, pending/failed/retry controls, and PR delivery UI hooks | `e2e/specs/happy-path.spec.ts`, `e2e/specs/rejected-delivery.spec.ts`, `e2e/specs/delivery-recovery.spec.ts` |
+
+Start the disposable service with `docker compose --profile test up -d --wait postgres-test`.
+It must expose `127.0.0.1:55432` and retain the fixture identity checked by the shared database guard.
+The browser harness creates and resets only `tranche_test_e2e` inside this disposable server.
+Run `pnpm --filter @tranche/agents eval:offline` to replay the committed scripted fixtures without provider calls.
+Missing or changed recordings fail the suite; these fixtures do not establish live-model quality.
+Run `pnpm --filter @tranche/e2e exec playwright install chromium`, then `pnpm --filter @tranche/e2e test:e2e` for the browser journeys.
+The harness builds the web application with localhost fake payment settings, starts fake payment and staging services, and signs in through Better Auth.
+Private portal links and browser sessions stay under ignored `e2e/.state/`; browser traces stay under ignored `e2e/test-results/`.
+The fake build is for local verification and must not be deployed.
+CI now includes offline eval and browser commands; successful remote execution remains unverified.
+
+Notification workers run through the `notifications` workflow task or the existing local agent loop.
+Without `RESEND_API_KEY` and `EMAIL_FROM`, jobs remain queued and no provider call occurs.
+Provider acceptance marks a job `sent`; this does not establish delivery to an inbox.
+Retries reuse a stable job key and private payload, stop after eight attempts or 23 hours from first dispatch, and leave ambiguous jobs in `review`.
+Do not reset a `review` job or change its payload to resend blindly; inspect the provider's acceptance record first.
+Client links expire after seven days, and recipient membership and email are checked before each dispatch.
+The bounded retry window follows [Resend's documented 24-hour idempotency window](https://resend.com/blog/engineering-idempotency-keys).
 
 ## Source plans
 
@@ -71,8 +130,8 @@ Starting fake-model and eval foundations in Phase 2 does not complete E5-01 or E
 Bring the email foundation forward from Phase 6 only if an earlier flow requires it, and record that dependency explicitly.
 Phase 8 prepares deployment; record provider readiness and any release approval required before publishing changes.
 Earlier slice results remain in the [slice 1 record](phase-1-slice-1-record.md) and [slice 2 record](phase-1-slice-2-record.md).
-The next recommended scope is Phase 6, covering E4-01 through E4-03: monitoring, durable notifications, and the workspace dashboard.
-Phases 6 through 10 remain pending; local runtime completion does not establish sandbox, deployment, or end-to-end product completion.
+The completed local checkpoint is Phases 6 and 7: monitoring, notifications, the dashboard, and offline end-to-end proof.
+Phases 8 through 10 remain pending; local runtime completion does not establish sandbox, deployment, or end-to-end product completion.
 
 ## Workstream: existing money path and interfaces
 
@@ -106,7 +165,7 @@ When the model is unavailable, only model-dependent jobs pause; deterministic mo
 The production registry now consumes deal.created for planning, milestone.verification_requested for exact-delivery verification, and negotiation.started for bounded negotiation.
 Independent consumer retries allow later machine-only deliveries to proceed while an earlier model-dependent delivery is paused.
 Generated migration 0012 adds per-event consumer receipts and must be applied before the new consumers run against an application database.
-E5-01 and E5-03 remain pending: Phase 2 supplies only their scripted-model, replay, and scoring foundations.
+Phase 2 supplied the scripted-model, replay, and scoring foundations; Phase 7 now completes their local acceptance coverage.
 
 ## Workstream: E2 verification and GitHub
 
@@ -134,9 +193,9 @@ The verifier may use delivery notes for context but cannot turn them into machin
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| E4-01 | Pending | Add read-only slip/risk detectors and `assessDeal`, with typed monitor proposals and Render consumers | Deterministic schedule changes remain in existing money handlers; duplicate monitor jobs do not multiply actions |
-| E4-02 | Pending | Add durable email notification jobs for approval, plan sent, and funding requested events, with recipient checks and private fresh portal links | Retries, expiry, and provider uncertainty are tested; no magic-link token appears in an event payload or logs |
-| E4-03 | Pending | Add workspace-scoped dashboard APIs, AG Grid Studio views, and a read-only model proxy | Role and workspace isolation, empty/loading/error states, and currency-separated totals are verified |
+| E4-01 | Complete locally | Add read-only slip/risk detectors and `assessDeal`, with typed monitor proposals and Render consumers | Deterministic schedule changes remain in existing money handlers; duplicate monitor jobs do not multiply actions |
+| E4-02 | Complete locally | Add durable email notification jobs for approval, plan sent, and funding requested events, with recipient checks and private fresh portal links | Retries, expiry, and provider uncertainty are tested; no magic-link token appears in an event payload or logs |
+| E4-03 | Complete locally | Add workspace-scoped dashboard APIs, AG Grid Studio views, and a read-only model proxy | Role and workspace isolation, empty/loading/error states, and currency-separated totals are verified |
 
 Do not claim exactly-once email delivery until provider idempotency and crash recovery are demonstrated.
 For `milestone.funding_requested`, consume `{ orderId, approveUrl, title }` and create a fresh client link with `createMagicLink`; the event must never carry a portal token.
@@ -145,11 +204,11 @@ For `milestone.funding_requested`, consume `{ orderId, approveUrl, title }` and 
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| E5-01 | Pending | Create a replay-first eval harness and cases for planner, verifier, negotiator, and monitor, including the six demo regressions | Critical safety cases all pass; target scores from the E5 plan are planner 0.80, verifier 1.00, negotiator 0.75, monitor 0.75 without weakening cases |
+| E5-01 | Complete locally | Create a replay-first eval harness and cases for planner, verifier, negotiator, and monitor, including the six demo regressions | Critical safety cases all pass; target scores from the E5 plan are planner 0.80, verifier 1.00, negotiator 0.75, monitor 0.75 without weakening cases |
 | E5-02 | Pending | Wire the existing `MONEY_TICK_TASKS`, `RECONCILE_TASK`, and `MONEY_HANDLERS` into health-checked Render cron entry points and a deploy blueprint | Timers and reconciliation run even when Gemini is unavailable; configuration uses current SDK and package APIs |
-| E5-03 | Pending | Build isolated fake PayPal, GitHub, model, and email fixtures plus a complete seed for the slip journey | A sent and agreed deal starts with design at D(7) for 5 days, build at D(12) for 5 days, milestone D(7)-D(17), funding Due D(4); moving design to D(14) yields build D(19), milestone D(14)-D(24), funding Due D(11), including after reload |
-| E5-04 | Pending | Add Playwright happy, rejected-delivery, and slip-and-replan journeys using actual manual-delivery UI hooks | Tests use `delivery-notes-input`, `delivery-pending-<key>`, `delivery-failed-<key>`, `resubmit-delivery-<key>`, and `delivery-via-pr-<key>` and pass locally |
-| E5-05 | Pending | Add eval and end-to-end CI jobs, deployment smoke tests, and runnable setup and submission instructions | CI runs rather than skips expected suites; deployed smoke test records app, agent, cron, DB, and webhook readiness |
+| E5-03 | Complete locally | Build isolated fake PayPal, GitHub, model, and email fixtures plus a complete seed for the slip journey | A sent and agreed deal starts with design at D(7) for 5 days, build at D(12) for 5 days, milestone D(7)-D(17), funding Due D(4); moving design to D(14) yields build D(19), milestone D(14)-D(24), funding Due D(11), including after reload |
+| E5-04 | Complete locally | Add Playwright happy, rejected-delivery, and slip-and-replan journeys using actual manual-delivery UI hooks | Tests use `delivery-notes-input`, `delivery-pending-<key>`, `delivery-failed-<key>`, `resubmit-delivery-<key>`, and `delivery-via-pr-<key>` and pass locally |
+| E5-05 | Local CI configured; deployment pending | Add eval and end-to-end CI jobs, deployment smoke tests, and runnable setup and submission instructions | CI runs rather than skips expected suites; deployed smoke test records app, agent, cron, DB, and webhook readiness |
 | E5-06 | Pending | Prepare the three-minute demo, evidence ledger, final checklist, and feature freeze review | Demo shows brief, plan, fund, deliver, verify, approve/release, and slip; submission assets are ready before the stated deadline |
 
 The slip seed calls `agreeToPlan(db, dealId, planVersion(deal.currency, milestonesOrderedByPosition))` and asserts `"agreed"` before testing funding timers.

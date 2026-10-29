@@ -1,0 +1,14 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"subject\":\"Please review your project\",\"body\":\"A project decision needs your attention.\"}"
+    }
+  ],
+  "finishReason": { "unified": "stop" },
+  "usage": {
+    "inputTokens": { "total": 0, "noCache": 0, "cacheRead": 0, "cacheWrite": 0 },
+    "outputTokens": { "total": 0, "text": 0, "reasoning": 0 }
+  },
+  "warnings": []
+}

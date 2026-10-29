@@ -66,6 +66,31 @@ export const notification = pgTable(
   (t) => [uniqueIndex().on(t.kind, t.ref)],
 );
 
+export const notificationJob = pgTable("notification_job", {
+  id: uuid().primaryKey().defaultRandom(),
+  key: text().notNull().unique(),
+  dealId: uuid()
+    .notNull()
+    .references(() => deal.id, { onDelete: "cascade" }),
+  actionId: uuid(),
+  side: text().$type<"agency" | "client">().notNull(),
+  recipientId: text().notNull(),
+  to: text().notNull(),
+  subject: text().notNull(),
+  body: text().notNull(),
+  status: text()
+    .$type<"pending" | "sending" | "sent" | "review" | "cancelled">()
+    .notNull()
+    .default("pending"),
+  attempts: integer().notNull().default(0),
+  nextAttemptAt: createdAt(),
+  dispatchedAt: timestamp({ withTimezone: true }),
+  sentAt: timestamp({ withTimezone: true }),
+  linkExpiresAt: timestamp({ withTimezone: true }).notNull(),
+  providerId: text(),
+  createdAt: createdAt(),
+});
+
 export const eventCursor = pgTable("event_cursor", {
   consumer: text().primaryKey(),
   lastEventId: bigint({ mode: "number" }).notNull().default(0),

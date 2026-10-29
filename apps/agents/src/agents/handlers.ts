@@ -1,4 +1,7 @@
+import { runMonitor } from "@tranche/agents";
 import { createDb, type Db } from "@tranche/db";
+import { emailSender } from "../notifications/email";
+import { deliverNotifications, queueNotifications } from "../notifications/queue";
 import { consumeAll } from "./consumers";
 
 let db: Db | undefined;
@@ -13,6 +16,14 @@ export async function closeAgentDb(): Promise<void> {
   }
 }
 export const AGENT_HANDLERS: Record<string, () => Promise<void>> = {
+  async notifications() {
+    await queueNotifications(agentDb());
+    const send = emailSender();
+    if (send) await deliverNotifications(agentDb(), send);
+  },
+  async monitor() {
+    await runMonitor(agentDb());
+  },
   async consumeAll() {
     await consumeAll(agentDb());
   },

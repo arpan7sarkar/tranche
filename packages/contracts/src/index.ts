@@ -5,6 +5,7 @@ export * from "./events";
 export * from "./evidence";
 export * from "./ids";
 export * from "./money";
+export * from "./monitor";
 export * from "./negotiation";
 export * from "./payment-intents";
 export * from "./plan";
