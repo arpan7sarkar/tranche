@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "test:e2e": "playwright test",
+    "smoke": "tsx scripts/smoke.ts",
     "typecheck": "tsc",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@renderinc/sdk": "1.2.0",
     "@tranche/agents": "workspace:*",
     "@tranche/agents-service": "workspace:*",
     "@tranche/contracts": "workspace:*",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
-    "tsx": "4.23.15"
+    "tsx": "4.23.15",
+    "yaml": "2.8.2"
   }
 }

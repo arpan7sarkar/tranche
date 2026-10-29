@@ -78,6 +78,8 @@ Turbo forwards both database variables and executes tests without cached results
 | `pnpm build` | Build web and agents |
 | `pnpm check` / `pnpm fix` | Lint and format with Biome |
 
+Deployment preparation is documented in [docs/deployment.md](docs/deployment.md), with a separately approved [sandbox run sheet](docs/paypal/phase-9-run-sheet.md).
+
 ## License
 
 MIT

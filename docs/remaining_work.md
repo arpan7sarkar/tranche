@@ -7,16 +7,19 @@ Lane H is merged; Lane E runtime, planner, verification, and negotiation are imp
 ## Current checkpoint
 
 Phases 0 through 7 are complete for their local implementation and offline verification scope.
-25 of the 33 tracked tasks are complete locally; E5-05 has its local CI configuration implemented, while its deployment portion and seven other tasks remain pending.
+26 of the 33 tracked tasks are complete locally, including E5-02 deployment implementation.
+E5-05 has local CI and smoke tooling; deployed evidence remains pending.
+SBX-01 has a proposed run sheet but still needs concrete identities, an attempt-counting mechanism, and an executable refund-validation path before approval.
 The Phase 1 follow-up was merged as PR #22 at bad27a1.
 Phase 2 was merged as PR #23 at 217d857.
 Phases 3, 4, and 5 were merged as PR #24 at 2936955.
-Phases 6 and 7 are implemented on feat/monitoring-dashboard-and-offline-validation and remain uncommitted.
+Phases 6 and 7 were merged as PR #25 at 79c80c7.
 The final full local regression run passed 1,131 tests, with six real-sandbox cases and two opt-in screenshot cases skipped.
 All ten Playwright cases passed against local fakes, including brief-to-plan, dashboard states and scripted assistant interaction, delivery recovery, signed PR delivery, happy payment, rejected delivery, and exact-date slip and reload.
 The replay suite passes 22 scripted-fixture regressions across all four agents without provider calls.
 These fixtures validate decision logic and integration behavior, not live-model quality.
-Next.js reports a dependency security advisory during builds; that notice is unresolved.
+Phase 8 upgrades Next.js to 16.4.1; the refreshed production dependency audit still reports 12 high, 13 moderate, and 5 low findings, with no critical findings.
+Dependency remediation or documented risk review remains a release gate.
 See the [Phase 3/4 implementation record](phase-3-4-implementation-record.md) for verification results, setup, and provider limitations.
 The Phase 5 full run passed 1,074 tests, all workspace typechecks, both production builds, and repository-wide Biome checks.
 Six real-sandbox tests and two opt-in screenshot tests were skipped in that run.
@@ -50,7 +53,7 @@ Unit tests prove that external raw sockets, provider fetches, and redirects to a
 Agency and client browser contexts also reject non-local HTTP requests, with service workers disabled.
 This is a test-harness guard, not an operating-system network sandbox; build-time dependency checks and browser installation are outside it.
 CI commands are present; remote CI has not been run or verified by this review.
-Deployment smoke tests remain Phase 8 work, and real provider validation remains Phase 9 work.
+Deployment smoke tooling is implemented locally in Phase 8; remote execution and real provider validation remain pending.
 
 | Demo regression | Executable evidence |
 | --- | --- |
@@ -130,8 +133,21 @@ Starting fake-model and eval foundations in Phase 2 does not complete E5-01 or E
 Bring the email foundation forward from Phase 6 only if an earlier flow requires it, and record that dependency explicitly.
 Phase 8 prepares deployment; record provider readiness and any release approval required before publishing changes.
 Earlier slice results remain in the [slice 1 record](phase-1-slice-1-record.md) and [slice 2 record](phase-1-slice-2-record.md).
-The completed local checkpoint is Phases 6 and 7: monitoring, notifications, the dashboard, and offline end-to-end proof.
-Phases 8 through 10 remain pending; local runtime completion does not establish sandbox, deployment, or end-to-end product completion.
+The Phase 8 deployment code and runbooks are prepared and locally tested; real Render readiness is not yet demonstrated.
+Phase 9 execution and Phase 10 release review remain pending.
+See [deployment instructions](deployment.md) and the [proposed sandbox run sheet](paypal/phase-9-run-sheet.md).
+
+### Phase 8 local verification
+
+The October 29 run passed 1,146 tests with eight opt-in skips: six real PayPal cases and two screenshot cases.
+Three Blueprint invariant tests added after that full run also passed separately, and all eight deployment config/cron tests were rerun successfully after the active-mode health change.
+All nine workspace typechecks passed, with six served from Turbo cache.
+Repository-wide Biome passed across 475 files.
+The workflow build emitted the service plus both cron entry points successfully.
+The production Next.js build and all ten fake-provider Playwright cases passed in the browser run.
+The refreshed dependency audit exited nonzero with the findings recorded above.
+No Render resources were created and no real PayPal requests were made.
+The smoke tool checks infrastructure and configuration, not provider webhook delivery or payment correctness.
 
 ## Workstream: existing money path and interfaces
 
@@ -205,7 +221,7 @@ For `milestone.funding_requested`, consume `{ orderId, approveUrl, title }` and 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
 | E5-01 | Complete locally | Create a replay-first eval harness and cases for planner, verifier, negotiator, and monitor, including the six demo regressions | Critical safety cases all pass; target scores from the E5 plan are planner 0.80, verifier 1.00, negotiator 0.75, monitor 0.75 without weakening cases |
-| E5-02 | Pending | Wire the existing `MONEY_TICK_TASKS`, `RECONCILE_TASK`, and `MONEY_HANDLERS` into health-checked Render cron entry points and a deploy blueprint | Timers and reconciliation run even when Gemini is unavailable; configuration uses current SDK and package APIs |
+| E5-02 | Complete locally | Wire the existing `MONEY_TICK_TASKS`, `RECONCILE_TASK`, and `MONEY_HANDLERS` into health-checked Render cron entry points and a deploy blueprint | Local cron tests pass with models off; Blueprint and build checks pass; actual Render execution remains unverified |
 | E5-03 | Complete locally | Build isolated fake PayPal, GitHub, model, and email fixtures plus a complete seed for the slip journey | A sent and agreed deal starts with design at D(7) for 5 days, build at D(12) for 5 days, milestone D(7)-D(17), funding Due D(4); moving design to D(14) yields build D(19), milestone D(14)-D(24), funding Due D(11), including after reload |
 | E5-04 | Complete locally | Add Playwright happy, rejected-delivery, and slip-and-replan journeys using actual manual-delivery UI hooks | Tests use `delivery-notes-input`, `delivery-pending-<key>`, `delivery-failed-<key>`, `resubmit-delivery-<key>`, and `delivery-via-pr-<key>` and pass locally |
 | E5-05 | Local CI configured; deployment pending | Add eval and end-to-end CI jobs, deployment smoke tests, and runnable setup and submission instructions | CI runs rather than skips expected suites; deployed smoke test records app, agent, cron, DB, and webhook readiness |
@@ -219,7 +235,7 @@ Fake-provider tests and replay evals must never fall through to network or paid 
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| SBX-01 | Pending | Prepare a bounded sandbox run sheet covering credentials, buyer/seller identities, principal, fee, API call count, hold cleanup, and exact commands | A reviewer can approve a concrete run without guessing exposure; no live credentials are used |
+| SBX-01 | Prepared; execution prerequisites pending | Prepare a bounded sandbox run sheet covering credentials, buyer/seller identities, principal, fee, API call count, hold cleanup, and exact commands | Proposed limits and commands are documented; identities, attempt accounting, and refund execution still need resolution before approval |
 | SBX-02 | Pending | After explicit operator allowance, run the real PayPal integration and product path: scopes, referral, webhook registration, manual or portal funding, authorization, capture, void/refund recovery | Write raw observations into `docs/paypal/` for the six open assumptions: scope URLs, assertion encoding, fee placement, referral features, already-done error names, and cumulative refund field |
 | SBX-03 | Pending | Correct behavior and documentation from sandbox results, then demonstrate onboarding through release on the product route | Each observed mismatch has a regression test; any unverified capability stays marked unverified |
 | DONE-01 | Pending | Run relevant package tests, core property tests, agent evals, typechecks, Biome, build, and three Playwright journeys | Record exact commands, date, result, and environment; investigate skips and failures rather than counting them as passes |

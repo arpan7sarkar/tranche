@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./deployment": "./src/deployment/config.ts",
     "./launch": "./src/agents/launch.ts",
     "./money": "./src/money/index.ts"
   },
@@ -11,6 +12,7 @@
     "dev": "render workflows dev -- tsx watch src/index.ts",
     "build": "tsdown",
     "start": "node dist/index.mjs",
+    "deploy:check": "tsx scripts/deploy-check.ts",
     "typecheck": "tsc",
     "money:recover": "node --env-file-if-exists=../../.env --import=tsx scripts/recover-creation.ts",
     "f0:preflight": "node --env-file-if-exists=../../.env --import=tsx scripts/f0/preflight.ts",
