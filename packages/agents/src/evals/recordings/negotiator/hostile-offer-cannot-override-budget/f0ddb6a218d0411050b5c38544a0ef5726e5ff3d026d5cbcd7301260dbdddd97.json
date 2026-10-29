@@ -1,0 +1,9 @@
+{
+  "content": [{ "type": "text", "text": "{\"kind\":\"accept\",\"message\":\"Accept\"}" }],
+  "finishReason": { "unified": "stop" },
+  "usage": {
+    "inputTokens": { "total": 0, "noCache": 0, "cacheRead": 0, "cacheWrite": 0 },
+    "outputTokens": { "total": 0, "text": 0, "reasoning": 0 }
+  },
+  "warnings": []
+}

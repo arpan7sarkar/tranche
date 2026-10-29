@@ -23,6 +23,8 @@
     "@tranche/db": "workspace:*",
     "@tranche/paypal": "workspace:*",
     "@tranche/verifiers": "workspace:*",
+    "ag-studio": "3.0.0",
+    "ag-studio-react": "3.0.0",
     "better-auth": "1.7.7",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",

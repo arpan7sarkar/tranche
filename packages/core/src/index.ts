@@ -3,6 +3,7 @@ export * from "./dates";
 export * from "./fees";
 export * from "./holds";
 export * from "./milestone";
+export * from "./monitor";
 export * from "./negotiation";
 export * from "./pending-order";
 export * from "./plan-version";

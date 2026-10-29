@@ -22,6 +22,7 @@
   --accent-foreground: oklch(0.32 0.07 160);
   --destructive: oklch(0.51 0.2 27);
   --border: oklch(0.9 0.007 85);
+  --studio-widget-border-color: #181d1f38;
   --input: oklch(0.88 0.007 85);
   --ring: oklch(0.56 0.12 160);
   --sidebar: oklch(0.97 0.005 85);

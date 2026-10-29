@@ -1,0 +1,32 @@
+export const testDatabase = "postgres://tranche:tranche@127.0.0.1:55432/tranche_p2_test";
+export const databaseUrl = "postgres://tranche:tranche@127.0.0.1:55432/tranche_test_e2e";
+export const workspaceId = "becb60b4-33c4-4e3a-93d7-a542ec693302";
+export const appEnv = {
+  NODE_ENV: "test",
+  DATABASE_URL: databaseUrl,
+  TEST_DATABASE_URL: testDatabase,
+  APP_URL: "http://localhost:3100",
+  BETTER_AUTH_URL: "http://localhost:3100",
+  BETTER_AUTH_SECRET: "e2e-secret-not-for-production-000000",
+  PAYPAL_API_BASE: "http://localhost:4010",
+  PAYPAL_CLIENT_ID: "fake",
+  PAYPAL_CLIENT_SECRET: "fake",
+  PAYPAL_WEBHOOK_ID: "fake",
+  NEXT_PUBLIC_E2E_FAKE_PAYPAL: "1",
+  PAGESPEED_API_BASE: "http://localhost:4020",
+  VERIFIER_ALLOW_TEST_LOCALHOST: "1",
+  TRANCHE_LLM: "off",
+  HOLD_MECHANISM: "authorization",
+  SUBCONTRACTOR_SPLIT: "agency_pays",
+  RESEND_API_KEY: "",
+  EMAIL_FROM: "",
+  GEMINI_API_KEY: "",
+  GOOGLE_GENERATIVE_AI_API_KEY: "",
+  OPENAI_API_KEY: "",
+  RENDER_WORKFLOW_SLUG: "",
+  RENDER_API_KEY: "",
+  GITHUB_APP_ID: "",
+  GITHUB_APP_PRIVATE_KEY: "",
+  GITHUB_WEBHOOK_SECRET: "offline-github-webhook-secret",
+  GITHUB_WORKSPACE_REPOSITORIES: JSON.stringify({ [workspaceId]: ["test/site"] }),
+};

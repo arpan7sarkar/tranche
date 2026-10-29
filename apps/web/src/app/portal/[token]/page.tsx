@@ -2,6 +2,7 @@ import { planVersion } from "@tranche/core";
 import { ArrowRight, CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { ApprovalsList } from "@/components/approvals-list";
 import { MilestoneBadge } from "@/components/milestone-badge";
@@ -155,6 +156,7 @@ async function Portal({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token } = await params;
+  await connection();
   const link = await resolvePortalToken(token);
   if (!link) notFound();
   const db = getDb();

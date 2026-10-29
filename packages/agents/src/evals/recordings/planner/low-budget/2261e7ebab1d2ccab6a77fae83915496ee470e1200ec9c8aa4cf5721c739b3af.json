@@ -1,0 +1,14 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"summary\":\"Website\",\"currency\":\"USD\",\"milestones\":[{\"key\":\"build\",\"title\":\"Build\",\"price\":{\"currency\":\"USD\",\"minor\":1},\"criteria\":{\"checks\":[{\"kind\":\"url_live\",\"url\":\"https://example.com\"}],\"prose\":[]},\"payees\":[{\"kind\":\"agency\",\"shareBps\":10000}]}],\"tasks\":[{\"key\":\"build\",\"title\":\"Build\",\"durationDays\":2,\"dependsOn\":[],\"milestoneKey\":\"build\"}]}"
+    }
+  ],
+  "finishReason": { "unified": "stop" },
+  "usage": {
+    "inputTokens": { "total": 0, "noCache": 0, "cacheRead": 0, "cacheWrite": 0 },
+    "outputTokens": { "total": 0, "text": 0, "reasoning": 0 }
+  },
+  "warnings": []
+}

@@ -47,4 +47,10 @@ jobs:
           -c "ALTER DATABASE tranche_p2_test SET tranche.test_fixture = 'tranche-f0-disposable-v1'"
       - run: pnpm --filter @tranche/db db:migrate:test
       - run: pnpm test
+      - name: Replay offline agent evaluations
+        run: pnpm --filter @tranche/agents eval:offline
       - run: pnpm build
+      - name: Install browser for isolated journeys
+        run: pnpm --filter @tranche/e2e exec playwright install --with-deps chromium
+      - name: Run journeys against local fake services
+        run: pnpm --filter @tranche/e2e test:e2e

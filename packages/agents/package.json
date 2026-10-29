@@ -10,7 +10,8 @@
   },
   "scripts": {
     "typecheck": "tsc",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "eval:offline": "vitest run src/evals/offline.test.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "4.0.92",
