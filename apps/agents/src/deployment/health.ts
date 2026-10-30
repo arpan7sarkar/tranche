@@ -11,7 +11,7 @@ export async function deploymentHealth(db: Db, source: string, env = process.env
   return {
     kind: "tranche-deployment-health",
     source,
-    ok: Boolean(row?.ready) && !deploymentIssues("workflow", env).length,
+    ok: Boolean(row?.ready) && !deploymentIssues("worker", env).length,
     schemaReady: Boolean(row?.ready),
     webhookConfigured: Boolean(env.PAYPAL_WEBHOOK_ID),
     modelEnabled: env.TRANCHE_LLM !== "off",

@@ -23,7 +23,7 @@ For implemented authorization/capture commands, offline verification and the del
 | Path | Purpose |
 |---|---|
 | `apps/web` | Next.js app: agency UI, client portal, API routes, webhooks |
-| `apps/agents` | Render Workflows tasks: agents and executor |
+| `apps/agents` | VPS PostgreSQL-backed workers: agents and executor |
 | `packages/contracts` | Shared Zod schemas |
 | `packages/core` | State machine and policy engine (pure) |
 | `packages/db` | Drizzle schema and client |
@@ -44,7 +44,7 @@ pnpm db:up
 pnpm dev
 ```
 
-Running the agents service locally needs the [Render CLI](https://render.com/docs/cli): `pnpm dev:agents`.
+Run the VPS worker locally with `pnpm dev:agents` after configuring its environment and migrating PostgreSQL.
 Compose exposes the application database at `localhost:5433`; container-internal connections use port 5432.
 For existing local `.env` files, update only the application database port if it still points to this Compose service on 5432.
 
@@ -72,7 +72,7 @@ Turbo forwards both database variables and executes tests without cached results
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Start the web app |
-| `pnpm dev:agents` | Start the local Render Workflows task server |
+| `pnpm dev:agents` | Start the PostgreSQL-backed worker service |
 | `pnpm typecheck` | Typecheck every package |
 | `pnpm test` | Run every test suite |
 | `pnpm build` | Build web and agents |

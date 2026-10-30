@@ -5,6 +5,8 @@ import { getDb } from "@/server/db";
 import { subscribe } from "@/server/event-hub";
 import { requireDealAccess } from "@/server/session";
 
+export const maxDuration = 60;
+
 const HEARTBEAT_MS = 15_000;
 const DEDUPE_WINDOW = 1000;
 
@@ -49,6 +51,7 @@ export async function GET(request: Request) {
   let live = false;
   let closed = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let lifetime: ReturnType<typeof setTimeout> | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array>;
 
   const write = (chunk: string) => {
@@ -83,6 +86,7 @@ export async function GET(request: Request) {
     if (closed) return;
     closed = true;
     clearInterval(heartbeat);
+    clearTimeout(lifetime);
     unsubscribe();
     try {
       controller.close();
@@ -100,6 +104,8 @@ export async function GET(request: Request) {
         live = true;
         write(SSE_HEARTBEAT);
         heartbeat = setInterval(() => write(SSE_HEARTBEAT), HEARTBEAT_MS);
+        // EventSource reconnects with Last-Event-ID before the function duration limit.
+        lifetime = setTimeout(close, 45_000);
         if (request.signal.aborted) close();
       } catch (error) {
         close();

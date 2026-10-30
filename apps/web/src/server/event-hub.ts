@@ -42,6 +42,11 @@ function start(): Promise<unknown> {
 }
 
 export async function subscribe(subscriber: Subscriber): Promise<() => void> {
+  if (process.env.VERCEL) {
+    // Serverless instances use bounded polling instead of a persistent LISTEN connection.
+    const timer = setInterval(() => subscriber.onResync(), 3000);
+    return () => clearInterval(timer);
+  }
   hub.ready ??= start();
   await hub.ready;
   hub.subscribers.add(subscriber);

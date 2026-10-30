@@ -1,4 +1,4 @@
-export type DeploymentRole = "web" | "workflow" | "cron";
+export type DeploymentRole = "web" | "worker";
 
 export function deploymentIssues(
   role: DeploymentRole,
@@ -8,17 +8,9 @@ export function deploymentIssues(
   const requireValue = (key: string) => {
     if (!env[key]?.trim()) issues.push(`${key}:missing`);
   };
-  if (role !== "workflow") {
-    requireValue("RENDER_API_KEY");
-    requireValue("RENDER_WORKFLOW_SLUG");
-  }
-  if (env.RENDER_WORKFLOW_SLUG && !/^[a-zA-Z0-9_-]+$/.test(env.RENDER_WORKFLOW_SLUG))
-    issues.push("RENDER_WORKFLOW_SLUG:invalid");
-  if (role === "cron") {
-    if (!["health", "active", "disabled"].includes(env.TRANCHE_CRON_MODE ?? ""))
-      issues.push("TRANCHE_CRON_MODE:invalid");
-    return issues;
-  }
+  if ((env.WORKER_TOKEN?.length ?? 0) < 32) issues.push("WORKER_TOKEN:at_least_32_characters");
+  if (role === "worker" && !["health", "active"].includes(env.WORKER_MODE ?? ""))
+    issues.push("WORKER_MODE:invalid");
   requireValue("DATABASE_URL");
   requireValue("PAYPAL_CLIENT_ID");
   requireValue("PAYPAL_CLIENT_SECRET");
@@ -51,6 +43,19 @@ export function deploymentIssues(
     issues.push("APP_URL:public_https_origin_required");
   }
   if (role === "web") {
+    try {
+      const worker = new URL(env.WORKER_URL ?? "");
+      if (
+        worker.protocol !== "https:" ||
+        worker.origin !== env.WORKER_URL ||
+        worker.username ||
+        worker.password
+      )
+        throw new Error();
+    } catch {
+      issues.push("WORKER_URL:https_origin_required");
+    }
+    if (env.DATABASE_SSL !== "verify-full") issues.push("DATABASE_SSL:verify_full_required");
     if (env.BETTER_AUTH_URL !== env.APP_URL) issues.push("BETTER_AUTH_URL:must_match_app_url");
     if ((env.BETTER_AUTH_SECRET?.length ?? 0) < 32)
       issues.push("BETTER_AUTH_SECRET:at_least_32_characters");

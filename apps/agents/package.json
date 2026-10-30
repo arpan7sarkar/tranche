@@ -9,7 +9,7 @@
     "./money": "./src/money/index.ts"
   },
   "scripts": {
-    "dev": "render workflows dev -- tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsdown",
     "start": "node dist/index.mjs",
     "deploy:check": "tsx scripts/deploy-check.ts",
@@ -21,7 +21,6 @@
     "consume:local": "node --env-file-if-exists=../../.env --import=tsx src/agents/local-loop.ts"
   },
   "dependencies": {
-    "@renderinc/sdk": "1.2.0",
     "@tranche/agents": "workspace:*",
     "@tranche/contracts": "workspace:*",
     "@tranche/core": "workspace:*",
@@ -29,6 +28,7 @@
     "@tranche/paypal": "workspace:*",
     "@tranche/verifiers": "workspace:*",
     "drizzle-orm": "0.45.4",
+    "pg-boss": "12.38.0",
     "playwright": "1.64.0",
     "zod": "4.6.5"
   },

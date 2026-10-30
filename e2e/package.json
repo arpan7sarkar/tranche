@@ -9,7 +9,6 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@renderinc/sdk": "1.2.0",
     "@tranche/agents": "workspace:*",
     "@tranche/agents-service": "workspace:*",
     "@tranche/contracts": "workspace:*",

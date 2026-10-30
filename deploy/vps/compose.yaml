@@ -1,0 +1,78 @@
+name: tranche-vps
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tranche
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a random URL-safe password}
+      POSTGRES_DB: tranche
+    entrypoint: ["bash", "/etc/tranche/tls-entrypoint.sh"]
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/var/lib/postgresql/server.crt", "-c", "ssl_key_file=/var/lib/postgresql/server.key", "-c", "hba_file=/etc/tranche/pg_hba.conf"]
+    ports:
+      - "${DB_BIND_ADDRESS:-127.0.0.1}:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./tls:/run/tranche-tls:ro
+      - ./tls-entrypoint.sh:/etc/tranche/tls-entrypoint.sh:ro
+      - ./pg_hba.conf:/etc/tranche/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tranche -d tranche"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    build: { context: ../.., dockerfile: deploy/vps/Dockerfile }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://tranche:${POSTGRES_PASSWORD}@postgres:5432/tranche
+      DATABASE_SSL: verify-full
+      DATABASE_CA_FILE: /run/tranche-tls/server.crt
+    volumes:
+      - ./tls/server.crt:/run/tranche-tls/server.crt:ro
+    command: ["node", "packages/db/node_modules/tsx/dist/cli.mjs", "packages/db/scripts/migrate-deploy.ts"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [maintenance]
+  worker:
+    build: { context: ../.., dockerfile: deploy/vps/Dockerfile }
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 40s
+    env_file: .env
+    environment:
+      TRANCHE_DEPLOYMENT: "1"
+      DATABASE_URL: postgres://tranche:${POSTGRES_PASSWORD}@postgres:5432/tranche
+      DATABASE_SSL: verify-full
+      DATABASE_CA_FILE: /run/tranche-tls/server.crt
+      WORKER_MODE: ${WORKER_MODE:-health}
+      PAYPAL_ENV: sandbox
+      PAYPAL_API_BASE: https://api-m.sandbox.paypal.com
+      HOLD_MECHANISM: authorization
+      SUBCONTRACTOR_SPLIT: agency_pays
+      PORT: "8080"
+    volumes:
+      - ./tls/server.crt:/run/tranche-tls/server.crt:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/status',{headers:{authorization:'Bearer '+process.env.WORKER_TOKEN},signal:AbortSignal.timeout(5000)}).then(async r=>{if(!r.ok||!(await r.json()).ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      WORKER_HOST: ${WORKER_HOST:?Set the worker DNS hostname}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [worker]
+volumes:
+  pgdata:
+  caddydata:
+  caddyconfig:

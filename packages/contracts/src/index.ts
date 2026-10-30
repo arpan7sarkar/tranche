@@ -16,3 +16,4 @@ export * from "./sandbox-maintenance";
 export * from "./sandbox-onboarding";
 export * from "./sandbox-protection";
 export * from "./states";
+export * from "./worker";

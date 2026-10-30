@@ -15,7 +15,6 @@
     "@base-ui/react": "1.9.0",
     "@bryntum/gantt": "npm:@bryntum/gantt-trial@7.3.7",
     "@paypal/paypal-js": "11.2.1",
-    "@renderinc/sdk": "1.2.0",
     "@tranche/agents": "workspace:*",
     "@tranche/agents-service": "workspace:*",
     "@tranche/contracts": "workspace:*",

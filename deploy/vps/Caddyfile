@@ -1,0 +1,6 @@
+{$WORKER_HOST} {
+  request_body {
+    max_size 16KB
+  }
+  reverse_proxy worker:8080
+}

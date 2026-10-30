@@ -8,10 +8,10 @@
 
 ## Stack
 - TypeScript everywhere, pnpm workspaces + Turborepo.
-- `apps/web` Next.js App Router, `apps/agents` Render Workflows TypeScript SDK.
+- `apps/web` Next.js App Router on Vercel, `apps/agents` PostgreSQL-backed workers on a VPS.
 - `packages/{contracts,core,paypal,db,agents,verifiers}`.
 - Postgres + Drizzle, Gemini via Vercel AI SDK (OpenAI only as fallback), Bryntum Gantt, AG Grid Studio.
-- Hosting on Render (web, workflows, cron, Postgres).
+- Hosting on Vercel (Next.js UI/API) and a VPS (workers, scheduling, Postgres); no Render dependency.
 
 ## Package Manager
 Use **pnpm** (version pinned in root `package.json`): `pnpm install`, `pnpm dev`, `pnpm dev:agents`, `pnpm db:up`.

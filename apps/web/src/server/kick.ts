@@ -1,14 +1,14 @@
 import "server-only";
-import { Render } from "@renderinc/sdk";
+import { launch } from "@tranche/agents-service/launch";
+import { after } from "next/server";
 
-let render: Render | undefined;
-
-// Best effort: the every-minute cron runs the money tick anyway, this only shortens the wait.
+// A persisted inbox/outbox and VPS schedule recover missed wakeups.
 export function kickMoneyTick(): void {
-  const slug = process.env.RENDER_WORKFLOW_SLUG;
-  if (!slug || !process.env.RENDER_API_KEY) return;
-  render ??= new Render();
-  render.workflows.startTask(`${slug}/moneyTick`, []).catch((err: unknown) => {
-    console.error("kickMoneyTick failed", err);
+  after(async () => {
+    try {
+      await launch("moneyTick", [], `wake:${Math.floor(Date.now() / 10_000)}`, async () => {});
+    } catch {
+      console.info("money_tick_wakeup_deferred");
+    }
   });
 }

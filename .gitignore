@@ -17,3 +17,5 @@ next-env.d.ts
 npm-debug.log*
 .pnpm-debug.log*
 .vercel
+deploy/vps/tls/
+deploy/vps/backups/

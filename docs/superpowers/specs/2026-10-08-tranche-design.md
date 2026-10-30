@@ -2,6 +2,8 @@
 
 Date: 2026-10-08
 Status: Draft, awaiting review
+Hosting update, 2026-10-30: the user selected Vercel for the complete Next.js application and a VPS for PostgreSQL, workers, and scheduling.
+The Render architecture below is historical; the implemented replacement and operational constraints are documented in `docs/deployment.md` from the repository root.
 Event: PayPal AI Hackathon (paypalaihackathon.devpost.com), submissions close 2026-11-12 12:00 PT.
 
 ## 1. Summary

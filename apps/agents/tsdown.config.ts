@@ -1,8 +1,8 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/cron-tick.ts", "src/cron-reconcile.ts"],
+  entry: ["src/index.ts"],
   platform: "node",
   format: "esm",
-  deps: { alwaysBundle: [/^@tranche\//], neverBundle: ["playwright"] },
+  deps: { alwaysBundle: [/^@tranche\//], neverBundle: ["playwright", "pg-boss"] },
 });

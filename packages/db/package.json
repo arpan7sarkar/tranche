@@ -12,6 +12,7 @@
     "test": "vitest run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "tsx scripts/migrate-deploy.ts",
     "db:migrate:test": "tsx scripts/migrate-test.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx --env-file-if-exists=../../.env src/seed.ts"

@@ -7,7 +7,7 @@ This document proposes bounded stages; approval applies only after the operator 
 
 ## Required private record
 
-Record the reviewed commit, public app origin, workflow slug, sandbox application identity, partner identity if applicable, distinct buyer and seller identities, country, and USD currency.
+Record the reviewed commit, Vercel app origin, VPS worker origin, sandbox application identity, partner identity if applicable, distinct buyer and seller identities, country, and USD currency.
 Store credentials, raw provider responses, portal URLs, merchant IDs, and request IDs only in an access-controlled private record, such as ignored `.sandbox-private/phase9/`.
 Publish only redacted observations and outcome summaries.
 Verify `PAYPAL_ENV=sandbox` and the sandbox API base on web and workflow before any operation.
@@ -62,8 +62,8 @@ Refund validation needs a separate reviewed execution path and allowance; the de
 Do not invent a new operation ID or retry a creation blindly after a timeout.
 The broad `test:sandbox` suite is excluded from this allowance because it can create multiple independent payments.
 Its separate allowance must enumerate the selected tests and cumulative exposure before enabling `RUN_PAYPAL_SANDBOX_TEST=1`.
-Keep `TRANCHE_CRON_MODE=health` until background processing is explicitly included in the approved run.
-Webhook and web-triggered tasks may still process payments in health mode, so cron mode is not a global payment stop switch.
+Keep `WORKER_MODE=health` until background processing is explicitly included in the approved run.
+This pauses domain jobs in the VPS worker, but synchronous web routes and already-running operations still require explicit control.
 
 ## Observation ledger
 

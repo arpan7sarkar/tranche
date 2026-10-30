@@ -1,37 +1,40 @@
 import { afterEach, expect, it, vi } from "vitest";
-
-const startTask = vi.hoisted(() => vi.fn());
-vi.mock("@renderinc/sdk", () => ({
-  Render: class {
-    workflows = { startTask };
-  },
-}));
-
 import { launch } from "./launch";
 
 afterEach(() => {
   vi.unstubAllEnvs();
-  vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
-it("uses the same task identity when launching remotely", async () => {
-  vi.stubEnv("RENDER_WORKFLOW_SLUG", "agents");
-  vi.stubEnv("RENDER_API_KEY", "test");
+it("submits a stable job identity to the authenticated VPS without redirects", async () => {
+  vi.stubEnv("WORKER_URL", "https://worker.example.com");
+  vi.stubEnv("WORKER_TOKEN", "s".repeat(32));
+  const request = vi.fn(async () => new Response(null, { status: 202 }));
+  vi.stubGlobal("fetch", request);
   const inline = vi.fn();
-  await launch("consume", ["monitor"], "stable-key", inline);
-  expect(startTask).toHaveBeenCalledWith("agents/consume", ["monitor"], {
-    idempotencyKey: "stable-key",
-  });
+  await launch("moneyTick", [], "same-key", inline);
+  expect(request).toHaveBeenCalledWith(
+    "https://worker.example.com/jobs",
+    expect.objectContaining({
+      redirect: "error",
+      body: JSON.stringify({ task: "moneyTick", args: [], key: "same-key" }),
+    }),
+  );
   expect(inline).not.toHaveBeenCalled();
 });
-it("allows explicit local execution but refuses partial remote configuration", async () => {
-  vi.stubEnv("RENDER_WORKFLOW_SLUG", "");
-  vi.stubEnv("RENDER_API_KEY", "");
-  vi.stubEnv("NODE_ENV", "test");
-  const inline = vi.fn();
-  await launch("consume", [], "local-key", inline);
-  expect(inline).toHaveBeenCalledOnce();
-  vi.stubEnv("RENDER_WORKFLOW_SLUG", "agents");
-  await expect(launch("consume", [], "key", inline)).rejects.toThrow(
-    "incomplete_workflow_configuration",
+it("fails closed in production without worker configuration", async () => {
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("WORKER_URL", "");
+  vi.stubEnv("WORKER_TOKEN", "");
+  await expect(launch("moneyTick", [], "key", vi.fn())).rejects.toThrow(
+    "worker_configuration_required",
   );
+});
+it("permits local fallback but never arbitrary remote task names", async () => {
+  vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("WORKER_URL", "");
+  vi.stubEnv("WORKER_TOKEN", "");
+  const inline = vi.fn();
+  await launch("moneyTick", [], "key", inline);
+  expect(inline).toHaveBeenCalledOnce();
+  await expect(launch("reconcile", [], "key", inline)).rejects.toThrow();
 });

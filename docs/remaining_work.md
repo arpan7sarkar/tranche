@@ -7,6 +7,8 @@ Lane H is merged; Lane E runtime, planner, verification, and negotiation are imp
 ## Current checkpoint
 
 Phases 0 through 7 are complete for their local implementation and offline verification scope.
+The October 30 hosting change replaces Render with the full Next.js application on Vercel and PostgreSQL, background workers, and scheduling on a VPS.
+Current deployment instructions are in `docs/deployment.md`; earlier Render verification records below are historical and do not describe the active runtime.
 26 of the 33 tracked tasks are complete locally, including E5-02 deployment implementation.
 E5-05 has local CI and smoke tooling; deployed evidence remains pending.
 SBX-01 has a proposed run sheet but still needs concrete identities, an attempt-counting mechanism, and an executable refund-validation path before approval.
@@ -133,11 +135,29 @@ Starting fake-model and eval foundations in Phase 2 does not complete E5-01 or E
 Bring the email foundation forward from Phase 6 only if an earlier flow requires it, and record that dependency explicitly.
 Phase 8 prepares deployment; record provider readiness and any release approval required before publishing changes.
 Earlier slice results remain in the [slice 1 record](phase-1-slice-1-record.md) and [slice 2 record](phase-1-slice-2-record.md).
-The Phase 8 deployment code and runbooks are prepared and locally tested; real Render readiness is not yet demonstrated.
+The Phase 8 deployment code and runbooks target Vercel and a VPS; remote deployment readiness is not yet demonstrated.
 Phase 9 execution and Phase 10 release review remain pending.
 See [deployment instructions](deployment.md) and the [proposed sandbox run sheet](paypal/phase-9-run-sheet.md).
 
 ### Phase 8 local verification
+
+The October 30 Vercel/VPS migration replaces Render task dispatch with authenticated worker wakeups and a PostgreSQL-backed pg-boss queue.
+Its initial full regression run passed 1,149 tests with eight opt-in skips, and all ten fake-provider Playwright journeys passed.
+Additional tests cover queue retry fencing, serverless event polling, and deployment configuration.
+The final full regression pass ran 1,154 passing tests with eight opt-in skips; three subsequent database TLS regression tests also passed separately.
+All nine workspace typechecks passed after the TLS fix.
+The Linux Docker image built successfully, including Chromium, and a non-root browser produced a screenshot with container networking disabled.
+The supplied Compose PostgreSQL entrypoint, verified-TLS migration command, and worker startup passed in an isolated local deployment fixture.
+The live local worker returned healthy schema status, rejected unauthenticated requests with 401, rejected job submissions in health mode with 503, and recorded a scheduled minute health job.
+An end-to-end TLS check exposed an IP-hostname verification gap; the fix requires DNS hostnames, pins server identity, and rejects SSL connection-string overrides.
+The corrected client connected using the trusted certificate and rejected a mismatched certificate hostname.
+The migration container uses the installed Node/tsx entrypoint directly, avoiding package-manager downloads or dependency installation during deployment.
+See [Vercel/VPS verification](vercel-vps-verification.md) for commands and remaining remote checks.
+No Vercel project or remote VPS has been provisioned by this work.
+Queue delivery is at least once, with payment correctness still enforced by the existing inbox, outbox, policy engine, and request identities.
+Database TLS, firewall/egress configuration, credentials, remote smoke tests, backups, dependency audit review, and real sandbox evidence remain deployment gates.
+
+The following October 29 results describe the superseded Render preparation.
 
 The October 29 run passed 1,146 tests with eight opt-in skips: six real PayPal cases and two screenshot cases.
 Three Blueprint invariant tests added after that full run also passed separately, and all eight deployment config/cron tests were rerun successfully after the active-mode health change.
@@ -171,7 +191,7 @@ Do not confuse the October 12 F0 authorization capture with proof that onboardin
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
 | E1-01 | Complete locally | Build `packages/agents` model routing, structured outputs, untrusted-input wrapper, read-only tools, and a stable database-free decision boundary (`decideAction`); domain functions such as `draftPlan` follow in their owning phases | Schema tests reject malformed output and hostile brief content cannot become instructions or invoke money tools |
-| E1-02 | Complete locally | Add the proposal writer and Render Workflows consumers in `apps/agents`, using the current DB and money service contracts | Duplicate event delivery makes at most one logical proposal and every resource belongs to the deal |
+| E1-02 | Complete locally | Add the proposal writer and durable VPS consumers in `apps/agents`, using the current DB and money service contracts | Duplicate event delivery makes at most one logical proposal and every resource belongs to the deal |
 | E1-03 | Complete locally | Implement planner constraints, dependency validation, priced milestones, acceptance criteria, and a draft-plan API | Unit tests and a brief-to-plan integration case cover invalid budgets, cycles, dates, and a valid saved draft |
 | E1-04 | Complete locally | Connect the authenticated agency brief flow to plan review and the existing Gantt, with empty, loading, failure, light, and dark states | A member can create and edit a draft through the UI; unauthenticated and cross-workspace calls fail |
 
@@ -209,7 +229,7 @@ The verifier may use delivery notes for context but cannot turn them into machin
 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
-| E4-01 | Complete locally | Add read-only slip/risk detectors and `assessDeal`, with typed monitor proposals and Render consumers | Deterministic schedule changes remain in existing money handlers; duplicate monitor jobs do not multiply actions |
+| E4-01 | Complete locally | Add read-only slip/risk detectors and `assessDeal`, with typed monitor proposals and durable consumers | Deterministic schedule changes remain in existing money handlers; duplicate monitor jobs do not multiply actions |
 | E4-02 | Complete locally | Add durable email notification jobs for approval, plan sent, and funding requested events, with recipient checks and private fresh portal links | Retries, expiry, and provider uncertainty are tested; no magic-link token appears in an event payload or logs |
 | E4-03 | Complete locally | Add workspace-scoped dashboard APIs, AG Grid Studio views, and a read-only model proxy | Role and workspace isolation, empty/loading/error states, and currency-separated totals are verified |
 
@@ -221,7 +241,7 @@ For `milestone.funding_requested`, consume `{ orderId, approveUrl, title }` and 
 | ID | Status | Work and deliverable | Completion evidence |
 | --- | --- | --- | --- |
 | E5-01 | Complete locally | Create a replay-first eval harness and cases for planner, verifier, negotiator, and monitor, including the six demo regressions | Critical safety cases all pass; target scores from the E5 plan are planner 0.80, verifier 1.00, negotiator 0.75, monitor 0.75 without weakening cases |
-| E5-02 | Complete locally | Wire the existing `MONEY_TICK_TASKS`, `RECONCILE_TASK`, and `MONEY_HANDLERS` into health-checked Render cron entry points and a deploy blueprint | Local cron tests pass with models off; Blueprint and build checks pass; actual Render execution remains unverified |
+| E5-02 | Complete locally | Wire the existing money and agent schedules into durable VPS jobs, with worker health checks and Vercel/VPS deployment configuration | Queue, transport, and deployment tests pass locally; actual remote execution remains unverified |
 | E5-03 | Complete locally | Build isolated fake PayPal, GitHub, model, and email fixtures plus a complete seed for the slip journey | A sent and agreed deal starts with design at D(7) for 5 days, build at D(12) for 5 days, milestone D(7)-D(17), funding Due D(4); moving design to D(14) yields build D(19), milestone D(14)-D(24), funding Due D(11), including after reload |
 | E5-04 | Complete locally | Add Playwright happy, rejected-delivery, and slip-and-replan journeys using actual manual-delivery UI hooks | Tests use `delivery-notes-input`, `delivery-pending-<key>`, `delivery-failed-<key>`, `resubmit-delivery-<key>`, and `delivery-via-pr-<key>` and pass locally |
 | E5-05 | Local CI configured; deployment pending | Add eval and end-to-end CI jobs, deployment smoke tests, and runnable setup and submission instructions | CI runs rather than skips expected suites; deployed smoke test records app, agent, cron, DB, and webhook readiness |
