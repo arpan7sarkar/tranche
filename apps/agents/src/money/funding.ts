@@ -111,7 +111,11 @@ export async function startFunding(
         returnUrl: input.returnUrl,
         cancelUrl: input.cancelUrl,
       };
-      const requestId = `create-funding:${milestone.id}:${holds.length}`;
+
+      // All concurrent callers for the same milestone must share one durable creation attempt.
+      // Using the milestone as the identity keeps the request stable across scheduler and portal
+      // triggers, while still allowing retries to reuse the same frozen intent.
+      const requestId = `create-funding:${milestone.id}`;
       await enqueueOutbox(tx, { kind: "create_funding_order", request, requestId }, input.now);
       const [intent] = await tx
         .select()
