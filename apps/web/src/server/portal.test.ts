@@ -1,7 +1,7 @@
 import { planVersion } from "@tranche/core";
 import { createDb, type Db, migrateDb, schema } from "@tranche/db";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agreeFromPortal,
   setAutoRelease,
@@ -22,6 +22,7 @@ describe.runIf(Boolean(url))("portal actions", { timeout: 20_000 }, () => {
   afterAll(async () => {
     await db.$client.end();
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   it("refuses a milestone that is not ready or belongs to another deal", async () => {
     const { deal, milestones } = await createDeal(db, { milestones: 1 });
@@ -40,6 +41,7 @@ describe.runIf(Boolean(url))("portal actions", { timeout: 20_000 }, () => {
   });
 
   it("submits exactly one release of the held amount under concurrent clicks", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const { deal, milestones } = await createDeal(db, { milestones: 1 });
     const m = one(milestones);
     await db
@@ -66,6 +68,7 @@ describe.runIf(Boolean(url))("portal actions", { timeout: 20_000 }, () => {
   });
 
   it("lets the client retry after a release fails", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const { deal, milestones } = await createDeal(db, { milestones: 1 });
     const m = one(milestones);
     await db
@@ -86,6 +89,7 @@ describe.runIf(Boolean(url))("portal actions", { timeout: 20_000 }, () => {
   });
 
   it("refuses to agree to a plan that changed since the client loaded it", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const { deal, milestones } = await createDeal(db, { milestones: 2 });
     await db.update(schema.deal).set({ status: "sent" }).where(eq(schema.deal.id, deal.id));
     const seen = planVersion("USD", milestones);
@@ -108,6 +112,7 @@ describe.runIf(Boolean(url))("portal actions", { timeout: 20_000 }, () => {
   });
 
   it("gives client-side agents no release authority when auto-release is turned on", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const { deal } = await createDeal(db, { milestones: 1 });
     const policy = await setAutoRelease(db, { dealId: deal.id, hours: 72 });
     expect(policy).toMatchObject({

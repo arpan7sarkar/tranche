@@ -23,6 +23,13 @@ export type RequestOptions = {
 
 const TIMEOUT_MS = 20_000;
 const REFRESH_MARGIN_MS = 60_000;
+const SANDBOX_BASE_URL = "https://api-m.sandbox.paypal.com";
+
+function sandboxBaseUrl(baseUrl: string): string {
+  if (baseUrl !== SANDBOX_BASE_URL && baseUrl !== `${SANDBOX_BASE_URL}/`)
+    throw new Error("Tranche runs against the PayPal sandbox only");
+  return SANDBOX_BASE_URL;
+}
 
 export function authAssertion(clientId: string, merchantId: string): string {
   const enc = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64");
@@ -39,19 +46,24 @@ function parse(text: string): unknown {
 }
 
 export function createTransport(config: PayPalConfig) {
+  const baseUrl = sandboxBaseUrl(config.baseUrl);
   let cached: { token: string; expiresAt: number } | null = null;
   let inflight: Promise<string> | null = null;
 
   async function send(url: string, init: RequestInit): Promise<Response> {
     try {
-      return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      return await fetch(url, {
+        ...init,
+        redirect: "error",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
     } catch (cause) {
       throw networkError(cause);
     }
   }
 
   async function fetchToken(): Promise<string> {
-    const res = await send(`${config.baseUrl}/v1/oauth2/token`, {
+    const res = await send(`${baseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`,
@@ -92,7 +104,7 @@ export function createTransport(config: PayPalConfig) {
 
     const qs = opts.query ? `?${new URLSearchParams(opts.query)}` : "";
     await opts.beforeDispatch?.();
-    const res = await send(`${config.baseUrl}${opts.path}${qs}`, {
+    const res = await send(`${baseUrl}${opts.path}${qs}`, {
       method: opts.method,
       headers,
       body,
@@ -113,14 +125,12 @@ export function createTransport(config: PayPalConfig) {
 
 export type Transport = ReturnType<typeof createTransport>;
 
-const LIVE_HOSTS = new Set(["api-m.paypal.com", "api.paypal.com"]);
-
 export function payPalConfigFromEnv(
   env: Record<string, string | undefined> = process.env,
 ): PayPalConfig {
-  const baseUrl = env.PAYPAL_API_BASE || "https://api-m.sandbox.paypal.com";
-  if (LIVE_HOSTS.has(new URL(baseUrl).hostname))
+  if (env.PAYPAL_ENV !== undefined && env.PAYPAL_ENV !== "sandbox")
     throw new Error("Tranche runs against the PayPal sandbox only");
+  const baseUrl = sandboxBaseUrl(env.PAYPAL_API_BASE || SANDBOX_BASE_URL);
   const clientId = env.PAYPAL_CLIENT_ID;
   const clientSecret = env.PAYPAL_CLIENT_SECRET;
   if (!clientId || !clientSecret)

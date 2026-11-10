@@ -3,6 +3,10 @@ import { fileURLToPath } from "node:url";
 import { appEnv } from "../support/environment";
 
 const env: NodeJS.ProcessEnv = { ...process.env, ...appEnv, NODE_ENV: "production" };
+const guardPath = fileURLToPath(
+  new URL("../support/network-guard.cjs", import.meta.url),
+).replaceAll("\\", "/");
+env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ""} --require "${guardPath}"`;
 async function run(args: string[]) {
   const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   const child = spawn(command, args, {
@@ -34,9 +38,5 @@ if (
   build = await run(["--filter", "@tranche/web", "build"]);
 }
 if (build.code !== 0) process.exit(build.code ?? 1);
-const guardPath = fileURLToPath(
-  new URL("../support/network-guard.cjs", import.meta.url),
-).replaceAll("\\", "/");
-env.NODE_OPTIONS = `${process.env.NODE_OPTIONS ?? ""} --require "${guardPath}"`;
 const server = await run(["--filter", "@tranche/web", "start", "--port", "3100"]);
 process.exit(server.code ?? 1);

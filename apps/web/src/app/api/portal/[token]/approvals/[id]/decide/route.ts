@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { decideApproval } from "@/server/approvals";
 import { getDb } from "@/server/db";
+import { withWebMoneyGate } from "@/server/money-gate";
 import { resolvePortalToken } from "@/server/portal";
 
 const Body = z.object({ decision: z.enum(["approved", "rejected"]) });
 
-export async function POST(
+export const POST = withWebMoneyGate(async function POST(
   request: Request,
   ctx: RouteContext<"/api/portal/[token]/approvals/[id]/decide">,
 ) {
@@ -21,4 +22,4 @@ export async function POST(
   });
   const status = result === "decided" ? 200 : result === "already_decided" ? 409 : 404;
   return Response.json({ result }, { status });
-}
+});

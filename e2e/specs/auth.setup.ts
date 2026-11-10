@@ -1,7 +1,7 @@
-import { createDb, schema } from "@tranche/db";
+import { schema } from "@tranche/db";
 import { eq } from "drizzle-orm";
 import { expect, test } from "../support/browser";
-import { databaseUrl } from "../support/environment";
+import { openFixtureDb } from "../support/database";
 import { AGENCY, readState } from "../support/state";
 
 test("create an agency session through Better Auth", async ({ request, baseURL }) => {
@@ -11,7 +11,7 @@ test("create an agency session through Better Auth", async ({ request, baseURL }
   });
   expect(signup.ok()).toBe(true);
   const body = (await signup.json()) as { user: { id: string } };
-  const db = createDb(databaseUrl);
+  const db = await openFixtureDb();
   try {
     await db.delete(schema.workspaceMember).where(eq(schema.workspaceMember.userId, body.user.id));
     await db

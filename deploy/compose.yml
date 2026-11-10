@@ -1,0 +1,80 @@
+name: ${TRANCHE_PROJECT_NAME:?Set a unique project name after collision checks}
+
+services:
+  postgres:
+    profiles: [database]
+    image: ${TRANCHE_POSTGRES_IMAGE:?Set an approved Postgres image reference}
+    pull_policy: never
+    cpus: ${TRANCHE_POSTGRES_CPUS:-0.75}
+    mem_limit: ${TRANCHE_POSTGRES_MEMORY:-512m}
+    memswap_limit: ${TRANCHE_POSTGRES_MEMORY:-512m}
+    pids_limit: ${TRANCHE_POSTGRES_PIDS:-128}
+    environment:
+      POSTGRES_USER: tranche
+      POSTGRES_DB: tranche
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U tranche -d tranche"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: "no"
+
+  tranche-web:
+    profiles: [web]
+    image: ${TRANCHE_WEB_IMAGE:?Set an approved web image reference}
+    pull_policy: never
+    cpus: ${TRANCHE_WEB_CPUS:-0.5}
+    mem_limit: ${TRANCHE_WEB_MEMORY:-512m}
+    memswap_limit: ${TRANCHE_WEB_MEMORY:-512m}
+    pids_limit: ${TRANCHE_WEB_PIDS:-128}
+    command: ["node", "--env-file=/run/secrets/web_env", "apps/web/server.js"]
+    environment:
+      PAYPAL_ENV: sandbox
+      WEB_MONEY_ENABLED: ${TRANCHE_WEB_MONEY_ENABLED:-false}
+    secrets: [web_env]
+    networks: [database, proxy]
+    restart: "no"
+
+  scheduler:
+    profiles: [scheduler]
+    image: ${TRANCHE_SCHEDULER_IMAGE:?Set an approved scheduler image reference}
+    pull_policy: never
+    cpus: ${TRANCHE_SCHEDULER_CPUS:-1.0}
+    mem_limit: ${TRANCHE_SCHEDULER_MEMORY:-768m}
+    memswap_limit: ${TRANCHE_SCHEDULER_MEMORY:-768m}
+    pids_limit: ${TRANCHE_SCHEDULER_PIDS:-256}
+    command: ["node", "--env-file=/run/secrets/scheduler_env", "apps/agents/dist/vps/index.mjs"]
+    environment:
+      PAYPAL_ENV: sandbox
+      VPS_MONEY_ENABLED: ${TRANCHE_VPS_MONEY_ENABLED:-0}
+    secrets: [scheduler_env]
+    networks: [database, egress]
+    init: true
+    stop_grace_period: 45s
+    restart: "no"
+
+networks:
+  database:
+    internal: true
+  egress: {}
+  proxy:
+    external: true
+    name: proxy
+
+volumes:
+  postgres_data:
+
+secrets:
+  postgres_password:
+    file: ${TRANCHE_POSTGRES_PASSWORD_FILE:?Set an absolute path to the local password file}
+  web_env:
+    file: ${TRANCHE_WEB_ENV_FILE:?Set an absolute path to the web runtime secret file}
+  scheduler_env:
+    file: ${TRANCHE_SCHEDULER_ENV_FILE:?Set an absolute path to the scheduler runtime secret file}

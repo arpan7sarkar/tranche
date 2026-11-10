@@ -25,9 +25,22 @@ export function startStagingSite(port: number) {
     res.writeHead(404, { "Content-Type": "text/plain" });
     res.end("Not found");
   });
-  return new Promise<{ close(): void }>((r) =>
-    server.listen(port, () => r({ close: () => server.close() })),
-  );
+  return new Promise<{ host: string; port: number; close(): Promise<void> }>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string")
+        return reject(new Error("staging_not_listening"));
+      resolve({
+        host: address.address,
+        port: address.port,
+        close: () =>
+          new Promise<void>((done, fail) =>
+            server.close((error) => (error ? fail(error) : done())),
+          ),
+      });
+    });
+  });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

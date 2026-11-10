@@ -17,7 +17,7 @@ jobs:
           POSTGRES_DB: tranche_p2_test
         ports: ["55432:5432"]
         options: >-
-          --health-cmd "pg_isready -U tranche -d tranche_p2_test" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -h 127.0.0.1 -U tranche -d tranche_p2_test" --health-interval 5s --health-timeout 5s --health-retries 10
       postgres:
         image: postgres:18
         env:
@@ -26,12 +26,14 @@ jobs:
           POSTGRES_DB: tranche
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U tranche" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -h 127.0.0.1 -U tranche" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://tranche:tranche@localhost:5432/tranche
       TEST_DATABASE_URL: postgres://tranche:tranche@localhost:55432/tranche_p2_test
     steps:
       - uses: actions/checkout@v7
+      - name: Validate inactive deployment configuration
+        run: node deploy/check-compose.mjs
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -47,10 +49,70 @@ jobs:
           -c "ALTER DATABASE tranche_p2_test SET tranche.test_fixture = 'tranche-f0-disposable-v1'"
       - run: pnpm --filter @tranche/db db:migrate:test
       - run: pnpm test
+      - name: Verify fake approval route against isolated PostgreSQL
+        run: RUN_FAKE_APPROVAL_ROUTE_TEST=1 pnpm --filter @tranche/web exec vitest run src/server/fake-approval-route.test.ts
       - name: Replay offline agent evaluations
         run: pnpm --filter @tranche/agents eval:offline
       - run: pnpm build
       - name: Install browser for isolated journeys
         run: pnpm --filter @tranche/e2e exec playwright install --with-deps chromium
       - name: Run journeys against local fake services
-        run: pnpm --filter @tranche/e2e test:e2e
+        run: env -u DATABASE_URL -u TEST_DATABASE_URL pnpm --filter @tranche/e2e test:e2e
+
+  web-image:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build web image once
+        run: docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t tranche-web-ci .
+      - name: Smoke-test the built image without network access
+        run: |
+          image_id=$(docker image inspect --format '{{.Id}}' tranche-web-ci)
+          trap 'docker rm -f tranche-web-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d --name tranche-web-smoke --network none "$image_id"
+          docker exec tranche-web-smoke node -e '
+            const http = require("node:http");
+            let attempts = 0;
+            function check() {
+              const request = http.get("http://127.0.0.1:3000/", response => {
+                response.resume();
+                if (response.statusCode >= 300 && response.statusCode < 400) process.exit(0);
+                process.exit(1);
+              });
+              request.on("error", () => {
+                if (++attempts >= 30) process.exit(1);
+                setTimeout(check, 1000);
+              });
+            }
+            check();
+          '
+
+  runtime-images:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build scheduler and migration images once
+        run: |
+          docker build -f Dockerfile.runtime --target runtime --label "org.opencontainers.image.revision=$GITHUB_SHA" -t tranche-scheduler-ci .
+          docker build -f Dockerfile.runtime --target migrate --label "org.opencontainers.image.revision=$GITHUB_SHA" -t tranche-migration-ci .
+      - name: Inspect scheduler image without starting jobs
+        run: |
+          image_id=$(docker image inspect --format '{{.Id}}' tranche-scheduler-ci)
+          docker run --rm --network none --entrypoint node "$image_id" --check /app/apps/agents/dist/vps/index.mjs
+          docker run --rm --network none --entrypoint node "$image_id" --check /app/apps/agents/dist/vps/job.mjs
+      - name: Inspect migration image without running migrations
+        run: |
+          image_id=$(docker image inspect --format '{{.Id}}' tranche-migration-ci)
+          docker run --rm --network none --entrypoint node "$image_id" -e '
+            const fs = require("node:fs");
+            for (const path of ["/app/packages/db/drizzle.config.ts", "/app/packages/db/drizzle/meta/_journal.json"]) fs.accessSync(path);
+            const journal = JSON.parse(fs.readFileSync("/app/packages/db/drizzle/meta/_journal.json", "utf8"));
+            if (!journal.entries.length) process.exit(1);
+            for (const entry of journal.entries) fs.accessSync(`/app/packages/db/drizzle/${entry.tag}.sql`);
+          '

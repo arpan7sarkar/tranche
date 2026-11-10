@@ -1,12 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
+import { openFixtureDb } from "./support/database";
 import { appEnv } from "./support/environment";
+
+const db = await openFixtureDb();
+await db.$client.end();
 export default defineConfig({
   testDir: "specs",
   timeout: 120_000,
   expect: { timeout: 45_000 },
   workers: 1,
   retries: 0,
-  globalSetup: "./scripts/global-setup.ts",
   use: { baseURL: appEnv.APP_URL, trace: "retain-on-failure", serviceWorkers: "block" },
   projects: [
     { name: "setup", testMatch: /.*\.setup\.ts/ },

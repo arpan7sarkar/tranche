@@ -4,6 +4,7 @@ import type { HoldMechanism } from "@tranche/contracts";
 import { type Db, schema, type Tx } from "@tranche/db";
 import { type PayPal, PayPalError } from "@tranche/paypal";
 import { and, eq } from "drizzle-orm";
+import { requireWebMoneyEnabled } from "./money-gate";
 
 export class FundingError extends Error {
   constructor(
@@ -25,6 +26,7 @@ async function orderStatus(paypal: Pick<PayPal, "getOrder">, orderId: string) {
 
 // Same row as H3's CHECKOUT.ORDER.APPROVED handler, so the browser callback and the webhook collapse onto one.
 export async function enqueuePlaceHold(db: Db | Tx, holdId: string): Promise<void> {
+  requireWebMoneyEnabled();
   await db
     .insert(schema.outbox)
     .values({ kind: "place_hold", request: { holdId }, requestId: `place:${holdId}` })
@@ -42,6 +44,7 @@ export async function startFunding(
     portalToken: string;
   },
 ): Promise<{ orderId: string; approveUrl: string | null }> {
+  requireWebMoneyEnabled();
   const [m] = await db
     .select({ state: schema.milestone.state })
     .from(schema.milestone)
@@ -75,6 +78,7 @@ export async function confirmApproval(
   paypal: Pick<PayPal, "getOrder">,
   input: { dealId: string; orderId: string },
 ): Promise<{ holdId: string }> {
+  requireWebMoneyEnabled();
   const [row] = await db
     .select({ hold: schema.hold })
     .from(schema.hold)

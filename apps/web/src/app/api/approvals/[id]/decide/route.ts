@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { decideApproval } from "@/server/approvals";
 import { getDb } from "@/server/db";
+import { withWebMoneyGate } from "@/server/money-gate";
 import { memberOrNull } from "@/server/session";
 
 const Body = z.object({ decision: z.enum(["approved", "rejected"]) });
 
-export async function POST(request: Request, ctx: RouteContext<"/api/approvals/[id]/decide">) {
+export const POST = withWebMoneyGate(async function POST(
+  request: Request,
+  ctx: RouteContext<"/api/approvals/[id]/decide">,
+) {
   const member = await memberOrNull(request);
   if (!member) return Response.json({ error: "unauthorized" }, { status: 401 });
   const parsed = Body.safeParse(await request.json().catch(() => null));
@@ -18,4 +22,4 @@ export async function POST(request: Request, ctx: RouteContext<"/api/approvals/[
   });
   const status = result === "decided" ? 200 : result === "already_decided" ? 409 : 404;
   return Response.json({ result }, { status });
-}
+});

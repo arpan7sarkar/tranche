@@ -2,9 +2,10 @@ import { resolveMagicLink } from "@tranche/db";
 import { PayPalError } from "@tranche/paypal";
 import { getDb } from "@/server/db";
 import { confirmApproval, FundingError } from "@/server/funding";
+import { requireWebMoneyEnabled, withWebMoneyGate } from "@/server/money-gate";
 import { getPayPal } from "@/server/paypal";
 
-export async function POST(
+export const POST = withWebMoneyGate(async function POST(
   _request: Request,
   ctx: RouteContext<"/api/portal/[token]/orders/[orderId]/approved">,
 ) {
@@ -12,6 +13,7 @@ export async function POST(
   const portal = await resolveMagicLink(getDb(), token);
   if (!portal || !/^[A-Z0-9]{8,40}$/.test(orderId))
     return Response.json({ error: "This link is invalid or has expired" }, { status: 404 });
+  requireWebMoneyEnabled();
   try {
     return Response.json(
       await confirmApproval(getDb(), getPayPal(), { dealId: portal.dealId, orderId }),
@@ -29,4 +31,4 @@ export async function POST(
       );
     throw err;
   }
-}
+});

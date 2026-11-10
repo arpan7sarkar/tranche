@@ -23,6 +23,11 @@ export async function startFakePayPal(opts: { port: number; webhookUrl: string }
   const captures = new Map<string, Record<string, unknown>>();
   const requests = new Map<string, { fingerprint: string; status: number; body: unknown }>();
   const identities = new WeakMap<ServerResponse, { key: string; fingerprint: string }>();
+  const fakeBase = () => {
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("fake_paypal_not_listening");
+    return `http://127.0.0.1:${address.port}`;
+  };
 
   const emit = (event_type: string, resource: Record<string, unknown>) =>
     fetch(opts.webhookUrl, {
@@ -33,7 +38,7 @@ export async function startFakePayPal(opts: { port: number; webhookUrl: string }
         "paypal-transmission-sig": "fake-signature",
         "paypal-transmission-time": new Date().toISOString(),
         "paypal-auth-algo": "SHA256withRSA",
-        "paypal-cert-url": "http://localhost:4010/fake-cert",
+        "paypal-cert-url": `${fakeBase()}/fake-cert`,
       },
       body: JSON.stringify({
         id: `WH-${randomUUID()}`,
@@ -127,7 +132,7 @@ export async function startFakePayPal(opts: { port: number; webhookUrl: string }
       order.links = [
         {
           rel: "approve",
-          href: `http://localhost:${opts.port}/approve/${order.id}`,
+          href: `${fakeBase()}/approve/${order.id}`,
           method: "GET",
         },
       ];
@@ -137,7 +142,7 @@ export async function startFakePayPal(opts: { port: number; webhookUrl: string }
         links: [
           {
             rel: "approve",
-            href: `http://localhost:${opts.port}/approve/${order.id}`,
+            href: `${fakeBase()}/approve/${order.id}`,
             method: "GET",
           },
         ],
@@ -258,15 +263,27 @@ export async function startFakePayPal(opts: { port: number; webhookUrl: string }
 
     if (path === "/v2/customer/partner-referrals") {
       return send(res, 201, {
-        links: [{ rel: "action_url", href: `http://localhost:${opts.port}/onboard` }],
+        links: [{ rel: "action_url", href: `${fakeBase()}/onboard` }],
       });
     }
 
     return send(res, 404, { name: "NOT_IMPLEMENTED_IN_FAKE", path });
   });
 
-  await new Promise<void>((r) => server.listen(opts.port, r));
-  return { close: () => new Promise<void>((r) => server.close(() => r())) };
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(opts.port, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("fake_paypal_not_listening");
+  return {
+    host: address.address,
+    port: address.port,
+    close: () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      ),
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

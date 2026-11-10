@@ -33,9 +33,13 @@ async function remoteStatus(paypal: PayPal, h: HoldRow): Promise<string | null> 
 const unreachable = (err: unknown) =>
   !(err instanceof PayPalError) || err.retryable || err.status === 401;
 
-export async function reconcile(
-  deps: Deps,
-): Promise<{ checked: number; mismatches: number; recovered: number }> {
+export async function reconcile(deps: Deps): Promise<{
+  checked: number;
+  mismatches: number;
+  recovered: number;
+  unavailable: number;
+  unknown: number;
+}> {
   const now = deps.now();
   const rows = await deps.db
     .select({
@@ -58,6 +62,7 @@ export async function reconcile(
 
   let checked = 0;
   let mismatches = 0;
+  let unknown = 0;
   const unreachableHolds: string[] = [];
   let lastError = "";
   for (const { hold, dealId, state, updatedAt } of rows) {
@@ -76,7 +81,11 @@ export async function reconcile(
       }
       theirs = `ERROR: ${errorMessage(err)}`;
     }
-    if (theirs === null || EXPECTED[hold.mechanism][hold.status]?.includes(theirs)) continue;
+    if (theirs === null) {
+      unknown++;
+      continue;
+    }
+    if (EXPECTED[hold.mechanism][hold.status]?.includes(theirs)) continue;
     mismatches++;
     if (await alreadyAlerted(deps, hold.id, theirs)) continue;
     await deps.db.transaction((tx) =>
@@ -152,7 +161,7 @@ export async function reconcile(
       }),
     );
   }
-  return { checked, mismatches, recovered };
+  return { checked, mismatches, recovered, unavailable: unreachableHolds.length, unknown };
 }
 
 // Replays what PayPal reports for a pending hold through the webhook path, so a lost

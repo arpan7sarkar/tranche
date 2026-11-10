@@ -1,6 +1,7 @@
 import { schema } from "@tranche/db";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/server/db";
+import { requireWebMoneyEnabled, withWebMoneyGate } from "@/server/money-gate";
 import { resolvePortalToken } from "@/server/portal";
 
 // End-to-end runs only: stands in for the buyer approving in PayPal's window, against E5's fake PayPal.
@@ -11,7 +12,7 @@ function fakePayPalBase(): string | null {
   return host === "paypal.com" || host.endsWith(".paypal.com") ? null : base;
 }
 
-export async function POST(
+export const POST = withWebMoneyGate(async function POST(
   _request: Request,
   ctx: RouteContext<"/api/portal/[token]/orders/[orderId]/fake-approve">,
 ) {
@@ -26,9 +27,10 @@ export async function POST(
     .innerJoin(schema.milestone, eq(schema.milestone.id, schema.hold.milestoneId))
     .where(and(eq(schema.hold.paypalOrderId, orderId), eq(schema.milestone.dealId, link.dealId)));
   if (!hold) return Response.json({ error: "not_found" }, { status: 404 });
+  requireWebMoneyEnabled();
   const res = await fetch(`${base}/__test/approve/${encodeURIComponent(orderId)}`, {
     method: "POST",
   });
   if (!res.ok) return Response.json({ error: "fake_paypal_failed" }, { status: 502 });
   return new Response(null, { status: 204 });
-}
+});

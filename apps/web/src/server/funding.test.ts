@@ -1,6 +1,6 @@
 import { createDb, type Db, migrateDb, schema } from "@tranche/db";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { confirmApproval, startFunding } from "./funding";
 import { createDeal, one } from "./test-fixtures";
 
@@ -15,6 +15,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   afterAll(async () => {
     await db.$client.end();
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   async function fundable() {
     const f = await createDeal(db, { milestones: 1 });
@@ -58,6 +59,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
       .where(eq(schema.outbox.requestId, `place:${holdId}`));
 
   it("BASE-01 commits the exact funding intent before calling PayPal", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const f = await fundable();
     const paypal = fakePayPal();
     paypal.createFundingOrder.mockImplementation(async () => {
@@ -78,6 +80,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   });
 
   it("refuses a milestone from another deal", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const a = await fundable();
     const b = await fundable();
     const paypal = fakePayPal();
@@ -88,6 +91,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   });
 
   it("refuses an order from another deal", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const a = await fundable();
     const b = await fundable();
     const paypal = fakePayPal();
@@ -101,6 +105,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   });
 
   it("enqueues place_hold once even when confirmed twice", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const f = await fundable();
     const paypal = fakePayPal();
     await startFunding(db, paypal, { ...base, ...f });
@@ -114,6 +119,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   });
 
   it("enqueues nothing when the order is not approved yet", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const f = await fundable();
     const paypal = fakePayPal("PAYER_ACTION_REQUIRED");
     await startFunding(db, paypal, { ...base, ...f });
@@ -125,6 +131,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   });
 
   it("confirms a completed order instead of creating a second one", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const f = await fundable();
     const paypal = fakePayPal("COMPLETED");
     await startFunding(db, paypal, { ...base, ...f });
@@ -142,6 +149,7 @@ describe.runIf(Boolean(url))("funding", { timeout: 20_000 }, () => {
   });
 
   it("replaces an expired order that was never paid", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const f = await fundable();
     const paypal = fakePayPal("PAYER_ACTION_REQUIRED");
     await startFunding(db, paypal, { ...base, ...f });
