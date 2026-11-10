@@ -13,9 +13,25 @@ export function createDb(url = process.env.DATABASE_URL) {
 export type Db = ReturnType<typeof createDb>;
 
 export async function migrateDb(db: Db) {
-  await migrate(db, {
-    migrationsFolder: join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle"),
-  });
+  // Drizzle's migrator checks the migration journal and applies missing migrations in a
+  // transaction, but concurrent test workers can both observe a migration as unapplied.
+  // Hold a database-scoped advisory lock on the very connection used by the migrator so
+  // multiple processes sharing a test database serialize this check-and-apply sequence.
+  const client = db.$client;
+  const connection = await client.reserve();
+  try {
+    await connection`select pg_advisory_lock(hashtext(current_database()), hashtext('tranche:drizzle:migrations'))`;
+    const migrationDb = drizzle(connection, { schema, casing: "snake_case" });
+    await migrate(migrationDb, {
+      migrationsFolder: join(dirname(fileURLToPath(import.meta.url)), "..", "drizzle"),
+    });
+  } finally {
+    try {
+      await connection`select pg_advisory_unlock(hashtext(current_database()), hashtext('tranche:drizzle:migrations'))`;
+    } finally {
+      connection.release();
+    }
+  }
 }
 
 export * from "./magic-links";
