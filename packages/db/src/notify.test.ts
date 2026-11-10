@@ -4,18 +4,19 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type Db, migrateDb, schema } from "./index";
 import { seed } from "./seed";
 
-const url = process.env.DATABASE_URL;
+const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 
 type Notified = { id: number; dealId: string | null; milestoneId: string | null; type: string };
 
 describe.runIf(Boolean(url))("event notify trigger", () => {
   let db: Db;
-  let listener: ReturnType<typeof postgres>;
+  let listener: ReturnType<typeof postgres> | undefined;
   let ids: Awaited<ReturnType<typeof seed>>;
   let milestoneId: string;
   const received: Notified[] = [];
 
   beforeAll(async () => {
+    if (!url) throw new Error("TEST_DATABASE_URL or DATABASE_URL is required");
     db = createDb(url);
     await migrateDb(db);
     ids = await seed(db);
@@ -24,13 +25,14 @@ describe.runIf(Boolean(url))("event notify trigger", () => {
       .from(schema.milestone)
       .where(eq(schema.milestone.dealId, ids.dealId));
     milestoneId = milestone?.id ?? "";
-    listener = postgres(url as string, { max: 1 });
+    listener = postgres(url, { max: 1 });
     await listener.listen("tranche_events", (payload) => {
       received.push(JSON.parse(payload) as Notified);
     });
   });
+
   afterAll(async () => {
-    await listener.end();
+    if (listener) await listener.end();
     await db.$client.end();
   });
 
