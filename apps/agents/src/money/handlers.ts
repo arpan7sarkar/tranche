@@ -3,11 +3,11 @@ import { reconcile } from "./reconcile";
 import { RECONCILE_TASK } from "./schedule";
 import { drainTicks } from "./tick";
 
-export const MONEY_HANDLERS: Record<string, () => Promise<void>> = {
+export const MONEY_HANDLERS = {
   async moneyTick() {
-    console.log(`moneyTick ${JSON.stringify(await drainTicks(getDeps()))}`);
+    return drainTicks(getDeps());
   },
   async [RECONCILE_TASK]() {
-    console.log(`reconcile ${JSON.stringify(await reconcile(getDeps()))}`);
+    return reconcile(getDeps());
   },
 };

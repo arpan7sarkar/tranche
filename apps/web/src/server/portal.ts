@@ -5,6 +5,7 @@ import { and, count, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
 import { getDb } from "./db";
 import * as money from "./money";
+import { requireWebMoneyEnabled } from "./money-gate";
 
 export type AutoReleaseHours = 24 | 72 | 168;
 export type ReleaseResult = "submitted" | "already_submitted" | "not_releasable";
@@ -105,6 +106,7 @@ export async function setAutoRelease(
   db: Db,
   input: { dealId: string; hours: AutoReleaseHours | null },
 ): Promise<Policy> {
+  if (input.hours !== null) requireWebMoneyEnabled();
   return db.transaction(async (tx) => {
     const [row] = await tx
       .select({ policy: schema.deal.clientPolicy })

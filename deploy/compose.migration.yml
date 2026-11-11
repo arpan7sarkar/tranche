@@ -1,0 +1,17 @@
+services:
+  migration:
+    profiles: [migration]
+    image: ${TRANCHE_MIGRATION_IMAGE:?Set an approved migration image reference}
+    pull_policy: never
+    cpus: ${TRANCHE_MIGRATION_CPUS:-0.5}
+    mem_limit: ${TRANCHE_MIGRATION_MEMORY:-384m}
+    memswap_limit: ${TRANCHE_MIGRATION_MEMORY:-384m}
+    pids_limit: ${TRANCHE_MIGRATION_PIDS:-96}
+    command: ["node", "--env-file=/run/secrets/migration_env", "/usr/local/bin/pnpm", "--filter", "@tranche/db", "db:migrate"]
+    secrets: [migration_env]
+    networks: [database]
+    restart: "no"
+
+secrets:
+  migration_env:
+    file: ${TRANCHE_MIGRATION_ENV_FILE:?Set an absolute path to the migration runtime secret file}

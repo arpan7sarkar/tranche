@@ -80,7 +80,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
@@ -100,11 +100,11 @@
   --color-tone-verifying: var(--tone-verifying);
   --color-tone-attention: var(--tone-attention);
   --color-tone-released: var(--tone-released);
-  --color-tone-danger: var(--tone-danger);
-  --font-sans: var(--font-instrument-sans);
-  --font-heading: var(--font-instrument-sans);
-  --font-serif: var(--font-instrument-serif);
-  --font-mono: var(--font-plex-mono);
+  --color-tone-danger: var(--destructive);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-heading: Arial, Helvetica, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

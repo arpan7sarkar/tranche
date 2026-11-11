@@ -3,9 +3,10 @@ import { PayPalError } from "@tranche/paypal";
 import { isUuid } from "@/lib/uuid";
 import { getDb } from "@/server/db";
 import { FundingError, startFunding } from "@/server/funding";
+import { requireWebMoneyEnabled, withWebMoneyGate } from "@/server/money-gate";
 import { appUrl, getPayPal, holdMechanism } from "@/server/paypal";
 
-export async function POST(
+export const POST = withWebMoneyGate(async function POST(
   _request: Request,
   ctx: RouteContext<"/api/portal/[token]/milestones/[milestoneId]/fund">,
 ) {
@@ -13,6 +14,7 @@ export async function POST(
   const portal = await resolveMagicLink(getDb(), token);
   if (!portal || !isUuid(milestoneId))
     return Response.json({ error: "This link is invalid or has expired" }, { status: 404 });
+  requireWebMoneyEnabled();
   try {
     return Response.json(
       await startFunding(getDb(), getPayPal(), {
@@ -33,4 +35,4 @@ export async function POST(
       );
     throw err;
   }
-}
+});

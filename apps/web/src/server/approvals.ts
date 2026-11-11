@@ -4,6 +4,7 @@ import { type Db, schema } from "@tranche/db";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { isUuid } from "@/lib/uuid";
 import type { DealView } from "./deals";
+import { requireWebMoneyEnabled } from "./money-gate";
 
 export type DecideResult = "decided" | "already_decided" | "not_found";
 
@@ -43,6 +44,7 @@ export async function decideApproval(
     );
   if (!row) return "not_found";
   if (row.decision) return "already_decided";
+  if (input.decision === "approved") requireWebMoneyEnabled();
 
   await recordDecision(db, input);
   // A concurrent decision can win between the check above and H3's locked write.

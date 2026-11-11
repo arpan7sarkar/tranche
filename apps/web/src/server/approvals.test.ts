@@ -1,6 +1,6 @@
 import { createDb, type Db, migrateDb, schema } from "@tranche/db";
 import { eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Decider, decideApproval } from "./approvals";
 import { addApproval, createDeal } from "./test-fixtures";
 
@@ -16,8 +16,10 @@ describe.runIf(Boolean(url))("decideApproval", { timeout: 20_000 }, () => {
   afterAll(async () => {
     await db.$client.end();
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   it("lets the first decision win and writes one event", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const { workspaceId, deal } = await createDeal(db);
     const approval = await addApproval(db, deal.id, { decision: null });
     const agency = (userId: string) => ({ side: "agency" as const, workspaceId, userId });
@@ -41,6 +43,7 @@ describe.runIf(Boolean(url))("decideApproval", { timeout: 20_000 }, () => {
   });
 
   it("refuses the wrong side, workspace or deal", async () => {
+    vi.stubEnv("WEB_MONEY_ENABLED", "true");
     const { workspaceId, clientId, deal } = await createDeal(db);
     const other = await createDeal(db);
     const approval = await addApproval(db, deal.id, { decision: null, side: "client" });

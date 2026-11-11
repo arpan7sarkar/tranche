@@ -11,6 +11,7 @@
     "dev": "render workflows dev -- tsx watch src/index.ts",
     "build": "tsdown",
     "start": "node dist/index.mjs",
+    "start:vps": "node dist/vps/index.mjs",
     "typecheck": "tsc",
     "money:recover": "node --env-file-if-exists=../../.env --import=tsx scripts/recover-creation.ts",
     "f0:preflight": "node --env-file-if-exists=../../.env --import=tsx scripts/f0/preflight.ts",

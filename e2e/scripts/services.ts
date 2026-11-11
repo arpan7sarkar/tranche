@@ -4,7 +4,6 @@ import { consumeEvents, defaultVerifyDeps, planDeal, verifyMilestone } from "@tr
 import { scriptedModel } from "@tranche/agents/testing";
 import { runTick } from "@tranche/agents-service/money";
 import { PlanDealInput } from "@tranche/contracts";
-import { createDb } from "@tranche/db";
 import { createPayPalClient, payPalConfigFromEnv } from "@tranche/paypal";
 import {
   deliverNotifications,
@@ -13,11 +12,12 @@ import {
 import { fakeGitHub, githubFixture } from "../fakes/github";
 import { startFakePayPal } from "../fakes/paypal";
 import { startStagingSite } from "../fakes/staging";
+import { openFixtureDb } from "../support/database";
 import { appEnv } from "../support/environment";
 
 Object.assign(process.env, appEnv);
 process.env.TRANCHE_LLM = "on";
-const db = createDb(appEnv.DATABASE_URL);
+const db = await openFixtureDb();
 const paypal = createPayPalClient(payPalConfigFromEnv(appEnv));
 const verifier = defaultVerifyDeps();
 verifier.checks.github = () => fakeGitHub(githubFixture);

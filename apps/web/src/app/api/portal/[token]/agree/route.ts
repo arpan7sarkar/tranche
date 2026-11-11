@@ -1,10 +1,14 @@
 import { z } from "zod";
 import { getDb } from "@/server/db";
+import { withWebMoneyGate } from "@/server/money-gate";
 import { agreeFromPortal, resolvePortalToken } from "@/server/portal";
 
 const Body = z.object({ planVersion: z.string().min(1).max(64) });
 
-export async function POST(request: Request, ctx: RouteContext<"/api/portal/[token]/agree">) {
+export const POST = withWebMoneyGate(async function POST(
+  request: Request,
+  ctx: RouteContext<"/api/portal/[token]/agree">,
+) {
   const { token } = await ctx.params;
   const link = await resolvePortalToken(token);
   if (!link) return Response.json({ error: "invalid_link" }, { status: 404 });
@@ -21,4 +25,4 @@ export async function POST(request: Request, ctx: RouteContext<"/api/portal/[tok
     );
   }
   return Response.json({ result }, { status: result === "not_agreeable" ? 409 : 200 });
-}
+});

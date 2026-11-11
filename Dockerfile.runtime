@@ -1,0 +1,23 @@
+FROM node:24-bookworm-slim AS workspace
+WORKDIR /app
+RUN corepack enable
+COPY . .
+RUN pnpm install --frozen-lockfile --filter @tranche/agents-service... --filter @tranche/db...
+
+FROM workspace AS build
+RUN pnpm --filter @tranche/agents-service build
+
+FROM workspace AS migrate
+ENV NODE_ENV=production
+USER node
+CMD ["pnpm", "--filter", "@tranche/db", "db:migrate"]
+
+FROM node:24-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN corepack enable
+COPY --from=build --chown=node:node /app /app
+RUN pnpm --filter @tranche/agents-service exec playwright install --with-deps --only-shell chromium
+USER node
+CMD ["node", "apps/agents/dist/vps/index.mjs"]

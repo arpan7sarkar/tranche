@@ -1,12 +1,16 @@
 import { z } from "zod";
 import { getDb } from "@/server/db";
+import { withWebMoneyGate } from "@/server/money-gate";
 import { resolvePortalToken, setAutoRelease } from "@/server/portal";
 
 const Body = z.object({
   autoReleaseAfterHours: z.union([z.literal(24), z.literal(72), z.literal(168), z.null()]),
 });
 
-export async function PATCH(request: Request, ctx: RouteContext<"/api/portal/[token]/policy">) {
+export const PATCH = withWebMoneyGate(async function PATCH(
+  request: Request,
+  ctx: RouteContext<"/api/portal/[token]/policy">,
+) {
   const { token } = await ctx.params;
   const link = await resolvePortalToken(token);
   if (!link) return Response.json({ error: "invalid_link" }, { status: 404 });
@@ -17,4 +21,4 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/portal/[to
     hours: parsed.data.autoReleaseAfterHours,
   });
   return Response.json({ policy });
-}
+});
