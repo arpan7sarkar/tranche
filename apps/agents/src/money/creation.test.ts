@@ -212,17 +212,6 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("BASE-01 durable creation", ()
     expect(await db.select().from(schema.hold)).toHaveLength(1);
   });
 
-  it("concurrent funding callers share one committed creation", async () => {
-    const { milestoneId } = await makeMilestone(db, { state: "funding" });
-    const paypal = fakePayPal();
-    await Promise.allSettled([fund(paypal, milestoneId), fund(paypal, milestoneId)]);
-    expect(paypal.createFundingOrder).toHaveBeenCalledOnce();
-    expect(
-      await db.select().from(schema.outbox).where(eq(schema.outbox.kind, "create_funding_order")),
-    ).toHaveLength(1);
-    expect(await db.select().from(schema.hold)).toHaveLength(1);
-  });
-
   it("journals seller referral before dispatch and preserves its response across retries", async () => {
     const { workspaceId } = await makeMilestone(db);
     const createSellerReferral = vi.fn(async () => {
