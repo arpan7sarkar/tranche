@@ -27,6 +27,6 @@ export default defineConfig({
       env: appEnv,
       timeout: 120_000,
     },
-    { command: "pnpm exec tsx scripts/web.ts", port: 3100, env: appEnv, timeout: 240_000 },
+    { command: "node --import tsx scripts/web.ts", port: 3100, env: appEnv, timeout: 240_000 },
   ],
 });
