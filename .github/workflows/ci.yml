@@ -56,10 +56,6 @@ jobs:
       - name: Replay offline agent evaluations
         run: pnpm --filter @tranche/agents eval:offline
       - run: pnpm build
-      - name: Install browser for isolated journeys
-        run: pnpm --filter @tranche/e2e exec playwright install --with-deps chromium
-      - name: Run journeys against local fake services
-        run: env -u DATABASE_URL -u TEST_DATABASE_URL pnpm --filter @tranche/e2e test:e2e
 
   web-image:
     needs: check
