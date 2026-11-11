@@ -48,6 +48,8 @@ jobs:
           psql -U tranche -d tranche_p2_test -v ON_ERROR_STOP=1
           -c "ALTER DATABASE tranche_p2_test SET tranche.test_fixture = 'tranche-f0-disposable-v1'"
       - run: pnpm --filter @tranche/db db:migrate:test
+      - name: Migrate shared test database before parallel tests
+        run: pnpm --filter @tranche/db db:migrate
       - run: pnpm test
       - name: Verify fake approval route against isolated PostgreSQL
         run: RUN_FAKE_APPROVAL_ROUTE_TEST=1 pnpm --filter @tranche/web exec vitest run src/server/fake-approval-route.test.ts
