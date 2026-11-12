@@ -1,8 +1,10 @@
+import { gmailConfig } from "@tranche/agents-service/gmail";
 import { schema } from "@tranche/db";
 import { SELLER_FEATURES, type SellerFeature } from "@tranche/paypal";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Suspense } from "react";
 import { ConnectPayPalButton } from "@/components/connect-paypal-button";
+import { GmailConnection } from "@/components/gmail-connection";
 import { LocalTime } from "@/components/local-time";
 import { LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -40,9 +42,27 @@ function CheckAgainButton() {
   );
 }
 
-async function Connections() {
+type SearchParams = Promise<{ paypalCheck?: string; gmail?: string }>;
+
+async function Connections({ searchParams }: { searchParams: SearchParams }) {
   const member = await requireMember();
+  const [gmailRows, ownerRows] = await Promise.all([
+    getDb()
+      .select({ email: schema.gmailConnection.email })
+      .from(schema.gmailConnection)
+      .where(eq(schema.gmailConnection.workspaceId, member.workspaceId)),
+    getDb()
+      .select({ role: schema.workspaceMember.role })
+      .from(schema.workspaceMember)
+      .where(
+        and(
+          eq(schema.workspaceMember.workspaceId, member.workspaceId),
+          eq(schema.workspaceMember.userId, member.userId),
+        ),
+      ),
+  ]);
   let ws = await loadWorkspace(member.workspaceId);
+  let checkFailed = (await searchParams).paypalCheck === "failed";
   if (ws && needsSellerRecheck(ws)) {
     try {
       await completeOnboarding(getDb(), getPayPal(), {
@@ -51,6 +71,7 @@ async function Connections() {
       });
       ws = await loadWorkspace(member.workspaceId);
     } catch (err) {
+      checkFailed = true;
       console.error("PayPal seller status check failed", err);
     }
   }
@@ -59,6 +80,12 @@ async function Connections() {
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <GmailConnection
+        configured={Boolean(gmailConfig())}
+        owner={ownerRows[0]?.role === "owner"}
+        email={gmailRows[0]?.email ?? null}
+        result={(await searchParams).gmail}
+      />
       <Card>
         <CardHeader>
           <CardTitle>PayPal</CardTitle>
@@ -67,7 +94,17 @@ async function Connections() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {ws?.paypalOnboarding === "active" ? (
+          {checkFailed || ws?.paypalCheckError ? (
+            <div className="flex flex-col items-start gap-3" role="alert">
+              <p className="text-sm text-destructive">
+                {ws?.paypalCheckError === "authorization"
+                  ? "PayPal denied the connection check. Check your sandbox app's partner permissions and platform account configuration."
+                  : "We could not check your PayPal connection. Please try again shortly."}
+              </p>
+              <p className="text-xs text-muted-foreground">Checks can be retried once a minute.</p>
+              <CheckAgainButton />
+            </div>
+          ) : ws?.paypalOnboarding === "active" ? (
             <p className="text-sm">
               Connected as <span className="tabular">{ws.paypalMerchantId}</span>
             </p>
@@ -93,6 +130,8 @@ async function Connections() {
               <p className="text-sm text-muted-foreground">
                 Waiting for PayPal to confirm your account.
               </p>
+              <ConnectPayPalButton label="Continue PayPal setup" />
+              <ConnectPayPalButton label="Start new PayPal setup" fresh />
               <CheckAgainButton />
             </div>
           ) : (
@@ -123,12 +162,12 @@ async function Connections() {
   );
 }
 
-export default function OnboardingPage() {
+export default function OnboardingPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <div className="flex max-w-4xl flex-col gap-6">
       <h1 className="text-4xl">Connections</h1>
       <Suspense fallback={<LoadingState rows={2} />}>
-        <Connections />
+        <Connections searchParams={searchParams} />
       </Suspense>
     </div>
   );

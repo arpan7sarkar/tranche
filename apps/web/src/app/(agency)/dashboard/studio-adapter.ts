@@ -48,7 +48,12 @@ export const trancheAdapter: AgLlmAdapter = {
       ...(options?.signal ? { signal: options.signal } : {}),
     })
       .then(async (res) => {
-        if (!res.ok) throw new Error(`assistant request failed (${res.status})`);
+        if (!res.ok)
+          throw new Error(
+            res.status === 429
+              ? "The AI provider's request limit has been reached. Please try again after the quota resets."
+              : "The AI assistant is temporarily unavailable. Please try again shortly.",
+          );
         return turnToStudio((await res.json()) as StudioTurn);
       })
       .catch((error: Error) => ({

@@ -8,7 +8,7 @@ test("an agency submits a brief, reviews a scripted draft, and saves the Gantt",
   await page.getByLabel("Project title").fill("Browser planned storefront");
   await page.getByLabel("Client name", { exact: true }).fill("Planning client");
   await page.getByLabel("Client email").fill("planning@client.test");
-  await page.getByLabel("Staging URL").fill(`${STAGING}/good`);
+  await page.getByLabel("Reference URL (optional)").fill(`${STAGING}/good`);
   await page
     .getByLabel("Project brief")
     .fill(

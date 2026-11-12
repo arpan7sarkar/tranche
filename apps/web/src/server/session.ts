@@ -3,6 +3,7 @@ import { schema } from "@tranche/db";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { PATH_HEADER } from "@/lib/request-path";
 import { safeNextPath } from "@/lib/safe-next";
 import { isUuid } from "@/lib/uuid";
@@ -39,6 +40,7 @@ async function memberFor(h: Headers): Promise<Member | null> {
 }
 
 export async function getMember(): Promise<Member | null> {
+  await connection();
   return memberFor(await headers());
 }
 

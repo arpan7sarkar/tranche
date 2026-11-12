@@ -1,4 +1,9 @@
-import { runStudioTurn, StudioLlmRequest, selectModels } from "@tranche/agents";
+import {
+  runStudioTurn,
+  StudioLlmRequest,
+  StudioRateLimitError,
+} from "@tranche/agents/dashboard/llm";
+import { selectModels } from "@tranche/agents/models";
 import { memberOrNull } from "@/server/session";
 
 export async function POST(request: Request) {
@@ -30,7 +35,12 @@ export async function POST(request: Request) {
     return Response.json(await runStudioTurn(parsed.data, selectModels().fast), {
       headers: { "Cache-Control": "no-store" },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof StudioRateLimitError)
+      return Response.json({ error: "model_rate_limited" }, { status: 429 });
+    console.error("Dashboard assistant unavailable", {
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
     return Response.json({ error: "model_unavailable" }, { status: 503 });
   }
 }

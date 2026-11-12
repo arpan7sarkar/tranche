@@ -1,6 +1,7 @@
+import { APICallError } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runStudioTurn, StudioLlmRequest, toModelMessages } from "./llm";
+import { runStudioTurn, StudioLlmRequest, StudioRateLimitError, toModelMessages } from "./llm";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("dashboard proxy", () => {
@@ -58,5 +59,68 @@ describe("dashboard proxy", () => {
     const model = new MockLanguageModelV4();
     await expect(runStudioTurn(request, model)).rejects.toThrow("model_disabled");
     expect(model.doGenerateCalls).toHaveLength(0);
+  });
+  it("recovers from temporary provider overload", async () => {
+    vi.stubEnv("TRANCHE_LLM", "on");
+    const unavailable = () =>
+      new APICallError({
+        message: "Provider unavailable",
+        url: "https://model.example.test/generate",
+        requestBodyValues: {},
+        statusCode: 503,
+        responseHeaders: { "retry-after-ms": "1" },
+      });
+    let attempts = 0;
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        if (++attempts < 3) throw unavailable();
+        return {
+          content: [{ type: "text", text: "Dashboard summary ready." }],
+          finishReason: { unified: "stop", raw: undefined },
+          warnings: [],
+          usage: {
+            inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 0, text: 0, reasoning: 0 },
+          },
+        };
+      },
+    });
+    expect((await runStudioTurn(request, model)).text).toBe("Dashboard summary ready.");
+    expect(model.doGenerateCalls).toHaveLength(3);
+  });
+  it.each([
+    [503, 3],
+    [403, 1],
+  ])("bounds retries for provider status %i", async (statusCode, attempts) => {
+    vi.stubEnv("TRANCHE_LLM", "on");
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new APICallError({
+          message: "Provider unavailable",
+          url: "https://model.example.test/generate",
+          requestBodyValues: {},
+          statusCode,
+          responseHeaders: { "retry-after-ms": "1" },
+        });
+      },
+    });
+    await expect(runStudioTurn(request, model)).rejects.toThrow("Provider unavailable");
+    expect(model.doGenerateCalls).toHaveLength(attempts);
+  });
+  it("preserves quota exhaustion after provider retries", async () => {
+    vi.stubEnv("TRANCHE_LLM", "on");
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new APICallError({
+          message: "Private quota details",
+          url: "https://model.example.test/generate",
+          requestBodyValues: {},
+          statusCode: 429,
+          responseHeaders: { "retry-after-ms": "1" },
+        });
+      },
+    });
+    await expect(runStudioTurn(request, model)).rejects.toBeInstanceOf(StudioRateLimitError);
+    expect(model.doGenerateCalls).toHaveLength(3);
   });
 });

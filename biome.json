@@ -12,6 +12,10 @@
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "overrides": [
     {
+      "includes": ["packages/agents/src/evals/recordings/**/*.json"],
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["apps/web/src/components/ui/**"],
       "linter": {
         "rules": {

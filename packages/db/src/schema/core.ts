@@ -48,8 +48,25 @@ export const workspace = pgTable("workspace", {
   // The last getSellerStatus result, so the missing permissions survive a reload.
   paypalMissingFeatures: jsonb().$type<string[]>().notNull().default([]),
   paypalCheckedAt: instant(),
+  paypalCheckError: text().$type<"authorization" | "unavailable">(),
   rateCard: jsonb().$type<RateCard>().notNull(),
   createdAt: createdAt(),
+});
+
+export const gmailConnection = pgTable("gmail_connection", {
+  id: id(),
+  workspaceId: uuid()
+    .notNull()
+    .unique()
+    .references(() => workspace.id, { onDelete: "cascade" }),
+  connectedBy: text()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  email: text().notNull(),
+  name: text().notNull(),
+  googleSubject: text().notNull(),
+  refreshTokenCiphertext: text().notNull(),
+  connectedAt: createdAt(),
 });
 
 export const workspaceMember = pgTable(

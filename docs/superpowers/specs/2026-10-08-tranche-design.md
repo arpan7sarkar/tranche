@@ -179,6 +179,10 @@ AG Grid Studio Agent Framework powers natural-language questions on the dashboar
 1. **Agency dashboard** (AG Grid Studio): held, released, overdue and forecast widgets; deals grid; agent audit grid; "ask your cash flow".
 2. **Deal workspace** (Bryntum Gantt): tasks, milestone diamonds with price and hold status, agent activity panel, approval cards.
 3. **Brief to plan**: paste a brief, watch the Gantt fill live, edit, send.
+
+Planning accepts an optional reference URL for designs, templates, or examples, separate from the delivered website.
+When no staging target is known, a `url_live` check without a URL requires the single URL from the exact submitted delivery and runs the normal URL safety and machine verification gates.
+Reference links never count as proof of delivery, and missing or unsafe delivery URLs fail verification.
 4. **Client portal**: plan review, PayPal checkout, per-milestone evidence, release button, auto-release rule.
 5. **Negotiation room**: live transcript of both agents with the Gantt updating as terms change.
 6. **Onboarding**: Connect PayPal, Connect GitHub.
@@ -195,6 +199,10 @@ Every screen ships designed empty, loading and error states, in light and dark t
 - A failed hold renewal alerts both sides and offers a manual fallback.
 - Magic links are single-purpose, hashed at rest and expire.
 - Secrets live in Render environment groups, never in the repo.
+
+Workspace owners may authorize Gmail for client notifications through OAuth with send-only Gmail access.
+The deterministic notification worker refreshes workspace-bound encrypted credentials and pins each attempted notification to its transport and sender.
+Uncertain Gmail attempts require review rather than an automatic resend because Gmail does not expose a provider idempotency key.
 
 ## 13. Testing
 

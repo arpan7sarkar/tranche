@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(process.cwd(), "../.."),
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // Automatic instant validation reports normal auth redirects as failures in development.
+    instantInsights: { validationLevel: "manual-warning" },
+  },
   transpilePackages: [
     "@tranche/agents",
     "@tranche/agents-service",

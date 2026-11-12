@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "skills": {
+    "demo-video": {
+      "source": "amahpour/demo-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/demo-video/SKILL.md",
+      "computedHash": "d88105bae02ca21e31dfc14bcd2ae24f18d509486b6ad426d12e1496db1f0fce"
+    },
+    "voice-over": {
+      "source": "amahpour/demo-video-skills",
+      "sourceType": "github",
+      "skillPath": "skills/voice-over/SKILL.md",
+      "computedHash": "3439e3fbfc96235c84754d1f1e5fc0cb7ec4fbeb078b2dc63d840578b95cba92"
+    }
+  }
+}

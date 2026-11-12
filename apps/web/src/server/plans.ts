@@ -6,8 +6,13 @@ import { plannerIssues } from "@tranche/core";
 import { type Db, schema } from "@tranche/db";
 import { repositoryAllowed } from "@tranche/verifiers";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import type { z } from "zod";
 
-export async function createDraftDeal(db: Db, workspaceId: string, raw: DraftRequest) {
+export async function createDraftDeal(
+  db: Db,
+  workspaceId: string,
+  raw: z.input<typeof DraftRequest>,
+) {
   const input = DraftRequest.parse(raw);
   if (input.repo && !repositoryAllowed(workspaceId, input.repo))
     throw new Error("repository_not_connected");

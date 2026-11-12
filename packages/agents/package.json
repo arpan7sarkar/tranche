@@ -6,7 +6,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing/index.ts",
-    "./tools": "./src/runtime/tools.ts"
+    "./tools": "./src/runtime/tools.ts",
+    "./dashboard/data": "./src/dashboard/data.ts",
+    "./dashboard/llm": "./src/dashboard/llm.ts",
+    "./models": "./src/runtime/models.ts",
+    "./negotiator": "./src/negotiator/index.ts"
   },
   "scripts": {
     "typecheck": "tsc",

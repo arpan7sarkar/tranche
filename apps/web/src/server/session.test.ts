@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({ getSession: vi.fn(), requestHeaders: vi.fn() }
 
 vi.mock("./auth", () => ({ auth: { api: { getSession: mocks.getSession } } }));
 vi.mock("next/headers", () => ({ headers: async () => mocks.requestHeaders() }));
+vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("next/navigation", () => ({
   redirect: (target: string) => {
     throw new Error(`redirect:${target}`);

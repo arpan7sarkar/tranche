@@ -57,6 +57,8 @@ html:root:not(.b-nothing) {
 }
 
 .tranche-gantt {
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;

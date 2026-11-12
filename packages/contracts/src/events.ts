@@ -4,6 +4,7 @@ import { Id, RepoRef } from "./ids";
 export const DomainEventType = z.enum([
   "deal.created",
   "deal.plan_sent",
+  "deal.portal_opened",
   "deal.agreed",
   "milestone.funding_requested",
   "milestone.held",

@@ -96,3 +96,78 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("draft planning", () => {
     );
   });
 });
+
+describe.runIf(Boolean(process.env.DATABASE_URL))("reference-only drafts", () => {
+  let db: Db;
+  beforeAll(async () => {
+    db = await createTestDb("web_reference_plans");
+  });
+  afterAll(async () => {
+    await db.$client.end();
+  });
+  it.each([null, "https://www.figma.com/design/example"])(
+    "saves a reviewable plan without a deployment URL: %s",
+    async (referenceUrl) => {
+      const [ws] = await db
+        .insert(schema.workspace)
+        .values({
+          name: "Reference test",
+          rateCard: { currency: "USD", dailyRateMinor: 10000, minimumProjectMinor: 10000 },
+        })
+        .returning();
+      assert(ws);
+      const { dealId } = await createDraftDeal(db, ws.id, {
+        requestId: crypto.randomUUID(),
+        title: "Portfolio",
+        clientName: "Client",
+        clientEmail: "client@example.com",
+        brief: "Build an accessible portfolio website with projects and contact details.",
+        repo: null,
+        referenceUrl,
+        startDate: "2026-11-12",
+      });
+      const plan = {
+        summary: "Portfolio",
+        currency: "USD",
+        milestones: [
+          {
+            key: "build",
+            title: "Build",
+            price: { currency: "USD", minor: 20000 },
+            criteria: { checks: [{ kind: "url_live" as const }], prose: [] },
+            payees: [{ kind: "agency" as const, shareBps: 10000 }],
+          },
+        ],
+        tasks: [
+          { key: "build", title: "Build", durationDays: 2, dependsOn: [], milestoneKey: "build" },
+        ],
+      };
+      const [proposal] = await db
+        .insert(schema.proposedAction)
+        .values({
+          dealId,
+          agent: "planner",
+          side: "agency",
+          type: "create_plan",
+          payload: { type: "create_plan", plan },
+          reasoning: "Validated",
+          idempotencyKey: crypto.randomUUID(),
+        })
+        .returning();
+      assert(proposal);
+      expect(await draftStatus(db, ws.id, dealId)).toMatchObject({ status: "ready" });
+      await saveDraft(db, ws.id, dealId, proposal.id, plan);
+      const milestones = await db
+        .select()
+        .from(schema.milestone)
+        .where(eq(schema.milestone.dealId, dealId));
+      expect(milestones[0]?.criteria.checks).toEqual([{ kind: "url_live" }]);
+      const events = await db.select().from(schema.event).where(eq(schema.event.dealId, dealId));
+      expect(events.find((e) => e.type === "deal.created")?.payload.planning).toMatchObject({
+        referenceUrl,
+        stagingUrl: null,
+      });
+      expect(events.some((e) => e.type === "deal.plan_sent")).toBe(false);
+    },
+  );
+});

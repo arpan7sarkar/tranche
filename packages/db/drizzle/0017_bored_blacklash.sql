@@ -1,0 +1,1 @@
+ALTER TABLE "workspace" ADD COLUMN "paypal_check_error" text;

@@ -1,4 +1,4 @@
-import { loadDashboardData } from "@tranche/agents";
+import { loadDashboardData } from "@tranche/agents/dashboard/data";
 import { getDb } from "@/server/db";
 import { memberOrNull } from "@/server/session";
 

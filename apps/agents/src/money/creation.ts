@@ -15,7 +15,7 @@ import {
   type PayPal,
   requiredSellerFeatures,
 } from "@tranche/paypal";
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 import type { Deps } from "./deps";
 import { enqueueOutbox, type OutboxKind, type OutboxRow } from "./outbox";
 import { executeOutbox } from "./outbox-executor";
@@ -45,14 +45,14 @@ export async function recordCreation(
 export async function startSellerOnboarding(
   db: Db,
   paypal: Pick<PayPal, "createSellerReferral">,
-  input: { workspaceId: string; appUrl: string; mechanism: HoldMechanism },
+  input: { workspaceId: string; appUrl: string; mechanism: HoldMechanism; attemptId?: string },
 ) {
   const request = SellerReferralIntent.parse({
     trackingId: input.workspaceId,
     returnUrl: `${input.appUrl}/api/paypal/onboarding/return`,
     mechanism: input.mechanism,
   });
-  const requestId = `referral-${input.mechanism}-${input.workspaceId}`;
+  let requestId = `referral-${input.mechanism}-${input.workspaceId}${input.attemptId ? `-${input.attemptId}` : ""}`;
   await db.transaction(async (tx) => {
     const [workspace] = await tx
       .select()
@@ -60,6 +60,40 @@ export async function startSellerOnboarding(
       .where(eq(schema.workspace.id, input.workspaceId))
       .for("update");
     if (!workspace) throw new Error("workspace_not_found");
+    if (!input.attemptId) {
+      const [latest] = await tx
+        .select()
+        .from(schema.outbox)
+        .where(
+          and(
+            eq(schema.outbox.kind, "create_seller_referral"),
+            sql`${schema.outbox.request}->>'trackingId' = ${input.workspaceId}`,
+            sql`${schema.outbox.request}->>'mechanism' = ${input.mechanism}`,
+          ),
+        )
+        .orderBy(desc(schema.outbox.createdAt))
+        .limit(1);
+      if (latest) requestId = latest.requestId;
+    }
+    if (input.attemptId) {
+      if (workspace.paypalOnboarding === "active") throw new Error("seller_already_connected");
+      const unsettled = await tx
+        .select()
+        .from(schema.outbox)
+        .where(
+          and(
+            eq(schema.outbox.kind, "create_seller_referral"),
+            inArray(schema.outbox.status, ["pending", "sent", "called"]),
+            sql`${schema.outbox.request}->>'trackingId' = ${input.workspaceId}`,
+          ),
+        );
+      if (
+        unsettled.some(
+          (row) => row.request.trackingId === input.workspaceId && row.requestId !== requestId,
+        )
+      )
+        throw new Error("creation_pending_recovery");
+    }
     await enqueueOutbox(tx, { kind: "create_seller_referral", request, requestId }, new Date());
   });
   const [row] = await db.select().from(schema.outbox).where(eq(schema.outbox.requestId, requestId));

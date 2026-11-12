@@ -97,7 +97,7 @@ export function NegotiationRoom({
       ["failed", "rejected"].includes(view.applicationStatus ?? "")) &&
     ["sent", "negotiating"].includes(deal.deal.status);
   return (
-    <div className="grid gap-6">
+    <div className="grid min-w-0 gap-6">
       <header>
         <Link className="underline" href={`/deals/${deal.deal.id}`}>
           Back to deal
@@ -223,7 +223,7 @@ export function NegotiationRoom({
           );
         })}
       </div>
-      <section className="grid gap-2">
+      <section className="grid min-w-0 gap-2" aria-label="Proposed schedule">
         <h2 className="text-xl">Latest proposed schedule</h2>
         <p className="text-sm text-muted-foreground">
           Preview only. The deal changes after approval.

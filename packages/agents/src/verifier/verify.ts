@@ -1,5 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type EvidenceInput, Id, InboxMessage } from "@tranche/contracts";
+import {
+  type EvidenceInput,
+  Id,
+  InboxMessage,
+  PlanningOptions,
+  planningTargets,
+} from "@tranche/contracts";
 import { verificationGate } from "@tranche/core";
 import { type Db, schema } from "@tranche/db";
 import {
@@ -88,12 +94,21 @@ export async function verifyMilestone(db: Db, eventId: number, injectedDeps?: Ve
       if (!deal || !repositoryAllowed(deal.workspaceId, message.repo))
         throw new Error("repository_not_connected");
     }
+    const [planningEvent] = await tx
+      .select()
+      .from(schema.event)
+      .where(and(eq(schema.event.dealId, event.dealId), eq(schema.event.type, "deal.created")))
+      .orderBy(desc(schema.event.id))
+      .limit(1);
+    const options = PlanningOptions.safeParse(planningEvent?.payload.planning);
+    const referenceUrl = options.success ? planningTargets(options.data).referenceUrl : null;
     const delivery: Delivery = {
       inboxId: deliveryId,
       repo: message.repo,
       sha: message.sha,
       prNumber: message.prNumber,
       urls: message.urls,
+      referenceUrls: referenceUrl ? [referenceUrl] : [],
       ...(message.notes ? { notes: message.notes } : {}),
     };
     const records: EvidenceInput[] = [];
@@ -124,7 +139,7 @@ export async function verifyMilestone(db: Db, eventId: number, injectedDeps?: Ve
       const urls = [
         ...new Set([
           ...message.urls,
-          ...milestone.criteria.checks.flatMap((c) => ("url" in c ? [c.url] : [])),
+          ...milestone.criteria.checks.flatMap((c) => ("url" in c && c.url ? [c.url] : [])),
         ]),
       ];
       let shots: Shot[] = [];

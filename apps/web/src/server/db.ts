@@ -1,9 +1,10 @@
 import "server-only";
 import { createDb, type Db } from "@tranche/db";
 
-let db: Db | undefined;
+// Next.js reloads server modules in development; keep one pool per process.
+const processState = globalThis as typeof globalThis & { trancheWebDb?: Db };
 
 export function getDb(): Db {
-  db ??= createDb();
-  return db;
+  processState.trancheWebDb ??= createDb();
+  return processState.trancheWebDb;
 }

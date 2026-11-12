@@ -3,6 +3,7 @@ import { ApprovalRequestedPayload } from "@tranche/contracts";
 import { createMagicLink, type Db, schema } from "@tranche/db";
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import type { SendEmail } from "./email";
+import type { EmailTransport, ResolveEmailTransport } from "./gmail";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type Store = Db | Tx;
@@ -168,7 +169,12 @@ export async function queueNotifications(db: Db) {
   }
 }
 
-export async function deliverNotifications(db: Db, send: SendEmail, limit = 20) {
+export async function deliverNotifications(
+  db: Db,
+  send: SendEmail | null,
+  limit = 20,
+  resolveTransport?: ResolveEmailTransport,
+) {
   let sent = 0;
   for (let i = 0; i < limit; i++) {
     const job = await db.transaction(async (tx) => {
@@ -191,6 +197,7 @@ export async function deliverNotifications(db: Db, send: SendEmail, limit = 20) 
         !validRecipient ||
         row.linkExpiresAt <= now ||
         row.attempts >= 8 ||
+        (row.transport === "gmail" && row.dispatchedAt !== null) ||
         (row.dispatchedAt && now.getTime() - row.dispatchedAt.getTime() >= 23 * HOUR)
       ) {
         await tx
@@ -199,22 +206,46 @@ export async function deliverNotifications(db: Db, send: SendEmail, limit = 20) 
           .where(eq(jobs.id, row.id));
         return { skipped: true } as const;
       }
+      const sender: EmailTransport | null = resolveTransport
+        ? await resolveTransport(row, tx)
+        : send
+          ? { transport: "resend", identity: "legacy", send }
+          : null;
+      if (
+        row.dispatchedAt &&
+        sender &&
+        ((row.transport &&
+          (row.transport !== sender.transport || row.senderIdentity !== sender.identity)) ||
+          (!row.transport && sender.transport !== "resend"))
+      ) {
+        await tx.update(jobs).set({ status: "review" }).where(eq(jobs.id, row.id));
+        return { skipped: true } as const;
+      }
+      if (!sender) {
+        await tx
+          .update(jobs)
+          .set({ nextAttemptAt: new Date(now.getTime() + 60000) })
+          .where(eq(jobs.id, row.id));
+        return { skipped: true } as const;
+      }
       await tx
         .update(jobs)
         .set({
           status: "sending",
+          transport: sender.transport,
+          senderIdentity: sender.identity,
           attempts: row.attempts + 1,
           dispatchedAt: row.dispatchedAt ?? now,
           nextAttemptAt: new Date(now.getTime() + Math.min(HOUR, 60_000 * 2 ** row.attempts)),
         })
         .where(eq(jobs.id, row.id));
-      return row;
+      return { ...row, sender };
     });
     if (!job) break;
     if ("skipped" in job) continue;
     try {
-      // This exact payload and key must survive a crash after provider acceptance.
-      const providerId = await send({
+      // Resend retries reuse the key; uncertain Gmail attempts require review.
+      const providerId = await job.sender.send({
         to: job.to,
         subject: job.subject,
         body: job.body,
@@ -226,7 +257,9 @@ export async function deliverNotifications(db: Db, send: SendEmail, limit = 20) 
         .where(eq(jobs.id, job.id));
       sent++;
     } catch {
-      // Retry the same payload within the provider's idempotency window.
+      if (job.sender.transport === "gmail") {
+        await db.update(jobs).set({ status: "review" }).where(eq(jobs.id, job.id));
+      }
     }
   }
   const actionIds = await db

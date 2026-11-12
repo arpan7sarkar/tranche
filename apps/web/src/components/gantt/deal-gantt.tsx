@@ -6,7 +6,6 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { milestoneTone, type Tone } from "@/lib/milestone-tone";
 import type { DealView } from "@/server/deals";
 import { addDays, type GanttTask, toGanttData, toIsoDate } from "./gantt-data";
-import "./gantt.css";
 
 type Props = {
   view: DealView;
@@ -55,13 +54,25 @@ export default function DealGantt({ view, onMove, readOnly = false }: Props) {
 
   useEffect(() => {
     let disposed = false;
-    import(/* turbopackIgnore: true */ /* webpackIgnore: true */ BRYNTUM_URL).then(
-      (bryntum: { Gantt: new (config: GanttConfig) => Gantt }) => {
+    setStatus("loading");
+    void import(/* turbopackIgnore: true */ /* webpackIgnore: true */ BRYNTUM_URL)
+      .then(async (bryntum: { Gantt: new (config: GanttConfig) => Gantt }) => {
         if (disposed || !host.current) return;
+        if (!getComputedStyle(host.current).getPropertyValue("--bryntum-version").trim()) {
+          throw new Error("Schedule stylesheet is unavailable");
+        }
         const instance = new bryntum.Gantt({
           readOnly,
           appendTo: host.current,
-          columns: [{ type: "name", field: "name", text: "Work", width: 320 }],
+          width: "100%",
+          columns: [
+            {
+              type: "name",
+              field: "name",
+              text: "Work",
+              width: Math.min(320, Math.max(144, Math.floor(host.current.clientWidth * 0.35))),
+            },
+          ],
           viewPreset: "weekAndDayLetter",
           tickSize: 23,
           barMargin: 8,
@@ -118,13 +129,16 @@ export default function DealGantt({ view, onMove, readOnly = false }: Props) {
           },
         });
         gantt.current = instance;
-        void load(instance, latest.current.data);
-        setStatus("ready");
-      },
-      () => {
-        if (!disposed) setStatus("error");
-      },
-    );
+        await load(instance, latest.current.data);
+        if (!disposed) setStatus("ready");
+      })
+      .catch(() => {
+        if (!disposed) {
+          gantt.current?.destroy();
+          gantt.current = null;
+          setStatus("error");
+        }
+      });
     return () => {
       disposed = true;
       gantt.current?.destroy();
@@ -133,20 +147,31 @@ export default function DealGantt({ view, onMove, readOnly = false }: Props) {
   }, [readOnly]);
 
   useEffect(() => {
-    if (gantt.current) void load(gantt.current, data);
+    let active = true;
+    const instance = gantt.current;
+    if (instance)
+      void load(instance, data).catch(() => {
+        if (!active) return;
+        instance.destroy();
+        if (gantt.current === instance) gantt.current = null;
+        setStatus("error");
+      });
+    return () => {
+      active = false;
+    };
   }, [data]);
 
   if (status === "error") {
     return (
       <ErrorState
         title="The schedule did not load"
-        body="The milestone list below still has every date and control."
+        body="The milestone list below is still available. Reload to try the timeline again."
         retry={() => window.location.reload()}
       />
     );
   }
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       {status === "loading" ? (
         <div className="absolute inset-0 z-10 bg-background">
           <LoadingState rows={8} />

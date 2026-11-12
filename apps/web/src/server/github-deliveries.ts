@@ -49,7 +49,9 @@ export async function recordGitHubDelivery(db: Db, payload: unknown) {
       )
     )
       continue;
-    const urls = [...new Set(ms.criteria.checks.flatMap((c) => ("url" in c ? [c.url] : [])))];
+    const urls = [
+      ...new Set(ms.criteria.checks.flatMap((c) => ("url" in c && c.url ? [c.url] : []))),
+    ];
     const inserted = await db
       .insert(schema.inbox)
       .values({

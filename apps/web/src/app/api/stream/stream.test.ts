@@ -8,6 +8,10 @@ import { createDeal, createUser, createWorkspace, one } from "@/server/test-fixt
 const mocks = vi.hoisted(() => ({ getSession: vi.fn(), requestHeaders: vi.fn() }));
 
 vi.mock("@/server/auth", () => ({ auth: { api: { getSession: mocks.getSession } } }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: async () => {},
+}));
 vi.mock("next/headers", () => ({ headers: async () => mocks.requestHeaders() }));
 vi.mock("next/navigation", () => ({
   redirect: (target: string) => {
