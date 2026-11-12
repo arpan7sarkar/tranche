@@ -6,6 +6,10 @@ import { createDeal, createUser, one } from "@/server/test-fixtures";
 const mocks = vi.hoisted(() => ({ getSession: vi.fn() }));
 
 vi.mock("@/server/auth", () => ({ auth: { api: { getSession: mocks.getSession } } }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: async () => {},
+}));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ cookie: "session=test" }) }));
 vi.mock("@/server/kick", () => ({ kickMoneyTick: () => {} }));
 
