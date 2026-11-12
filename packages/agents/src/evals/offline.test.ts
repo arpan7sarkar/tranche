@@ -85,6 +85,27 @@ const plan: PlanDraft = {
   tasks: [{ key: "build", title: "Build", durationDays: 2, dependsOn: [], milestoneKey: "build" }],
 };
 describe("offline production decision regressions", () => {
+  const deferred = structuredClone(plan);
+  if (!deferred.milestones[0]) throw new Error("missing_eval_milestone");
+  deferred.milestones[0].criteria.checks = [{ kind: "url_live" }];
+  evaluation("planner", "reference-only", [deferred], async (model) => {
+    const referenceOnly = {
+      ...options,
+      stagingUrl: null,
+      referenceUrl: "https://www.figma.com/design/example",
+    };
+    const result = await draftPlan(
+      {
+        title: "Portfolio",
+        brief: "Build an accessible portfolio using this design as reference.",
+        rateCard,
+        options: referenceOnly,
+      },
+      model,
+    );
+    expect(plannerIssues(result, rateCard, referenceOnly)).toEqual([]);
+    expect(result).toEqual(deferred);
+  });
   for (const kind of ["valid", "low-budget", "cycle", "foreign-url", "empty"] as const) {
     const candidate = structuredClone(plan);
     assert(candidate.milestones[0] && candidate.tasks[0]);

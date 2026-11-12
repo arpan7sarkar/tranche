@@ -1,14 +1,1 @@
-{
-  "content": [
-    {
-      "type": "text",
-      "text": "{\"criteria\":[{\"criterion\":\"Working cart\",\"met\":false,\"reason\":\"Observed evidence\"}],\"overall\":\"fail\"}"
-    }
-  ],
-  "finishReason": { "unified": "stop" },
-  "usage": {
-    "inputTokens": { "total": 0, "noCache": 0, "cacheRead": 0, "cacheWrite": 0 },
-    "outputTokens": { "total": 0, "text": 0, "reasoning": 0 }
-  },
-  "warnings": []
-}
+{"content":[{"type":"text","text":"{\"criteria\":[{\"criterion\":\"Working cart\",\"met\":false,\"reason\":\"Observed evidence\"}],\"overall\":\"fail\"}"}],"finishReason":{"unified":"stop"},"usage":{"inputTokens":{"total":0,"noCache":0,"cacheRead":0,"cacheWrite":0},"outputTokens":{"total":0,"text":0,"reasoning":0}},"warnings":[]}

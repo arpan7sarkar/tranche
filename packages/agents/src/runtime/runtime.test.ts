@@ -38,6 +38,24 @@ describe("agent runtime", () => {
     ).rejects.toThrow();
     expect(model.doGenerateCalls).toHaveLength(2);
   });
+  it("retains local constraints when simplifying Google's output grammar", async () => {
+    const model = scriptedModel([{ count: 100 }, { count: 2 }]);
+    Object.defineProperty(model, "provider", { value: "google.generative-ai" });
+    const result = await generateStructured({
+      model,
+      schema: z.object({ count: z.number().int().max(5) }),
+      system: "Count",
+      prompt: "Return a count",
+    });
+    expect(result).toEqual({ count: 2 });
+    expect(model.doGenerateCalls).toHaveLength(2);
+    const responseFormat = model.doGenerateCalls[0]?.responseFormat;
+    expect(responseFormat).toMatchObject({
+      type: "json",
+      schema: { properties: { count: { type: "integer" } } },
+    });
+    expect(JSON.stringify(responseFormat)).not.toContain('"maximum"');
+  });
   it("disables injected and live models before any request", async () => {
     vi.stubEnv("TRANCHE_LLM", "off");
     const model = scriptedModel([{ count: 1 }]);
@@ -53,7 +71,12 @@ describe("agent runtime", () => {
     expect(model.doGenerateCalls).toHaveLength(0);
   });
   it("selects only configured providers without calling them", () => {
-    expect(selectModels({}).judge).toHaveProperty("modelId", "gemini-3.1-pro-preview");
+    expect(selectModels({}).judge).toHaveProperty("modelId", "gemini-3.5-flash-lite");
+    expect(selectModels({}).fast).toHaveProperty("modelId", "gemini-3.5-flash-lite");
+    expect(selectModels({ GEMINI_FAST_MODEL: "gemini-3.6-flash" }).fast).toHaveProperty(
+      "modelId",
+      "gemini-3.6-flash",
+    );
     expect(
       selectModels({ AI_FALLBACK: "openai", OPENAI_FAST_MODEL: "test-model" }).fast,
     ).toHaveProperty("modelId", "test-model");

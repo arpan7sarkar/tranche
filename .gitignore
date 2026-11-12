@@ -17,3 +17,20 @@ next-env.d.ts
 npm-debug.log*
 .pnpm-debug.log*
 .vercel
+/tmp
+/project-screenshots
+/output
+
+# Local Python environments and caches used by media skills
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Browser test reports and local authentication state
+playwright-report/
+test-results/
+/e2e/.state/
+
+# Local runtime logs
+*.log

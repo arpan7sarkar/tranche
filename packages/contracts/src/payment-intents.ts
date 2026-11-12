@@ -23,6 +23,7 @@ export const SellerReferralIntent = z.object({
   mechanism: HoldMechanism,
 });
 export const SellerReferralResponse = z.object({ actionUrl: z.url() });
+export const SellerReferralStart = z.object({ attemptId: z.uuid().optional() }).strict();
 export const WebhookRegistrationIntent = z.object({
   url: z.url(),
   events: z.array(z.string().min(1)).min(1),

@@ -234,6 +234,39 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("BASE-01 durable creation", ()
     expect((await db.select().from(schema.workspace))[0]?.paypalOnboarding).toBe("active");
   });
 
+  it("creates an explicit fresh referral once while preserving the old referral", async () => {
+    const { workspaceId } = await makeMilestone(db);
+    await db
+      .update(schema.workspace)
+      .set({ paypalOnboarding: "pending" })
+      .where(eq(schema.workspace.id, workspaceId));
+    const createSellerReferral = vi
+      .fn()
+      .mockResolvedValueOnce({ actionUrl: "https://www.sandbox.paypal.com/old" })
+      .mockResolvedValueOnce({ actionUrl: "https://www.sandbox.paypal.com/new" });
+    const input = {
+      workspaceId,
+      appUrl: "https://tranche.test",
+      mechanism: "authorization" as const,
+    };
+    await startSellerOnboarding(db, { createSellerReferral }, input);
+    const fresh = { ...input, attemptId: crypto.randomUUID() };
+    const response = await startSellerOnboarding(db, { createSellerReferral }, fresh);
+    expect(response.actionUrl).toBe("https://www.sandbox.paypal.com/new");
+    expect(await startSellerOnboarding(db, { createSellerReferral }, fresh)).toEqual(response);
+    expect(await startSellerOnboarding(db, { createSellerReferral }, input)).toEqual(response);
+    expect(createSellerReferral).toHaveBeenCalledTimes(2);
+    const rows = await db
+      .select()
+      .from(schema.outbox)
+      .where(eq(schema.outbox.kind, "create_seller_referral"));
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.requestId)).size).toBe(2);
+    expect(rows.map((row) => row.response?.actionUrl)).toContain(
+      "https://www.sandbox.paypal.com/old",
+    );
+  });
+
   it("does not replay ambiguous referral POST and recovers a verified known referral", async () => {
     const { workspaceId } = await makeMilestone(db);
     const paypal = fakePayPal({
@@ -248,6 +281,13 @@ describe.runIf(Boolean(process.env.DATABASE_URL))("BASE-01 durable creation", ()
       mechanism: "authorization" as const,
     };
     await expect(startSellerOnboarding(db, paypal, input)).rejects.toThrow("pending_recovery");
+    await db
+      .update(schema.workspace)
+      .set({ paypalOnboarding: "pending" })
+      .where(eq(schema.workspace.id, workspaceId));
+    await expect(
+      startSellerOnboarding(db, paypal, { ...input, attemptId: crypto.randomUUID() }),
+    ).rejects.toThrow("pending_recovery");
     await due();
     await expect(startSellerOnboarding(db, paypal, input)).rejects.toThrow("pending_recovery");
     expect(paypal.createSellerReferral).toHaveBeenCalledOnce();

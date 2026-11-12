@@ -6,11 +6,12 @@ import {
   type AgDataSourcesDefinition,
   type AgReportState,
   AgStudioAiModule,
+  type AgStudioApi,
   createAiHarness,
   studioTheme,
 } from "ag-studio";
 import { AgStudio, AgStudioProvider } from "ag-studio-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trancheAdapter } from "./studio-adapter";
 import "./studio.css";
 
@@ -24,7 +25,12 @@ const kpi = (field: "held" | "released" | "overdue" | "forecast", caption: strin
 
 const INITIAL_STATE: AgReportState = {
   selectedPageId: "cash",
-  panels: { filters: { collapsed: true } },
+  panels: {
+    filters: { collapsed: true },
+    ai: { collapsed: true },
+    edit: { collapsed: true },
+    data: { collapsed: true },
+  },
   pages: [
     {
       id: "cash",
@@ -35,6 +41,10 @@ const INITIAL_STATE: AgReportState = {
         forecast: kpi("forecast", "Forecast"),
         flow: {
           type: "column-chart-stacked",
+          format: {
+            title: { enabled: true, text: "Payment timeline" },
+            style: { theme: { common: { legend: { enabled: true } } } },
+          },
           dataMapping: {
             categoryKey: [{ id: "cashflow.day" }],
             valueKey: [
@@ -47,6 +57,7 @@ const INITIAL_STATE: AgReportState = {
         },
         deals: {
           type: "grid",
+          format: { title: { enabled: true, text: "Deals" } },
           dataMapping: {
             cols: [
               { id: "deals.title" },
@@ -74,6 +85,7 @@ const INITIAL_STATE: AgReportState = {
       widgets: {
         audit: {
           type: "grid",
+          format: { title: { enabled: true, text: "Agent activity" } },
           dataMapping: {
             cols: [
               { id: "audit.createdAt" },
@@ -93,6 +105,12 @@ const INITIAL_STATE: AgReportState = {
 };
 
 function toSources(d: DashboardData): AgDataSourcesDefinition {
+  const money = {
+    format: "currencyFormat" as const,
+    formatOptions: {
+      format: new Intl.NumberFormat("en-US", { style: "currency", currency: d.currency }),
+    },
+  };
   return {
     sources: [
       {
@@ -100,7 +118,7 @@ function toSources(d: DashboardData): AgDataSourcesDefinition {
         data: d.kpis,
         fields: ["held", "released", "overdue", "forecast"].map((id) => ({
           id,
-          format: "decimalFormat" as const,
+          ...money,
         })),
       },
       {
@@ -110,7 +128,7 @@ function toSources(d: DashboardData): AgDataSourcesDefinition {
           { id: "day", format: "textFormat" },
           ...["held", "released", "overdue", "forecast"].map((id) => ({
             id,
-            format: "decimalFormat" as const,
+            ...money,
           })),
         ],
       },
@@ -146,17 +164,16 @@ function toSources(d: DashboardData): AgDataSourcesDefinition {
   };
 }
 
-function useDarkMode() {
-  const [dark, setDark] = useState(false);
+function useMedia(query: string) {
+  const [matches, setMatches] = useState(false);
   useEffect(() => {
-    const root = document.documentElement;
-    const read = () => setDark(root.classList.contains("dark"));
+    const media = window.matchMedia(query);
+    const read = () => setMatches(media.matches);
     read();
-    const observer = new MutationObserver(read);
-    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, []);
-  return dark;
+    media.addEventListener("change", read);
+    return () => media.removeEventListener("change", read);
+  }, [query]);
+  return matches;
 }
 
 export function DashboardStudio() {
@@ -164,17 +181,87 @@ export function DashboardStudio() {
   const [currency, setCurrency] = useState("");
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const dark = useDarkMode();
+  const dark = useMedia("(prefers-color-scheme: dark)");
+  const compact = useMedia("(max-width: 767px)");
+  const wide = useMedia("(min-width: 1280px)");
+  const [editing, setEditing] = useState(false);
+  const [assistant, setAssistant] = useState(false);
+  const apiRef = useRef<AgStudioApi | null>(null);
+  const [report, setReport] = useState("cash");
+  const selectReport = (id: string) => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.setState({ ...api.getState(), selectedPageId: id });
+    setReport(id);
+  };
+  const initialState = useMemo<AgReportState>(() => {
+    if (!compact) return INITIAL_STATE;
+    return {
+      ...INITIAL_STATE,
+      pages: INITIAL_STATE.pages.map((page) =>
+        page.id !== "cash"
+          ? page
+          : {
+              ...page,
+              widgetLayout: {
+                held: { xTrack: 0, yTrack: 0, xSpan: 12, ySpan: 5 },
+                released: { xTrack: 12, yTrack: 0, xSpan: 12, ySpan: 5 },
+                overdue: { xTrack: 0, yTrack: 5, xSpan: 12, ySpan: 5 },
+                forecast: { xTrack: 12, yTrack: 5, xSpan: 12, ySpan: 5 },
+                flow: { xTrack: 0, yTrack: 10, xSpan: 24, ySpan: 16 },
+                deals: { xTrack: 0, yTrack: 26, xSpan: 24, ySpan: 16 },
+              },
+            },
+      ),
+    };
+  }, [compact]);
   const [theme, setTheme] = useState<typeof studioTheme>();
   useEffect(() => {
+    const styles = getComputedStyle(document.documentElement);
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    // Charts need concrete RGB colours, including when app tokens use OKLCH.
+    const color = (token: string) => {
+      const value = styles.getPropertyValue(token).trim();
+      if (!context) return value;
+      context.fillStyle = value;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    const background = color("--background");
+    const card = color("--card");
+    const foreground = color("--foreground");
+    const muted = color("--muted-foreground");
+    const border = color("--border");
     setTheme(
       studioTheme.withParams({
-        studioWidgetBorder: getComputedStyle(document.documentElement)
-          .getPropertyValue("--studio-widget-border-color")
-          .trim(),
+        backgroundColor: background,
+        foregroundColor: foreground,
+        textColor: foreground,
+        borderColor: border,
+        browserColorScheme: dark ? "dark" : "light",
+        studioMinWidth: 0,
+        studioMinHeight: 0,
+        studioCanvasMinWidth: 0,
+        studioCanvasBackgroundColor: background,
+        studioWidgetBackgroundColor: card,
+        studioWidgetBorder: { color: border },
+        studioWidgetTitleFontSize: 18,
+        studioWidgetTitleTextColor: foreground,
+        studioWidgetCaptionTextColor: muted,
+        studioWidgetSubtitleTextColor: muted,
+        chartTextColor: foreground,
+        chartSubtleTextColor: muted,
+        chartGridLineColor: border,
+        gridDataBackgroundColor: card,
+        gridHeaderBackgroundColor: color("--muted"),
+        gridHeaderTextColor: foreground,
+        gridCellTextColor: foreground,
+        gridBrowserColorScheme: dark ? "dark" : "light",
       }),
     );
-  }, []);
+  }, [dark]);
   const sources = useMemo(() => (data ? toSources(data) : undefined), [data]);
 
   useEffect(() => {
@@ -241,41 +328,99 @@ export function DashboardStudio() {
     );
 
   return (
-    <section className="space-y-4">
-      <label className="flex items-center gap-3">
-        Currency
-        <select
-          className="rounded border bg-background p-2"
-          value={data.currency}
-          onChange={(event) => setCurrency(event.target.value)}
-        >
-          {data.currencies.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
+    <section className="min-w-0 space-y-4" aria-label="Cash flow dashboard">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-3">
+          Currency
+          <select
+            className="rounded border bg-background p-2"
+            value={data.currency}
+            onChange={(event) => setCurrency(event.target.value)}
+          >
+            {data.currencies.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="hidden gap-2 xl:flex">
+          <button
+            type="button"
+            aria-pressed={assistant}
+            onClick={() => {
+              setEditing(false);
+              setAssistant((value) => !value);
+            }}
+            className="rounded-md border bg-card px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {assistant ? "Close assistant" : "Ask cash flow"}
+          </button>
+          <button
+            type="button"
+            aria-pressed={editing}
+            onClick={() => {
+              setAssistant(false);
+              setEditing((value) => !value);
+            }}
+            className="rounded-md border bg-card px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {editing ? "Done editing" : "Customize dashboard"}
+          </button>
+        </div>
+      </div>
       <p className="text-sm text-muted-foreground">
         Amounts are in {data.currency}. Currencies are shown separately. The assistant can change
         this dashboard, but cannot approve actions or move money.
       </p>
+      <fieldset className="flex gap-2" aria-label="Dashboard report">
+        {(
+          [
+            ["cash", "Payments"],
+            ["audit", "Agent activity"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={report === id}
+            onClick={() => selectReport(id)}
+            className="rounded-md border px-3 py-2 text-sm hover:bg-muted aria-pressed:bg-secondary aria-pressed:font-semibold focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {label}
+          </button>
+        ))}
+      </fieldset>
       {!data.deals.length ? (
         <p className="rounded-lg border p-8">
           No deals in {data.currency} yet. Create a deal to see its cash flow here.
         </p>
       ) : (
-        <div className="ag-theme-mode tranche-studio" data-ag-theme-mode={dark ? "dark" : "light"}>
+        <div
+          className="ag-theme-mode tranche-studio"
+          data-editing={(editing || assistant) && wide}
+          data-ag-theme-mode={dark ? "dark" : "light"}
+        >
           <AgStudioProvider
             modules={[AgStudioAiModule]}
             {...(LICENSE ? { licenseKey: LICENSE } : {})}
           >
             <AgStudio
-              key={data.currency}
+              key={`${data.currency}-${compact}`}
+              onStudioReady={({ api }) => {
+                apiRef.current = api;
+                setReport("cash");
+              }}
+              onStateUpdated={({ state }) => setReport(state.selectedPageId)}
               data={sources}
               theme={theme}
-              initialState={INITIAL_STATE}
-              mode="edit"
+              initialState={initialState}
+              layout={{ minWidth: 0, pagePadding: compact ? 8 : 16 }}
+              panels={{
+                edit: { left: assistant ? ["ai"] : [], right: editing ? ["edit", "data"] : [] },
+                view: { left: [], right: [] },
+              }}
+              mode={(editing || assistant) && wide ? "edit" : "view"}
               ai={ai}
               style={{ height: "100%", width: "100%" }}
             />

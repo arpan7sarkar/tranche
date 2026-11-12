@@ -2,7 +2,8 @@ import type { DomainEventType } from "@tranche/contracts";
 
 const SENTENCES: Record<DomainEventType, (title: string) => string> = {
   "deal.created": () => "Deal created",
-  "deal.plan_sent": () => "Plan sent to the client",
+  "deal.plan_sent": () => "Plan shared for client review",
+  "deal.portal_opened": () => "Client portal opened",
   "deal.agreed": () => "Client agreed to the plan",
   "milestone.funding_requested": (t) => `Funding requested for ${t}`,
   "milestone.held": (t) => `Funds held for ${t}`,

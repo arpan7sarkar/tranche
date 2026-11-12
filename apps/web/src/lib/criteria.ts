@@ -11,7 +11,9 @@ export function describeCheck(check: MachineCheck): string {
     case "ci_green":
       return `CI passes in ${check.repo}`;
     case "url_live":
-      return `${check.url} is live`;
+      return check.url
+        ? `${check.url} is live`
+        : "Delivery URL required when submitting work; the deployed website must be live";
     case "lighthouse":
       return `Lighthouse ${check.category} ${check.min}+ on ${check.url}`;
   }

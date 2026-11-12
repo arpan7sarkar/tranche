@@ -1,12 +1,18 @@
 .tranche-studio {
-  --ag-background-color: var(--background);
-  --ag-foreground-color: var(--foreground);
-  --ag-accent-color: var(--primary);
-  --ag-border-color: var(--border);
-  --ag-font-family: var(--font-sans);
-  height: calc(100dvh - 9rem);
-  min-height: 640px;
+  width: 100%;
+  min-width: 0;
+  height: 640px;
   border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid var(--border);
+}
+
+.tranche-studio[data-editing="true"] {
+  height: 740px;
+}
+
+@media (max-width: 767px) {
+  .tranche-studio {
+    height: 760px;
+  }
 }

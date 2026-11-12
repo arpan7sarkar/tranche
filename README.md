@@ -4,6 +4,7 @@ Milestone-protected payments for freelancers and agencies, run by an AI agent, s
 Built for the PayPal AI Hackathon.
 
 Design: [`docs/superpowers/specs/2026-10-08-tranche-design.md`](docs/superpowers/specs/2026-10-08-tranche-design.md)
+Client email configuration and sharing status: [client notifications](docs/client-notifications.md).
 Implementation phases, current status, and pending tasks: [remaining work](docs/remaining_work.md).
 
 F0 contributors: start with the [sandbox capability plan](docs/paypal/f0-plan.md), then read the [current handoff](docs/paypal/f0-status.md).

@@ -1,4 +1,4 @@
-import type { MachineCheck } from "@tranche/contracts";
+import { type MachineCheck, StagingUrl } from "@tranche/contracts";
 import type { GitHubReader } from "./github";
 import {
   assertPublicUrl,
@@ -15,6 +15,7 @@ export type Delivery = {
   prNumber: number | null;
   urls: string[];
   notes?: string;
+  referenceUrls?: string[];
 };
 export type CheckResult = { passed: boolean; summary: string; data: Record<string, unknown> };
 export type CheckDeps = {
@@ -55,8 +56,28 @@ export async function runCheck(
       throw new InfrastructureError("CI is not complete; retry verification later");
     return result(ci === "success", `CI: ${ci}`, { sha: delivery.sha });
   }
+  const target = check.url ?? (delivery.urls.length === 1 ? delivery.urls[0] : undefined);
+  if (!target) return result(false, "Submit one deployed website URL for verification");
+  if (!StagingUrl.safeParse(target).success)
+    return result(false, "Submit the deployed website, not a design reference or credentialed URL");
+  const canonicalUrl = (value: string) => {
+    const url = new URL(value);
+    url.hash = "";
+    return url.href;
+  };
+  const isReference = (url: string) =>
+    delivery.referenceUrls?.some((reference) => canonicalUrl(reference) === canonicalUrl(url));
+  if (isReference(target))
+    return result(false, "A project reference cannot be submitted as the finished website");
   try {
-    const response = await deps.fetch(check.url);
+    const response = await deps.fetch(target);
+    if (!StagingUrl.safeParse(response.url).success)
+      return result(false, "Delivery redirects to an invalid website target");
+    if (isReference(response.url))
+      return result(
+        false,
+        "Delivery redirects to a project reference instead of the finished website",
+      );
     if (response.status < 200 || response.status >= 300)
       return result(false, `Page returned HTTP ${response.status}`);
     if (check.kind === "url_live")

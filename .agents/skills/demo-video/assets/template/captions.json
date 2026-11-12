@@ -1,0 +1,23 @@
+{
+ "open": "A checklist, recorded for real",
+ "type": "Type a task",
+ "added": "One keystroke adds it",
+ "ticked": "Tick it off",
+ "final": "Every frame is the real app",
+ "credit": "",
+ "colors": {},
+ "voice": {
+  "open": {
+   "text": "This is a real recording of a small checklist app. Nothing on screen is mocked or redrawn.",
+   "through": "type"
+  },
+  "added": {
+   "text": "One keystroke adds a task, and ticking one off updates the count.",
+   "through": "ticked"
+  },
+  "final": {
+   "text": "Every frame you saw came from the app itself.",
+   "through": "final"
+  }
+ }
+}

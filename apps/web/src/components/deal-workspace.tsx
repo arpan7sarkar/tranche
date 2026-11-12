@@ -20,6 +20,7 @@ import { DealStatusBadge } from "@/components/deal-status-badge";
 import { addDays, LOCKED_STATES } from "@/components/gantt/gantt-data";
 import { GanttLoader } from "@/components/gantt/gantt-loader";
 import { MilestoneBadge } from "@/components/milestone-badge";
+import { PlanSharingPanel } from "@/components/plan-sharing-panel";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,7 @@ function evidenceLabel(m: Milestone, e: Milestone["evidence"][number]): string {
 
 export function DealWorkspace({ initialView }: { initialView: DealView }) {
   const [view, setView] = useState(initialView);
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState<Task | null>(null);
   const [delivering, setDelivering] = useState<Milestone | null>(null);
   const [pending, setPending] = useState(false);
@@ -173,11 +175,8 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
     }
     const { portalUrl } = (await res.json()) as { portalUrl: string };
     setView((v) => ({ ...v, deal: { ...v.deal, status: "sent" } }));
-    const copied = await navigator.clipboard.writeText(portalUrl).then(
-      () => true,
-      () => false,
-    );
-    toast.success(copied ? "Plan sent. Portal link copied." : "Plan sent to the client.");
+    setPortalUrl(portalUrl);
+    toast.success("Plan ready for client review. Check sharing status below.");
     refresh();
   }
 
@@ -280,6 +279,14 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
           </div>
         ) : null}
       </header>
+
+      {view.deal.status !== "draft" && (
+        <PlanSharingPanel
+          dealId={dealId}
+          clientEmail={view.deal.clientEmail}
+          initialUrl={portalUrl}
+        />
+      )}
 
       {notice ? (
         <Alert
@@ -438,6 +445,10 @@ export function DealWorkspace({ initialView }: { initialView: DealView }) {
             </DialogHeader>
             <div className="flex flex-col gap-2">
               <Label htmlFor="delivery-url">Delivery URL</Label>
+              <p className="text-sm text-muted-foreground">
+                Submit the finished, deployed website. Design and template references are not
+                delivery evidence.
+              </p>
               <Input
                 id="delivery-url"
                 name="url"

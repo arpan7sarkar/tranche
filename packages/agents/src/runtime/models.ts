@@ -20,7 +20,7 @@ export function selectModels(env: NodeJS.ProcessEnv = process.env): Models {
         fast: openai(env.OPENAI_FAST_MODEL ?? "gpt-5.4-nano"),
       }
     : {
-        judge: google(env.GEMINI_JUDGE_MODEL ?? "gemini-3.1-pro-preview"),
-        fast: google(env.GEMINI_FAST_MODEL ?? "gemini-3.8-flash"),
+        judge: google(env.GEMINI_JUDGE_MODEL ?? "gemini-3.5-flash-lite"),
+        fast: google(env.GEMINI_FAST_MODEL ?? "gemini-3.5-flash-lite"),
       };
 }

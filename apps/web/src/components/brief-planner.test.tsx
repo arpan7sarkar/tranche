@@ -56,6 +56,31 @@ it("shows recoverable errors without discarding a submitted brief", async () => 
   expect(container.textContent).toContain("Your brief is saved");
   expect(container.textContent).toContain("Check again");
 });
+it.each(["", "https://www.figma.com/design/abc/portfolio"])(
+  "submits an optional reference without using it as a verification target: %s",
+  async (reference) => {
+    const fetch = vi.fn(async (_url: string, options?: RequestInit) =>
+      options?.method === "POST"
+        ? Response.json({ dealId: "new-deal" })
+        : Response.json({ status: "planning" }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await act(async () => root.render(<BriefPlanner initialDealId={null} />));
+    const input = container.querySelector<HTMLInputElement>('[name="referenceUrl"]');
+    const form = container.querySelector("form");
+    assert(input && form);
+    expect(input.required).toBe(false);
+    input.value = reference;
+    await act(async () =>
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+    );
+    const call = fetch.mock.calls.find(([, options]) => options?.method === "POST");
+    assert(call);
+    const body = JSON.parse(String(call[1]?.body));
+    expect(body.referenceUrl).toBe(reference || null);
+    expect(body).not.toHaveProperty("stagingUrl");
+  },
+);
 it("preserves multiline edits and saves the reviewed draft before opening Gantt", async () => {
   const fetch = vi.fn(async (_url: string, options?: RequestInit) =>
     options?.method === "PUT"

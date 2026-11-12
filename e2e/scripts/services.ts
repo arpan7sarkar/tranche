@@ -53,7 +53,12 @@ for (;;) {
                 key: "build",
                 title: "Storefront",
                 price: { currency: "USD", minor: 180000 },
-                criteria: { checks: [{ kind: "url_live", url: input.stagingUrl }], prose: [] },
+                criteria: {
+                  checks: [
+                    { kind: "url_live", ...(input.stagingUrl ? { url: input.stagingUrl } : {}) },
+                  ],
+                  prose: [],
+                },
                 payees: [{ kind: "agency", shareBps: 10000 }],
               },
             ],

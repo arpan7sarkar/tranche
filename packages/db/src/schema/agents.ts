@@ -88,6 +88,8 @@ export const notificationJob = pgTable("notification_job", {
   sentAt: timestamp({ withTimezone: true }),
   linkExpiresAt: timestamp({ withTimezone: true }).notNull(),
   providerId: text(),
+  transport: text().$type<"resend" | "gmail">(),
+  senderIdentity: text(),
   createdAt: createdAt(),
 });
 

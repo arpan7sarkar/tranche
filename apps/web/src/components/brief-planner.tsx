@@ -1,6 +1,6 @@
 "use client";
 
-import { fromPayPalValue, type PlanDraft, toPayPalValue } from "@tranche/contracts";
+import { fromPayPalValue, type PlanDraft, ReferenceUrl, toPayPalValue } from "@tranche/contracts";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -58,6 +58,13 @@ export function BriefPlanner({ initialDealId }: { initialDealId: string | null }
     setBusy(true);
     setError("");
     const fields = Object.fromEntries(new FormData(event.currentTarget));
+    const reference = String(fields.referenceUrl ?? "").trim();
+    const parsedReference = ReferenceUrl.nullable().safeParse(reference || null);
+    if (!parsedReference.success) {
+      setError(parsedReference.error.issues[0]?.message ?? "Enter a valid reference URL.");
+      setBusy(false);
+      return;
+    }
     requestId.current ??= crypto.randomUUID();
     try {
       const response = await fetch("/api/plans/draft", {
@@ -67,6 +74,7 @@ export function BriefPlanner({ initialDealId }: { initialDealId: string | null }
           ...fields,
           requestId: requestId.current,
           repo: fields.repo || null,
+          referenceUrl: parsedReference.data,
         }),
       });
       const data = await response.json();
@@ -123,7 +131,7 @@ export function BriefPlanner({ initialDealId }: { initialDealId: string | null }
               ["clientName", "Client name", "text"],
               ["clientEmail", "Client email", "email"],
               ["repo", "GitHub repository (optional, owner/repository)", "text"],
-              ["stagingUrl", "Staging URL", "url"],
+              ["referenceUrl", "Reference URL (optional)", "url"],
               ["startDate", "Start date", "date"],
             ] as const
           ).map(([name, label, type]) => (
@@ -133,13 +141,19 @@ export function BriefPlanner({ initialDealId }: { initialDealId: string | null }
                 id={name}
                 name={name}
                 type={type}
-                required={name !== "repo"}
-                maxLength={name === "stagingUrl" ? 2000 : 200}
+                required={name !== "repo" && name !== "referenceUrl"}
+                maxLength={name === "referenceUrl" ? 2000 : 200}
                 defaultValue={
                   name === "startDate" ? new Date().toISOString().slice(0, 10) : undefined
                 }
                 disabled={busy}
               />
+              {name === "referenceUrl" ? (
+                <p className="text-sm text-muted-foreground">
+                  Add a design, template, or example for context, or leave this blank. Submit the
+                  finished website URL when delivering work.
+                </p>
+              ) : null}
             </div>
           ))}
           <div className="grid gap-2">

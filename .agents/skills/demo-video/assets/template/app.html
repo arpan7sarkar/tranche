@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Checklist</title>
+<!-- The template's sample app: self-contained (no network), follows prefers-color-scheme. -->
+<style>
+  :root { color-scheme: light dark; --bg: #f6f7f9; --card: #ffffff; --ink: #16181b; --ink2: #5b616a;
+          --line: #e3e6ea; --accent: #2f7d4f; --on-accent: #ffffff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111316; --card: #1a1d21; --ink: #eef0f2; --ink2: #9aa1a9; --line: #2a2e34;
+            --accent: #7ece8e; --on-accent: #10140f; }
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+               font: 20px/1.4 system-ui, "Noto Sans", "DejaVu Sans", sans-serif; }
+  main { max-width: 760px; margin: 64px auto; background: var(--card); border: 1px solid var(--line);
+         border-radius: 18px; padding: 34px 44px 26px; }
+  h1 { margin: 0 0 4px; font-size: 34px; letter-spacing: -0.3px; }
+  #count { color: var(--ink2); margin: 0 0 24px; }
+  #add { display: flex; gap: 12px; margin-bottom: 14px; }
+  #new { flex: 1; font: inherit; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line);
+         background: var(--bg); color: var(--ink); }
+  #new:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; font-weight: 600; padding: 12px 24px; border-radius: 12px; border: 0;
+           background: var(--accent); color: var(--on-accent); cursor: pointer; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; align-items: center; gap: 14px; padding: 12px 4px; border-top: 1px solid var(--line); }
+  li input { width: 24px; height: 24px; accent-color: var(--accent); margin: 0; }
+  li.done span { color: var(--ink2); text-decoration: line-through; }
+  li.fresh { animation: arrive .35s ease-out; }
+  @keyframes arrive { from { opacity: 0; transform: translateY(-6px); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Launch checklist</h1>
+  <p id="count"></p>
+  <form id="add" autocomplete="off">
+    <input id="new" placeholder="Add a task…" aria-label="New task">
+    <button type="submit">Add</button>
+  </form>
+  <ul id="list"></ul>
+</main>
+<script>
+const tasks = [{text: "Write the README", done: true}, {text: "Record the demo", done: false}];
+const list = document.getElementById("list"), count = document.getElementById("count");
+function render(fresh) {
+  list.replaceChildren(...tasks.map((t, i) => {
+    const li = document.createElement("li");
+    li.className = (t.done ? "done" : "") + (i === fresh ? " fresh" : "");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = t.done;
+    box.setAttribute("aria-label", t.text);
+    box.addEventListener("change", () => { t.done = box.checked; render(); });
+    const span = document.createElement("span");
+    span.textContent = t.text;
+    li.append(box, span);
+    return li;
+  }));
+  count.textContent = `${tasks.filter(t => t.done).length} of ${tasks.length} done`;
+}
+document.getElementById("add").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("new"), text = input.value.trim();
+  if (!text) return;
+  tasks.push({text, done: false});
+  input.value = "";
+  render(tasks.length - 1);
+});
+render();
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ export const LighthouseCategory = z.enum(["performance", "accessibility", "best-
 export const MachineCheck = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pr_merged"), repo: RepoRef, base: z.string().min(1) }),
   z.object({ kind: z.literal("ci_green"), repo: RepoRef }),
-  z.object({ kind: z.literal("url_live"), url: z.url() }),
+  z.object({ kind: z.literal("url_live"), url: z.url().optional() }),
   z.object({
     kind: z.literal("lighthouse"),
     url: z.url(),

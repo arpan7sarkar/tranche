@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const STATUS: Record<DealStatus, { label: string; tone: Tone }> = {
   draft: { label: "Draft", tone: "neutral" },
-  sent: { label: "Sent to client", tone: "progress" },
+  sent: { label: "Awaiting client review", tone: "progress" },
   negotiating: { label: "Negotiating", tone: "attention" },
   agreed: { label: "Agreed", tone: "verifying" },
   active: { label: "Active", tone: "progress" },

@@ -29,6 +29,24 @@ export function PortalLive({
     [],
   );
 
+  useEffect(() => {
+    let recorded = false;
+    const record = () => {
+      if (recorded || document.visibilityState !== "visible") return;
+      recorded = true;
+      void fetch(`/api/portal/${token}/opened`, { method: "POST" })
+        .then((response) => {
+          if (!response.ok) recorded = false;
+        })
+        .catch(() => {
+          recorded = false;
+        });
+    };
+    record();
+    document.addEventListener("visibilitychange", record);
+    return () => document.removeEventListener("visibilitychange", record);
+  }, [token]);
+
   // With a cursor the stream replays what it missed; without one, refetch on every (re)connect.
   useDealStream(dealId, token, refresh, from, from === undefined ? refresh : undefined);
   return null;

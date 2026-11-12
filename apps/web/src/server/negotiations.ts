@@ -1,9 +1,13 @@
 import "server-only";
-import { runNegotiation } from "@tranche/agents";
+import { runNegotiation } from "@tranche/agents/negotiator";
 import { launch } from "@tranche/agents-service/launch";
 import { getDb } from "./db";
 
-export { latestNegotiation, loadNegotiationView, startNegotiation } from "@tranche/agents";
+export {
+  latestNegotiation,
+  loadNegotiationView,
+  startNegotiation,
+} from "@tranche/agents/negotiator";
 export async function kickNegotiation(id: string) {
   try {
     await launch("runNegotiation", [id], `negotiation:${id}`, () => runNegotiation(getDb(), id));

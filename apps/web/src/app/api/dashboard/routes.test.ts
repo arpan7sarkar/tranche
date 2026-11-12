@@ -3,13 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ member: vi.fn(), data: vi.fn(), turn: vi.fn() }));
 vi.mock("@/server/session", () => ({ memberOrNull: mocks.member }));
 vi.mock("@/server/db", () => ({ getDb: () => ({}) }));
-vi.mock("@tranche/agents", async (original) => ({
-  ...(await original<typeof import("@tranche/agents")>()),
+vi.mock("@tranche/agents/dashboard/data", () => ({
   loadDashboardData: mocks.data,
+}));
+vi.mock("@tranche/agents/dashboard/llm", async (original) => ({
+  ...(await original<typeof import("@tranche/agents/dashboard/llm")>()),
   runStudioTurn: mocks.turn,
+}));
+vi.mock("@tranche/agents/models", () => ({
   selectModels: () => ({ fast: "fake" }),
 }));
 
+import { StudioRateLimitError } from "@tranche/agents/dashboard/llm";
 import { GET } from "./data/route";
 import { POST } from "./llm/route";
 
@@ -61,5 +66,17 @@ describe("dashboard routes", () => {
     );
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("private");
+  });
+  it("returns quota exhaustion as 429 instead of generic 503", async () => {
+    mocks.member.mockResolvedValue({ workspaceId: "mine" });
+    mocks.turn.mockRejectedValue(new StudioRateLimitError());
+    const response = await POST(
+      new Request("http://localhost/api/dashboard/llm", {
+        method: "POST",
+        body: JSON.stringify({ input: [] }),
+      }),
+    );
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "model_rate_limited" });
   });
 });

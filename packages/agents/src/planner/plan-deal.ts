@@ -3,11 +3,12 @@ import { PlanDealInput } from "@tranche/contracts";
 import { type Db, schema } from "@tranche/db";
 import type { LanguageModel } from "ai";
 import { eq, sql } from "drizzle-orm";
+import type { z } from "zod";
 import { selectModels } from "../runtime/models";
 import { canonical, proposeAction } from "../runtime/persistence";
 import { draftPlan, InvalidPlanError } from "./draft-plan";
 
-export async function planDeal(db: Db, raw: PlanDealInput, model?: LanguageModel) {
+export async function planDeal(db: Db, raw: z.input<typeof PlanDealInput>, model?: LanguageModel) {
   const input = PlanDealInput.parse(raw);
   return db.transaction(async (lock) => {
     await lock.execute(

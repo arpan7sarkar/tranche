@@ -12,9 +12,14 @@ export async function GET(request: Request) {
     const next = encodeURIComponent(`${pathname}${search}`);
     return Response.redirect(`${appUrl()}/sign-in?next=${next}`, 303);
   }
-  await completeOnboarding(getDb(), getPayPal(), {
-    workspaceId: member.workspaceId,
-    mechanism: holdMechanism(),
-  });
+  try {
+    await completeOnboarding(getDb(), getPayPal(), {
+      workspaceId: member.workspaceId,
+      mechanism: holdMechanism(),
+    });
+  } catch {
+    console.error("PayPal connection check could not complete");
+    return Response.redirect(`${appUrl()}/onboarding?paypalCheck=failed`, 303);
+  }
   return Response.redirect(`${appUrl()}/onboarding`, 303);
 }

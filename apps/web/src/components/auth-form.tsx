@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,8 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const next = useSearchParams().get("next");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,7 +44,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-4">
+    <form method="post" onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-4">
       <h1 className="text-4xl">{mode === "sign-up" ? "Create your studio" : "Sign in"}</h1>
       {mode === "sign-up" ? (
         <div className="flex flex-col gap-1.5">
@@ -76,7 +78,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           {error}
         </p>
       ) : null}
-      <Button type="submit" size="lg" disabled={pending} aria-busy={pending}>
+      <Button type="submit" size="lg" disabled={pending || !ready} aria-busy={pending || !ready}>
         {pending ? "Please wait" : mode === "sign-up" ? "Create account" : "Sign in"}
       </Button>
       <p className="text-sm text-muted-foreground">
