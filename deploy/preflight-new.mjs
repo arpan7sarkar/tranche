@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { validateImages } from "./validate-images.mjs";
 
+// biome-ignore lint/suspicious/noUndeclaredEnvVars: Standalone deployment check, outside cached Turbo tasks.
 const project = process.env.TRANCHE_PROJECT_NAME ?? "";
 if (!/^[a-z0-9][a-z0-9_-]{2,47}$/.test(project)) {
   throw new Error("Set a unique, lowercase project name");

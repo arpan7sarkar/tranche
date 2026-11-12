@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>terminal</title>
@@ -18,7 +18,7 @@
   #av:empty { display: none; }
   #sub { color: #8b9097; font-weight: 500; }
   #term { flex: 1; padding: 16px 22px 10px 22px; }
-  .xterm .xterm-viewport { overflow: hidden !important; background: #16181b !important; }
+  .xterm .xterm-viewport { overflow: hidden; background: #16181b; }
 </style>
 </head>
 <body>
@@ -34,7 +34,7 @@ const color = q.get('color') || '#6aa8ff';
 const av = document.getElementById('av');
 av.textContent = q.get('badge') || '';
 av.style.color = color;
-av.style.background = color + '33';
+av.style.background = `${color}33`;
 document.getElementById('name').textContent = q.get('title') || who;
 document.getElementById('sub').textContent = q.get('sub') || '';
 const fonts = Promise.race([
