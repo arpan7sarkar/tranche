@@ -1,0 +1,169 @@
+WEBVTT
+
+00:00:03.600 --> 00:00:08.225
+Tranche connects project milestones with protected payment decisions.
+
+00:00:08.225 --> 00:00:11.638
+This walkthrough follows a fictional client project through the
+
+00:00:11.638 --> 00:00:15.088
+real application, using the PayPal sandbox for the
+
+00:00:15.088 --> 00:00:16.100
+payment.
+
+00:00:17.225 --> 00:00:20.825
+We begin with a brief and explicit acceptance requirements
+
+00:00:20.825 --> 00:00:21.225
+.
+
+00:00:20.938 --> 00:00:25.050
+The planner generates priced milestones, tasks and dependencies
+
+00:00:25.050 --> 00:00:26.250
+for review.
+
+00:00:26.250 --> 00:00:29.138
+Nothing is sent automatically at this step.
+
+00:00:29.138 --> 00:00:32.150
+For the sandbox demonstration, we set the first
+
+00:00:32.150 --> 00:00:35.762
+milestone to one dollar and leave the website implementation
+
+00:00:35.762 --> 00:00:38.862
+as a later, unfunded milestone.
+
+00:00:38.862 --> 00:00:42.350
+The first milestone certifies only that a public endpoint
+
+00:00:42.350 --> 00:00:44.225
+responds successfully.
+
+00:00:45.350 --> 00:00:47.762
+The Gantt brings work and payment dates into the
+
+00:00:47.762 --> 00:00:49.038
+same view.
+
+00:00:49.038 --> 00:00:52.275
+Editing the first task moves the dependent work,
+
+00:00:52.275 --> 00:00:55.038
+while the milestone dates update with it.
+
+00:00:55.038 --> 00:00:58.112
+The agency can inspect the schedule before sharing the
+
+00:00:58.112 --> 00:00:59.150
+plan.
+
+00:01:00.275 --> 00:01:02.925
+The client gets a private portal with the plan
+
+00:01:02.925 --> 00:01:05.588
+, prices and acceptance criteria.
+
+00:01:05.588 --> 00:01:10.275
+The negotiation room separately configures a simulated client agent
+
+00:01:10.275 --> 00:01:10.675
+.
+
+00:01:10.425 --> 00:01:14.100
+Here, the real agent requests human review.
+
+00:01:14.100 --> 00:01:17.275
+That outcome is recorded in the transcript and appears
+
+00:01:17.275 --> 00:01:18.812
+in the review queue.
+
+00:01:18.812 --> 00:01:21.338
+The client reviews the plan and makes the next
+
+00:01:21.338 --> 00:01:22.375
+decision.
+
+00:01:29.300 --> 00:01:33.538
+After sandbox buyer approval, PayPal confirms the one-dollar
+
+00:01:33.538 --> 00:01:35.012
+authorization.
+
+00:01:35.012 --> 00:01:38.512
+The first milestone now shows an active hold.
+
+00:01:38.512 --> 00:01:41.912
+Approval and authorization are separate steps, and the
+
+00:01:41.912 --> 00:01:44.875
+money has not been released to the agency.
+
+00:01:46.025 --> 00:01:49.150
+A delivery must satisfy its machine checks.
+
+00:01:49.150 --> 00:01:51.550
+We first submit a missing page, and the
+
+00:01:51.550 --> 00:01:53.738
+availability check fails.
+
+00:01:53.738 --> 00:01:56.400
+The milestone returns for changes.
+
+00:01:56.400 --> 00:02:00.325
+Submitting the reachable endpoint creates a new verification attempt
+
+00:02:00.325 --> 00:02:02.062
+with fresh evidence.
+
+00:02:02.062 --> 00:02:05.650
+Failed checks cannot be overridden by the language model
+
+00:02:05.650 --> 00:02:06.050
+.
+
+00:02:06.975 --> 00:02:09.975
+Once the check passes and the verification proposal is
+
+00:02:09.975 --> 00:02:13.812
+reviewed, the milestone becomes ready for release.
+
+00:02:13.812 --> 00:02:17.100
+The client can keep manual release or configure a
+
+00:02:17.100 --> 00:02:20.075
+rule that applies after verification.
+
+00:02:20.075 --> 00:02:23.762
+In this demonstration, the client explicitly releases the
+
+00:02:23.762 --> 00:02:27.800
+first milestone, and PayPal confirms the capture.
+
+00:02:28.950 --> 00:02:32.612
+The cash flow dashboard separates held, released,
+
+00:02:32.612 --> 00:02:35.125
+overdue and forecast amounts.
+
+00:02:35.125 --> 00:02:38.350
+Agent activity provides a reviewable history, and the
+
+00:02:38.350 --> 00:02:42.088
+assistant helps explore the dashboard without approving actions or
+
+00:02:42.088 --> 00:02:43.388
+moving money.
+
+00:02:43.388 --> 00:02:47.050
+The remaining website milestone is still unfunded.
+
+00:02:47.050 --> 00:02:50.525
+Tranche keeps the plan, evidence and payment decisions
+
+00:02:50.525 --> 00:02:51.600
+connected.
