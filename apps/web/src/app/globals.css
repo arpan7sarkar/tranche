@@ -5,6 +5,8 @@
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 :root {
+  --brand-background: #111a20;
+  --brand-foreground: #a5d4bc;
   --radius: 0.5rem;
   --background: oklch(0.985 0.004 85);
   --foreground: oklch(0.22 0.02 255);

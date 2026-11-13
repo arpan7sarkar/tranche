@@ -2,6 +2,7 @@ import Link from "next/link";
 import { type ReactNode, Suspense } from "react";
 import { MainNav, NavLinks } from "@/components/main-nav";
 import { SignOutButton } from "@/components/sign-out-button";
+import { TrancheMark } from "@/components/tranche-mark";
 
 export function AppShell({
   user,
@@ -16,9 +17,9 @@ export function AppShell({
         <div className="flex items-center justify-between gap-2">
           <Link
             href="/deals"
-            className="rounded-sm font-serif text-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-2 rounded-sm font-serif text-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Tranche
+            <TrancheMark className="size-7" /> Tranche
           </Link>
           <SignOutButton />
         </div>

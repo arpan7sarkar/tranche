@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { AuthForm } from "@/components/auth-form";
+import { TrancheMark } from "@/components/tranche-mark";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function FormSkeleton() {
@@ -16,7 +18,13 @@ function FormSkeleton() {
 
 export function AuthScreen({ mode }: { mode: "sign-in" | "sign-up" }) {
   return (
-    <main className="grid min-h-screen place-items-center px-4 py-10">
+    <main className="relative grid min-h-screen place-items-center px-4 py-24">
+      <Link
+        href="/"
+        className="absolute top-8 left-6 inline-flex items-center gap-2 rounded-sm font-serif text-2xl focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <TrancheMark /> Tranche
+      </Link>
       <Suspense fallback={<FormSkeleton />}>
         <AuthForm mode={mode} />
       </Suspense>
