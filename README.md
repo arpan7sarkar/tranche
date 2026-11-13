@@ -1,5 +1,7 @@
 # Tranche
 
+<img src="apps/web/public/brand/tranche-mark.svg" alt="Tranche layered milestone mark" width="48" height="48" />
+
 **Clear milestones. Confident payments.**
 
 Tranche helps freelancers and small agencies turn client briefs into AI-generated plans, verify milestone deliveries, and manage payments through PayPal.
@@ -7,6 +9,36 @@ Human approval gates and an audit trail keep consequential decisions visible.
 Built for the PayPal AI Hackathon using **PayPal Sandbox only**.
 
 [Pitch deck in Canva](https://www.canva.com/d/kJ63oInu7Hc-506) · [Project write-up](tranche.md) · [Design specification](docs/superpowers/specs/2026-10-08-tranche-design.md)
+
+## Explore the project
+
+Open `http://localhost:3000` after starting the web app to explore the public landing page.
+It includes an example project, the milestone workflow, interactive product views, payment approval boundaries, FAQs, and a captioned walkthrough.
+The landing page follows the application's light and dark color schemes and adapts to desktop and mobile screens.
+
+[Watch or download the 2:56 walkthrough](apps/web/public/demo/tranche-walkthrough.mp4) · [English captions](apps/web/public/demo/walkthrough.vtt)
+
+![Tranche cash-flow dashboard showing demo deals, payment forecasts, and USD 1.00 released](apps/web/public/product/cash-flow.png)
+
+The screenshot uses demo project data rather than live customer balances.
+The forecasts are planned amounts, not revenue or captured funds.
+
+| Route | What you will find |
+|---|---|
+| `/` | Public landing page, product previews, and walkthrough |
+| `/sign-up` | Create a studio account |
+| `/sign-in` | Sign in to an existing workspace |
+| `/deals` | Authenticated project list |
+| `/deals/new` | Create a project from a client brief |
+| `/deals/[dealId]` | Project schedule, milestones, evidence, and activity |
+| `/deals/[dealId]/negotiation` | Negotiation room, transcript, and review state |
+| `/approvals` | Decisions requiring human review |
+| `/dashboard` | Cash-flow dashboard and assistant |
+| `/onboarding` | Workspace connection setup |
+| `/portal/[token]` | Private client review portal |
+
+Workspace routes require authentication.
+Client portal links are private, token-based links; do not publish their tokens in documentation or screenshots.
 
 ## Why Tranche
 
@@ -44,6 +76,7 @@ Funding follows milestone scheduling and payment eligibility rules; the diagram 
 
 ## Product features
 
+- **Public product walkthrough:** Explore the workflow and real product captures before creating an account.
 - **AI project planning:** Convert a brief into structured milestones, tasks, budgets, and delivery requirements.
 - **Interactive scheduling:** Inspect task dates and dependencies in Bryntum Gantt.
 - **Negotiation room:** Follow the transcript, project timeline, agent status, and requests for human review.
@@ -102,6 +135,9 @@ An OpenAI fallback is available through `AI_FALLBACK=openai`; it is not the defa
 | Path | Purpose |
 |---|---|
 | `apps/web` | Next.js freelancer and agency workspace, client portal, API routes, and webhooks |
+| `apps/web/public/product` | Real demo screenshots used by the landing page and this README |
+| `apps/web/public/demo` | Product walkthrough video and English captions |
+| `apps/web/public/brand` | Tranche mark and technology logos |
 | `apps/agents` | Render Workflows tasks, background consumers, notifications, and executor |
 | `packages/contracts` | Shared Zod schemas |
 | `packages/core` | Pure state machine, scheduling, and policy engine |
@@ -144,6 +180,15 @@ To enable Gemini, configure `GOOGLE_GENERATIVE_AI_API_KEY` and set `TRANCHE_LLM=
 PayPal checkout needs sandbox credentials and the seller configuration documented in the operator runbooks below.
 Gmail and Resend require their own configuration; neither connects automatically from API credentials alone.
 
+The homepage renders publicly without a database lookup or sign-in.
+Its project preview is explicitly labelled as demo data; opening the landing page does not create a deal, send a notification, or execute a payment.
+
+### Branding and icons
+
+The shared layered milestone mark appears in the landing-page navigation, workspace shell, and authentication screens.
+Next.js serves the SVG icon from `apps/web/src/app/icon.svg`, the browser favicon from `apps/web/src/app/favicon.ico`, and the Apple touch icon from `apps/web/src/app/apple-icon.png`.
+Global colors and typography remain in `apps/web/src/app/globals.css`; landing-page layout rules live in `apps/web/src/app/landing.css`.
+
 ### Background execution
 
 The local consumer processes agent events and queued notifications:
@@ -169,6 +214,17 @@ pnpm build
 Database-dependent suites are skipped when their required database variables are missing.
 A passing run without those variables does not validate the database integration paths.
 Real PayPal Sandbox cases and screenshot checks have additional opt-in requirements; consult the runbooks before running payment tests.
+
+### Landing-page verification
+
+The landing-page implementation was verified at desktop (1536 × 1024) and mobile (390 × 844) viewports in both light and dark modes.
+Checks covered public access, horizontal overflow, browser console errors, product tabs and keyboard navigation, FAQ expansion, signup navigation, video metadata, captions, technology logos, and icon routes.
+The production build, repository-wide Biome checks, and 95 focused design-token, authentication-form, and proxy tests passed for that change.
+See the [visual QA record](design-qa.md) for the reference comparison and local screenshot evidence paths.
+Those local QA captures are ignored by Git; the product screenshots linked above are included in the repository.
+
+CI runs lint, typechecking, both database migrations, the full test command, isolated fake-approval tests, offline agent evaluations, and production builds.
+Container jobs then build and inspect the runtime images; the web-image smoke test expects HTTP 200 from the public homepage without network access.
 
 ### Disposable database integration tests
 
